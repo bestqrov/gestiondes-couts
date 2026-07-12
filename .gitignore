@@ -8,3 +8,4 @@ dist/
 ~$*
 .tmp-uploads/
 .tmp-output/
+*.traineddata

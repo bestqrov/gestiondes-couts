@@ -43,6 +43,30 @@ describe('parseLiquidation', () => {
     expect(article2.taxes.map((t) => t.code)).toEqual(['000110', '007217', '002109']);
   });
 
+  it('tolerates real-world OCR spacing noise in header labels ("BE N°" instead of "B E N°", REDEVABLE/CODE merged on one line)', () => {
+    // Mirrors actual Tesseract output observed on a real scanned document: the
+    // REDEVABLE and CODE labels sit side-by-side on the source page and get
+    // merged onto one OCR'd line, and "B E N°" is frequently OCR'd as "BE N°"
+    // (missing the space between B and E).
+    const text = `Type Intervenant : Operateur
+REDEVABLE : GLOBAL TRADE LOGISTICS SARL CODE : 500001
+CATEGORIE D'ORDONNANCEMENT : Crédit d'enlèvement BE N° : 501 DU : 25/06/2026
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+TOTAL ARTICLE :          5 511,00
+`;
+    const result = parseLiquidation(text);
+    expect(result.header).toEqual({
+      code: '500001',
+      redevable: 'GLOBAL TRADE LOGISTICS SARL',
+      benNumero: '501',
+    });
+  });
+
   it('throws when no articles are found', () => {
     expect(() => parseLiquidation('CODE : 123\nREDEVABLE : X\nB E N° : 1')).toThrow(
       'No articles found'
@@ -107,6 +131,30 @@ QUANTITE : 354.000                UNITE : NOMBRE
 TOTAL ARTICLE :          5 511,00
 `;
     expect(() => parseLiquidation(text)).toThrow(/Malformed tax row/i);
+  });
+
+  it('skips OCR border noise ("!" wrapped around label lines like QUANTITE/TOTAL ARTICLE) rather than throwing', () => {
+    // Mirrors real Tesseract output: the table's box-drawing border is
+    // frequently misread as a stray "!" wrapping the QUANTITE and
+    // TOTAL ARTICLE lines, even though those aren't tax-row data.
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+! QUANTITE : 354.000                UNITE : NOMBRE !
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+! TOTAL ARTICLE :          5 511,00 |
+`;
+    const result = parseLiquidation(text);
+    expect(result.articles).toHaveLength(1);
+    expect(result.articles[0].quantite).toBeCloseTo(354.0);
+    expect(result.articles[0].totalArticle).toBeCloseTo(5511.0);
+    expect(result.articles[0].taxes).toEqual([
+      { code: '000110', assiette: 27147.0, taux: 0.0, montant: 0.0 },
+    ]);
   });
 
   // Note: the existing "parses header and both articles from the real sample document" test

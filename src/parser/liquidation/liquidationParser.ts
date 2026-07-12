@@ -30,6 +30,21 @@ const ARTICLE_BLOCK_PATTERN =
 
 const TAX_ROW_PATTERN = /^!\s*\d{6}\s*!/;
 
+// A genuine tax row has 8 "!" delimiters (9 fields). Real-world OCR frequently
+// misreads a table's box-drawing border as a stray "!" at the start/end of
+// unrelated label lines (e.g. "! QUANTITE : 354.000 UNITE : NOMBRE !", "!
+// TOTAL ARTICLE : 5 511,00 |") — those aren't tax-row data and must be
+// skipped as noise, not treated as malformed tax rows. A line with too few
+// "!" characters to plausibly be a multi-column data row is assumed to be
+// such noise; a line with enough "!" characters to look like a real attempted
+// data row, but that doesn't parse cleanly, is still treated as malformed
+// (likely-corrupted) tax data and must not be silently dropped.
+const MIN_DELIMITERS_FOR_TAX_ROW_CANDIDATE = 3;
+
+function countChar(text: string, char: string): number {
+  return text.split(char).length - 1;
+}
+
 function parseTaxRows(block: string): TaxLine[] {
   const taxes: TaxLine[] = [];
   for (const line of block.split('\n')) {
@@ -37,10 +52,13 @@ function parseTaxRows(block: string): TaxLine[] {
     if (!trimmed.startsWith('!')) continue;
 
     if (!TAX_ROW_PATTERN.test(trimmed)) {
-      // The header row (e.g. "! TAXE ! ASSIETTE ! ...") is expected and skipped; any other
-      // line starting with "!" that doesn't look like a valid tax row is malformed input
-      // (e.g. OCR-garbled code) and must not be silently dropped.
+      // The header row (e.g. "! TAXE ! ASSIETTE ! ...") is expected and skipped.
       if (trimmed.includes('TAXE')) continue;
+      // Not enough "!" delimiters to plausibly be a data row — OCR border noise on an
+      // unrelated label line, not tax data. Skip rather than throw.
+      if (countChar(trimmed, '!') < MIN_DELIMITERS_FOR_TAX_ROW_CANDIDATE) continue;
+      // Looks like an attempted data row (enough delimiters) but doesn't match the
+      // expected shape — genuinely malformed tax data and must not be silently dropped.
       throw new Error(`Malformed tax row (unrecognized format): "${trimmed}"`);
     }
 
@@ -63,8 +81,12 @@ function parseTaxRows(block: string): TaxLine[] {
 
 export function parseLiquidation(text: string): LiquidationResult {
   const code = extractFirst(text, /CODE\s*:\s*(\d+)/);
-  const redevable = extractFirst(text, /REDEVABLE\s*:\s*(.+)/);
-  const benNumero = extractFirst(text, /B E N°\s*:\s*(\S+)/);
+  // Stop the capture at the next label on the same line (e.g. OCR often merges
+  // "REDEVABLE : X" and "CODE : Y" onto one line since they sit side-by-side
+  // on the source document) or at a newline, whichever comes first.
+  const redevable = extractFirst(text, /REDEVABLE\s*:\s*(.+?)(?=\s+CODE\s*:|\n|$)/);
+  // Tolerate OCR spacing variance around "B E N°" (e.g. "BE N°", "B.E.N°").
+  const benNumero = extractFirst(text, /B\s*\.?\s*E\s*\.?\s*N[°ºo]?\s*:\s*(\S+)/i);
 
   if (!code || !redevable || !benNumero) {
     throw new Error('Liquidation header fields (CODE, REDEVABLE, B E N°) not found');

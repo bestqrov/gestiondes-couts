@@ -1,6 +1,5 @@
 import { extractDocumentText } from '../src/ocr/documentTextExtractor.js';
-import { parseLiquidation } from '../src/parser/liquidation/liquidationParser.js';
-import { parseDum } from '../src/parser/dum/dumParser.js';
+import { detectAndParsePair } from '../src/parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../src/merge/declarationMerger.js';
 import { validateArticle } from '../src/domain/validators.js';
 import { generateArticleSummaryExcel } from '../src/excel/articleSummaryExcelGenerator.js';
@@ -25,8 +24,10 @@ async function main() {
   console.log(dumOcr.text);
 
   console.log('\n--- Parsing ---');
-  const liquidation = parseLiquidation(liquidationOcr.text);
-  const dum = parseDum(dumOcr.text);
+  const { liquidation, dum, swapped } = detectAndParsePair(liquidationOcr.text, dumOcr.text);
+  if (swapped) {
+    console.log('(Note: files were auto-detected in reversed order from the arguments given)');
+  }
 
   console.log('--- Merging ---');
   const declaration = mergeDeclaration(liquidation, dum);

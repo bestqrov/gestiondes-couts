@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import multer from 'multer';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';
-import { parseLiquidation } from '../parser/liquidation/liquidationParser.js';
-import { parseDum } from '../parser/dum/dumParser.js';
+import { detectAndParsePair } from '../parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateArticleSummaryExcel } from '../excel/articleSummaryExcelGenerator.js';
@@ -63,8 +62,7 @@ app.post(
       const liquidationOcr = await extractDocumentText(liquidationFile.path);
       const dumOcr = await extractDocumentText(dumFile.path);
 
-      const liquidation = parseLiquidation(liquidationOcr.text);
-      const dum = parseDum(dumOcr.text);
+      const { liquidation, dum } = detectAndParsePair(liquidationOcr.text, dumOcr.text);
       const declaration = mergeDeclaration(liquidation, dum);
       for (const article of declaration.articles) {
         validateArticle(article);
