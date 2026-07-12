@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
@@ -17,6 +17,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const UPLOAD_DIR = path.join(PROJECT_ROOT, '.tmp-uploads');
 const OUTPUT_DIR = path.join(PROJECT_ROOT, '.tmp-output');
+// These don't exist yet on a fresh checkout/container — created locally by
+// hand during earlier development, but a fresh deployment has neither.
+mkdirSync(UPLOAD_DIR, { recursive: true });
+mkdirSync(OUTPUT_DIR, { recursive: true });
 
 const uploadHtml = readFileSync(path.join(__dirname, 'views/upload.html'), 'utf-8');
 const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8');

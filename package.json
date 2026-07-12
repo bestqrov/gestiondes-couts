@@ -8,7 +8,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "generate": "tsx scripts/cli.ts",
-    "web": "tsx src/web/server.ts"
+    "web": "tsx src/web/server.ts",
+    "start": "tsx src/web/server.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -17,13 +18,13 @@
     "multer": "^2.2.0",
     "pdfjs-dist": "^5.6.205",
     "sharp": "^0.35.3",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "tsx": "^4.23.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.1.1",
-    "tsx": "^4.23.0",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
   }

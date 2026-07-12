@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import sharp from 'sharp';
 import { createWorker, PSM } from 'tesseract.js';
 import type { OcrResult } from './types.js';
@@ -23,7 +24,10 @@ async function preprocessForOcr(filePath: string): Promise<Buffer> {
 export async function extractImageText(filePath: string): Promise<OcrResult> {
   const preprocessed = await preprocessForOcr(filePath);
 
-  const worker = await createWorker('fra');
+  // Tesseract downloads/caches language data (fra.traineddata) on first use.
+  // Point that at the OS temp dir rather than the process's cwd, since cwd
+  // isn't guaranteed writable in a container.
+  const worker = await createWorker('fra', undefined, { cachePath: tmpdir() });
   try {
     await worker.setParameters({
       tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
