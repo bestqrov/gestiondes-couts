@@ -6,3 +6,5 @@ dist/
 !sample-output/*.xlsx
 .DS_Store
 ~$*
+.tmp-uploads/
+.tmp-output/
