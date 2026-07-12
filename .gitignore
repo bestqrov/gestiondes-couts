@@ -1,0 +1,7 @@
+.worktrees/
+
+node_modules/
+dist/
+*.xlsx
+!sample-output/*.xlsx
+.DS_Store

@@ -1,0 +1,117 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { describe, it, expect } from 'vitest';
+import { parseLiquidation } from '../../../src/parser/liquidation/liquidationParser.js';
+
+const fixturePath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../fixtures/liquidation-sample-1.txt'
+);
+
+describe('parseLiquidation', () => {
+  it('parses header and both articles from the real sample document', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseLiquidation(text);
+
+    expect(result.header).toEqual({
+      code: '500001',
+      redevable: 'GLOBAL TRADE LOGISTICS SARL',
+      benNumero: '501',
+    });
+
+    expect(result.articles).toHaveLength(2);
+
+    const [article1, article2] = result.articles;
+
+    expect(article1.numero).toBe(1);
+    expect(article1.hsCode).toBe('6109100010');
+    expect(article1.valeurDeclaree).toBeCloseTo(27147.0);
+    expect(article1.quantite).toBeCloseTo(354.0);
+    expect(article1.unite).toBe('NOMBRE');
+    expect(article1.totalArticle).toBeCloseTo(5511.0);
+    expect(article1.taxes).toEqual([
+      { code: '000110', assiette: 27147.0, taux: 0.0, montant: 0.0 },
+      { code: '007217', assiette: 27147.0, taux: 0.25, montant: 68.0 },
+      { code: '002109', assiette: 27215.0, taux: 20.0, montant: 5443.0 },
+    ]);
+
+    expect(article2.numero).toBe(2);
+    expect(article2.valeurDeclaree).toBeCloseTo(12892.99);
+    expect(article2.quantite).toBeCloseTo(200.0);
+    expect(article2.totalArticle).toBeCloseTo(7260.0);
+    expect(article2.taxes.map((t) => t.code)).toEqual(['000110', '007217', '002109']);
+  });
+
+  it('throws when no articles are found', () => {
+    expect(() => parseLiquidation('CODE : 123\nREDEVABLE : X\nB E N° : 1')).toThrow(
+      'No articles found'
+    );
+  });
+
+  it('throws mentioning the article number when a required article field is missing', () => {
+    // No "QUANTITE :" line for article 1.
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+TOTAL ARTICLE :          5 511,00
+`;
+    expect(() => parseLiquidation(text)).toThrow(/Article 1/);
+  });
+
+  it('throws "no tax rows found" when an article has zero tax rows', () => {
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+TOTAL ARTICLE :          5 511,00
+`;
+    expect(() => parseLiquidation(text)).toThrow(/no tax rows found/i);
+  });
+
+  it('throws rather than silently dropping a malformed tax row (wrong column count)', () => {
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !     0,00 !
+TOTAL ARTICLE :          5 511,00
+`;
+    expect(() => parseLiquidation(text)).toThrow(/Malformed tax row/i);
+  });
+
+  it('throws rather than silently dropping a line starting with "!" that is not a recognizable tax row or header', () => {
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+! 0011 ! garbled OCR line !
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+TOTAL ARTICLE :          5 511,00
+`;
+    expect(() => parseLiquidation(text)).toThrow(/Malformed tax row/i);
+  });
+
+  // Note: the existing "parses header and both articles from the real sample document" test
+  // already exercises the (?<!TOTAL ) lookbehind implicitly, since the fixture contains
+  // "TOTAL ARTICLE :" lines between article blocks and correctly yields exactly 2 articles
+  // (not more, which is what would happen if "TOTAL ARTICLE :" were mistaken for a new
+  // article-block boundary). No separate regression test is needed for this.
+});

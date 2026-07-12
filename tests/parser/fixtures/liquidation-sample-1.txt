@@ -1,0 +1,27 @@
+Type Intervenant :  Operateur
+REDEVABLE :  GLOBAL TRADE LOGISTICS SARL
+CATEGORIE D'ORDONNANCEMENT :  Credit d'enlevement
+CODE : 500001
+B E N° : 501 DU : 25/06/2026
+
+N° ET DATE DECLARATION : 700000000000000001 DU : 25/06/2026
+N° ET DATE LIQUIDATION : 700000CEE00000000001 DU : 25/06/2026
+DATE ECHEANCE PAIEMENT : 24/07/2026
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+! 007217 !  27147.00 !  0.25!   T   !      !              !    68,00 !
+! 002109 !  27215.00 ! 20.0 !       !      !              !  5 443,00 !
+TOTAL ARTICLE :          5 511,00
+
+ARTICLE  : 2              NUMERO SH : 6109100010     VALEUR :   12 892,99
+QUANTITE : 200.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  12892.99 ! 30.0 !   T   !      !              !  3 868,00 !
+! 007217 !  12892.99 !  0.25!   T   !      !              !    33,00 !
+! 002109 !  16793.99 ! 20.0 !       !      !              !  3 359,00 !
+TOTAL ARTICLE :          7 260,00

@@ -1,0 +1,17 @@
+DECLARATION
+
+N° d'ordre de l'art. : 1
+Colis et désignation des marchandises : T-SHIRT 354.00 NB
+Code marchandises : 6109100010
+Valeur déclarée : 27 147.000
+Unités complémentaires : 354.0 U
+Pays d'origine (Nom et code) : ITALIE IT
+
+N° d'ordre de l'art. : 2
+Colis et désignation des marchandises : T-SHIRT 200.00 NB
+Code marchandises : 6109100010
+Valeur déclarée : 12 892.992
+Unités complémentaires : 200.0 U
+Pays d'origine (Nom et code) : BANGLADESH BD
+
+Renseignements financiers et bancaires : 02 Crédit d'enlèvement 500001099
