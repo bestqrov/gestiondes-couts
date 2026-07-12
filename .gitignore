@@ -9,3 +9,5 @@ dist/
 .tmp-uploads/
 .tmp-output/
 *.traineddata
+.env
+.claude/scheduled_tasks.lock

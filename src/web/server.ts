@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';

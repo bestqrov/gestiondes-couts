@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { extractDocumentText } from '../src/ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../src/parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../src/merge/declarationMerger.js';
