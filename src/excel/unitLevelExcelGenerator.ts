@@ -2,16 +2,15 @@ import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
 import { allocateTaxAcrossUnits, unionTaxCodes } from './unitLevelTaxHelpers.js';
 
-export async function generateUnitLevelExcel(
-  declaration: Declaration,
-  outputPath: string
-): Promise<void> {
+// Shared by the standalone File 2 generator below and by the combined
+// (single-file, multi-sheet) generator — both need to add this exact sheet
+// to a workbook writer they own, so the sheet-building logic lives here once.
+export function addUnitLevelSheet(
+  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+  declaration: Declaration
+): void {
   const taxCodes = unionTaxCodes(declaration.articles);
 
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: outputPath,
-    useStyles: false,
-  });
   const sheet = workbook.addWorksheet('Unit Detail');
 
   sheet.columns = [
@@ -52,5 +51,16 @@ export async function generateUnitLevelExcel(
   }
 
   sheet.commit();
+}
+
+export async function generateUnitLevelExcel(
+  declaration: Declaration,
+  outputPath: string
+): Promise<void> {
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: outputPath,
+    useStyles: false,
+  });
+  addUnitLevelSheet(workbook, declaration);
   await workbook.commit();
 }

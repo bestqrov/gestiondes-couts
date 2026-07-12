@@ -97,11 +97,26 @@
 
       try {
         const response = await fetch('/generate', { method: 'POST', body: formData });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
+
+        if (!response.ok) {
+          const result = await response.json();
           throw new Error(result.error || `Erreur serveur (${response.status})`);
         }
-        window.location.href = '/results';
+
+        // Success: the response body is the .xlsx file itself — trigger a
+        // direct download rather than navigating to a results page.
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'Declaration.xlsx';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+
+        statusEl.textContent = 'Fichier téléchargé.';
+        submitBtn.disabled = false;
       } catch (err) {
         statusEl.textContent = '';
         submitBtn.disabled = false;

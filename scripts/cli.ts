@@ -2,8 +2,7 @@ import { extractDocumentText } from '../src/ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../src/parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../src/merge/declarationMerger.js';
 import { validateArticle } from '../src/domain/validators.js';
-import { generateArticleSummaryExcel } from '../src/excel/articleSummaryExcelGenerator.js';
-import { generateUnitLevelExcel } from '../src/excel/unitLevelExcelGenerator.js';
+import { generateCombinedExcel } from '../src/excel/combinedExcelGenerator.js';
 
 async function main() {
   const [, , liquidationPath, dumPath, outDir = '.'] = process.argv;
@@ -36,12 +35,10 @@ async function main() {
   }
   console.log(`Merged declaration: code=${declaration.code}, ${declaration.articles.length} article(s)`);
 
-  const file1Path = `${outDir}/File1-ArticleSummary.xlsx`;
-  const file2Path = `${outDir}/File2-UnitLevelDetail.xlsx`;
-  await generateArticleSummaryExcel(declaration, file1Path);
-  await generateUnitLevelExcel(declaration, file2Path);
+  const outputPath = `${outDir}/Declaration.xlsx`;
+  await generateCombinedExcel(declaration, outputPath);
 
-  console.log(`\nGenerated:\n  ${file1Path}\n  ${file2Path}`);
+  console.log(`\nGenerated: ${outputPath} (2 sheets: Articles, Unit Detail)`);
 }
 
 main().catch((error) => {

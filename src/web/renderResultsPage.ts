@@ -105,15 +105,15 @@ export function renderResultsPage(declaration: Declaration): string {
   <h1>Résultats — Déclaration ${escapeHtml(declaration.code)} (${escapeHtml(declaration.redevable)})</h1>
   <div class="columns">
     <div class="column">
-      <h2>File 1 — Article Summary</h2>
+      <h2>Feuille 1 — Article Summary</h2>
       <div class="table-scroll">${file1Table}</div>
-      <a class="download" href="/download/file1">Télécharger Excel</a>
+      <a class="download" href="/download">Télécharger Excel (2 feuilles)</a>
     </div>
     <div class="column">
-      <h2>File 2 — Unit-Level Cost Detail</h2>
+      <h2>Feuille 2 — Unit-Level Cost Detail</h2>
       ${previewNote}
       <div class="table-scroll">${file2Table}</div>
-      <a class="download" href="/download/file2">Télécharger Excel</a>
+      <a class="download" href="/download">Télécharger Excel (2 feuilles)</a>
     </div>
   </div>
 </body>

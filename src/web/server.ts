@@ -7,8 +7,7 @@ import { extractDocumentText } from '../ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
-import { generateArticleSummaryExcel } from '../excel/articleSummaryExcelGenerator.js';
-import { generateUnitLevelExcel } from '../excel/unitLevelExcelGenerator.js';
+import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
 import { checkCredentials, createSession, requireAuth, setSessionCookie } from './auth.js';
 import type { Declaration } from '../domain/types.js';
@@ -25,8 +24,7 @@ const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8'
 // recently generated declaration in memory so /download and the results
 // preview can reference it without a database.
 let lastDeclaration: Declaration | undefined;
-const file1Path = path.join(OUTPUT_DIR, 'File1-ArticleSummary.xlsx');
-const file2Path = path.join(OUTPUT_DIR, 'File2-UnitLevelDetail.xlsx');
+const combinedFilePath = path.join(OUTPUT_DIR, 'Declaration.xlsx');
 
 // multer's default disk storage strips the original file extension, but
 // extractDocumentText() dispatches on extension (.pdf vs image formats) —
@@ -91,11 +89,10 @@ app.post(
         validateArticle(article);
       }
 
-      await generateArticleSummaryExcel(declaration, file1Path);
-      await generateUnitLevelExcel(declaration, file2Path);
+      await generateCombinedExcel(declaration, combinedFilePath);
 
       lastDeclaration = declaration;
-      res.json({ success: true });
+      res.download(combinedFilePath, 'Declaration.xlsx');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ success: false, error: message });
@@ -111,12 +108,8 @@ app.get('/results', (_req, res) => {
   res.send(renderResultsPage(lastDeclaration));
 });
 
-app.get('/download/file1', (_req, res) => {
-  res.download(file1Path, 'File1-ArticleSummary.xlsx');
-});
-
-app.get('/download/file2', (_req, res) => {
-  res.download(file2Path, 'File2-UnitLevelDetail.xlsx');
+app.get('/download', (_req, res) => {
+  res.download(combinedFilePath, 'Declaration.xlsx');
 });
 
 const port = Number(process.env.PORT ?? 4310);

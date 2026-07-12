@@ -1,14 +1,13 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
 
-export async function generateArticleSummaryExcel(
-  declaration: Declaration,
-  outputPath: string
-): Promise<void> {
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: outputPath,
-    useStyles: false,
-  });
+// Shared by the standalone File 1 generator below and by the combined
+// (single-file, multi-sheet) generator — both need to add this exact sheet
+// to a workbook writer they own, so the sheet-building logic lives here once.
+export function addArticleSummarySheet(
+  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+  declaration: Declaration
+): void {
   const sheet = workbook.addWorksheet('Articles');
 
   sheet.columns = [
@@ -32,5 +31,16 @@ export async function generateArticleSummaryExcel(
   }
 
   sheet.commit();
+}
+
+export async function generateArticleSummaryExcel(
+  declaration: Declaration,
+  outputPath: string
+): Promise<void> {
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: outputPath,
+    useStyles: false,
+  });
+  addArticleSummarySheet(workbook, declaration);
   await workbook.commit();
 }
