@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Connexion</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 360px; margin: 120px auto; padding: 0 20px; color: #1a1a1a; }
+    h1 { font-size: 20px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+    input { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    button {
+      width: 100%; margin-top: 20px; padding: 12px; font-size: 15px; font-weight: 600;
+      background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;
+    }
+    .error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Connexion</h1>
+  {{ERROR_BLOCK}}
+  <form method="post" action="/login">
+    <label for="username">Identifiant</label>
+    <input type="text" id="username" name="username" autocomplete="username" required />
+    <label for="password">Mot de passe</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" required />
+    <button type="submit">Se connecter</button>
+  </form>
+</body>
+</html>

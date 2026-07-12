@@ -10,6 +10,7 @@ import { validateArticle } from '../domain/validators.js';
 import { generateArticleSummaryExcel } from '../excel/articleSummaryExcelGenerator.js';
 import { generateUnitLevelExcel } from '../excel/unitLevelExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
+import { checkCredentials, createSession, requireAuth, setSessionCookie } from './auth.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +19,7 @@ const UPLOAD_DIR = path.join(PROJECT_ROOT, '.tmp-uploads');
 const OUTPUT_DIR = path.join(PROJECT_ROOT, '.tmp-output');
 
 const uploadHtml = readFileSync(path.join(__dirname, 'views/upload.html'), 'utf-8');
+const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8');
 
 // Single-user local tool (no auth, no concurrency handling) — holds the most
 // recently generated declaration in memory so /download and the results
@@ -38,6 +40,27 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 const app = express();
+app.use(express.urlencoded({ extended: false }));
+
+app.get('/login', (_req, res) => {
+  res.send(loginHtml.replace('{{ERROR_BLOCK}}', ''));
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body as { username?: string; password?: string };
+
+  if (!username || !password || !checkCredentials(username, password)) {
+    const errorBlock = '<div class="error">Identifiant ou mot de passe incorrect.</div>';
+    res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
+    return;
+  }
+
+  const sessionId = createSession();
+  setSessionCookie(res, sessionId);
+  res.redirect('/');
+});
+
+app.use(requireAuth);
 
 app.get('/', (_req, res) => {
   res.send(uploadHtml.replace('{{ERROR_BLOCK}}', ''));
