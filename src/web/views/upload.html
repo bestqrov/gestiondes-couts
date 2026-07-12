@@ -74,9 +74,44 @@
     wireDropZone('zone-liquidation', 'input-liquidation', 'name-liquidation');
     wireDropZone('zone-dum', 'input-dum', 'name-dum');
 
-    document.getElementById('uploadForm').addEventListener('submit', () => {
-      document.getElementById('submitBtn').disabled = true;
-      document.getElementById('status').textContent = 'Traitement en cours (OCR + parsing + génération)...';
+    const form = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusEl = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const liquidationFile = document.getElementById('input-liquidation').files[0];
+      const dumFile = document.getElementById('input-dum').files[0];
+      if (!liquidationFile || !dumFile) {
+        statusEl.textContent = 'Veuillez sélectionner les 2 fichiers avant de générer.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
+
+      const formData = new FormData();
+      formData.append('liquidation', liquidationFile);
+      formData.append('dum', dumFile);
+
+      try {
+        const response = await fetch('/generate', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || `Erreur serveur (${response.status})`);
+        }
+        window.location.href = '/results';
+      } catch (err) {
+        statusEl.textContent = '';
+        submitBtn.disabled = false;
+        const existingError = document.querySelector('.error');
+        if (existingError) existingError.remove();
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.textContent = 'Échec : ' + err.message;
+        form.parentNode.insertBefore(errorDiv, form);
+      }
     });
   </script>
 </body>

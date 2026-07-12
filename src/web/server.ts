@@ -27,7 +27,17 @@ let lastDeclaration: Declaration | undefined;
 const file1Path = path.join(OUTPUT_DIR, 'File1-ArticleSummary.xlsx');
 const file2Path = path.join(OUTPUT_DIR, 'File2-UnitLevelDetail.xlsx');
 
-const upload = multer({ dest: UPLOAD_DIR });
+// multer's default disk storage strips the original file extension, but
+// extractDocumentText() dispatches on extension (.pdf vs image formats) —
+// preserve it explicitly so uploaded files are routed correctly.
+const storage = multer.diskStorage({
+  destination: UPLOAD_DIR,
+  filename: (_req, file, callback) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    callback(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+const upload = multer({ storage });
 const app = express();
 
 app.get('/', (_req, res) => {
@@ -64,11 +74,10 @@ app.post(
       await generateUnitLevelExcel(declaration, file2Path);
 
       lastDeclaration = declaration;
-      res.redirect('/results');
+      res.json({ success: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const errorBlock = `<div class="error">Échec : ${message}</div>`;
-      res.status(400).send(uploadHtml.replace('{{ERROR_BLOCK}}', errorBlock));
+      res.status(400).json({ success: false, error: message });
     }
   }
 );
