@@ -42,5 +42,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     next();
     return;
   }
+  // The client's fetch()-based upload flow expects JSON back from POST
+  // /generate; redirecting it to the (HTML) /login page here made the
+  // client's response.json() throw a confusing "Unexpected token '<'"
+  // instead of the real problem (session expired — in-memory sessions are
+  // wiped on every server restart/redeploy). Only redirect for normal page
+  // navigation (GET); respond with JSON for API-style POST requests so the
+  // client can show a clear "please log in again" message.
+  if (req.method === 'POST') {
+    res.status(401).json({ success: false, error: 'Session expirée, veuillez vous reconnecter.' });
+    return;
+  }
   res.redirect('/login');
 }

@@ -302,8 +302,18 @@
         const response = await fetch('/generate', { method: 'POST', body: formData });
 
         if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error || `Erreur serveur (${response.status})`);
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const result = await response.json();
+            if (response.status === 401) {
+              window.location.href = '/login';
+              return;
+            }
+            throw new Error(result.error || `Erreur serveur (${response.status})`);
+          }
+          // Server returned something other than JSON (e.g. an HTML error
+          // page from an unhandled crash) — don't try to parse it as JSON.
+          throw new Error(`Erreur serveur (${response.status})`);
         }
 
         // Success: the response body is the .xlsx file itself — trigger a
