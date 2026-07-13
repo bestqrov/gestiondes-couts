@@ -11,9 +11,19 @@ export interface DumArticleResult {
   unite: string;
 }
 
+export interface DumShipmentCost {
+  devise: string;
+  montantFacture: number;
+  tauxChange: number;
+  fret: number;
+  assurance: number;
+  valeurTotaleDeclaree: number;
+}
+
 export interface DumResult {
   creditEnlevementCode: string;
   articles: DumArticleResult[];
+  shipmentCost?: DumShipmentCost;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -34,6 +44,38 @@ export interface DumResult {
 // also capitalized and adjacent — aren't swept into the product name.
 const ARTICLE_PATTERN =
   /(\d{10})\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+([\d.]+)\s+(U)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+[\d.,]+\s+(?:NB|U)\s+(\d+)\b/g;
+
+// See design spec §4 — this cluster of shipment-level values (currency,
+// invoiced amount, exchange rate, freight, [a form field-number label,
+// ignored], insurance, total declared value) appears together in the raw
+// extracted text, terminated by a DD MM YYYY date used only as a reliable
+// anchor. Optional: if not found, shipmentCost is simply omitted rather
+// than treated as a parse failure — the app's core function doesn't depend
+// on it.
+//
+// The currency alternation (EUR|MAD|USD|GBP) is derived from the single real
+// sample this pattern was built against. A shipment invoiced in a currency
+// outside this list won't match and falls through to the same "not found" /
+// undefined result as a genuinely malformed document, with no distinct
+// signal for which case occurred. Broaden this list if a shipment in another
+// currency is encountered.
+const SHIPMENT_COST_PATTERN =
+  /\b(EUR|MAD|USD|GBP)\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d+\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d{2}\s+\d{2}\s+\d{4}/;
+
+function extractShipmentCost(text: string): DumShipmentCost | undefined {
+  const match = text.match(SHIPMENT_COST_PATTERN);
+  if (!match) return undefined;
+
+  const [, devise, montantFactureRaw, tauxChangeRaw, fretRaw, assuranceRaw, valeurTotaleRaw] = match;
+  return {
+    devise,
+    montantFacture: parseFrenchNumber(montantFactureRaw),
+    tauxChange: parseFrenchNumber(tauxChangeRaw),
+    fret: parseFrenchNumber(fretRaw),
+    assurance: parseFrenchNumber(assuranceRaw),
+    valeurTotaleDeclaree: parseFrenchNumber(valeurTotaleRaw),
+  };
+}
 
 export function parseDum(text: string): DumResult {
   // Bounded to a short gap (\D{0,20}) rather than unbounded \D*, so that if OCR noise ever
@@ -76,5 +118,5 @@ export function parseDum(text: string): DumResult {
     throw new Error('No articles found in DUM document');
   }
 
-  return { creditEnlevementCode, articles };
+  return { creditEnlevementCode, articles, shipmentCost: extractShipmentCost(text) };
 }

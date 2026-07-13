@@ -12,7 +12,9 @@ import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
-import { checkCredentials, createSession, requireAuth, setSessionCookie } from './auth.js';
+import { createSession, requireAuth, setSessionCookie } from './auth.js';
+import { getDatabase } from '../db/database.js';
+import { findUserByUsername, verifyPassword, seedSuperAdminIfEmpty } from '../db/usersRepository.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +25,22 @@ const OUTPUT_DIR = path.join(PROJECT_ROOT, '.tmp-output');
 // hand during earlier development, but a fresh deployment has neither.
 mkdirSync(UPLOAD_DIR, { recursive: true });
 mkdirSync(OUTPUT_DIR, { recursive: true });
+
+const db = getDatabase();
+const superAdminUsername = process.env.SUPERADMIN_USERNAME ?? 'redwan';
+const superAdminPassword = process.env.SUPERADMIN_PASSWORD ?? 'redwan2026';
+if (!process.env.SUPERADMIN_USERNAME || !process.env.SUPERADMIN_PASSWORD) {
+  console.warn(
+    'SUPERADMIN_USERNAME/SUPERADMIN_PASSWORD not set — falling back to default credentials for initial setup. Set these in production.'
+  );
+}
+seedSuperAdminIfEmpty(db, superAdminUsername, superAdminPassword);
+
+// Fixed bcrypt hash (cost 10, matching usersRepository's hashing cost) with
+// no corresponding real password — used so a login attempt against a
+// nonexistent username still pays bcrypt's ~50-100ms cost, instead of
+// returning near-instantly and leaking which usernames exist via timing.
+const DUMMY_PASSWORD_HASH = '$2a$10$r2UyLAu1mdPlxnjaJGSsP.XJFU3ietRR/a.INq8TYvFMb4rSxugbC';
 
 const uploadHtml = readFileSync(path.join(__dirname, 'views/upload.html'), 'utf-8');
 const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8');
@@ -74,15 +92,26 @@ app.get('/login', (_req, res) => {
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
+  const errorBlock =
+    '<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Identifiant ou mot de passe incorrect.</span></div>';
 
-  if (!username || !password || !checkCredentials(username, password)) {
-    const errorBlock =
-      '<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Identifiant ou mot de passe incorrect.</span></div>';
+  if (!username || !password) {
     res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
     return;
   }
 
-  const sessionId = createSession();
+  const user = findUserByUsername(db, username);
+  // Always run a bcrypt compare, even for a nonexistent username, against a
+  // fixed dummy hash — otherwise a missing user short-circuits before the
+  // ~50-100ms bcrypt call a wrong-password attempt incurs, letting response
+  // timing reveal which usernames exist.
+  const passwordMatches = verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, password);
+  if (!user || user.disabledAt || !passwordMatches) {
+    res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
+    return;
+  }
+
+  const sessionId = createSession({ userId: user.id, username: user.username, role: user.role });
   setSessionCookie(res, sessionId);
   res.redirect('/');
 });

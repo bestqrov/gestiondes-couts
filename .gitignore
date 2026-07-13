@@ -11,3 +11,4 @@ dist/
 *.traineddata
 .env
 .claude/scheduled_tasks.lock
+data.db*

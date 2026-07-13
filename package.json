@@ -12,6 +12,8 @@
     "start": "tsx src/web/server.ts"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
@@ -22,6 +24,8 @@
     "tsx": "^4.23.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.1.1",

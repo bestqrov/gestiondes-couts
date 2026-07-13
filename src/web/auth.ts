@@ -1,25 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import type { UserRole } from '../db/usersRepository.js';
 
-// Single hardcoded credential pair for an internal, single-user local tool —
-// this is an access gate, not a security boundary (no password hashing, no
-// rate limiting, no HTTPS enforcement). Per design spec §3.6.1: session
-// persists in memory for the server's lifetime; restarting the server logs
-// everyone out. Do not reuse this pattern if this app is ever exposed beyond
-// localhost.
-const VALID_USERNAME = process.env.APP_USERNAME ?? 'redwan';
-const VALID_PASSWORD = process.env.APP_PASSWORD ?? 'redwan2026';
-
+// Per design spec §2: sessions are still held in memory (not persisted to
+// SQLite) — restarting the server logs everyone out, same tradeoff as
+// before. What's new is that sessions now carry a role, and the
+// credentials they were created from live in the `users` table (bcrypt
+// password hashes) instead of a single hardcoded pair.
 const SESSION_COOKIE_NAME = 'session';
-const activeSessions = new Set<string>();
 
-export function checkCredentials(username: string, password: string): boolean {
-  return username === VALID_USERNAME && password === VALID_PASSWORD;
+export interface SessionInfo {
+  userId: number;
+  username: string;
+  role: UserRole;
 }
 
-export function createSession(): string {
+const activeSessions = new Map<string, SessionInfo>();
+
+export function createSession(user: SessionInfo): string {
   const sessionId = randomUUID();
-  activeSessions.add(sessionId);
+  activeSessions.set(sessionId, user);
   return sessionId;
 }
 
@@ -36,22 +36,38 @@ export function setSessionCookie(res: Response, sessionId: string): void {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${sessionId}; HttpOnly; Path=/; SameSite=Lax`);
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+function getSession(req: Request): SessionInfo | undefined {
   const sessionId = getSessionIdFromCookie(req.headers.cookie);
-  if (sessionId && activeSessions.has(sessionId)) {
+  if (!sessionId) return undefined;
+  return activeSessions.get(sessionId);
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const session = getSession(req);
+  if (session) {
+    (req as Request & { session?: SessionInfo }).session = session;
     next();
     return;
   }
   // The client's fetch()-based upload flow expects JSON back from POST
   // /generate; redirecting it to the (HTML) /login page here made the
   // client's response.json() throw a confusing "Unexpected token '<'"
-  // instead of the real problem (session expired — in-memory sessions are
-  // wiped on every server restart/redeploy). Only redirect for normal page
-  // navigation (GET); respond with JSON for API-style POST requests so the
-  // client can show a clear "please log in again" message.
+  // instead of the real problem. Only redirect for normal page navigation
+  // (GET); respond with JSON for API-style POST requests.
   if (req.method === 'POST') {
     res.status(401).json({ success: false, error: 'Session expirée, veuillez vous reconnecter.' });
     return;
   }
   res.redirect('/login');
+}
+
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction): void {
+  const existing = (req as Request & { session?: SessionInfo }).session;
+  const session = existing ?? getSession(req);
+  if (session?.role === 'superadmin') {
+    (req as Request & { session?: SessionInfo }).session = session;
+    next();
+    return;
+  }
+  res.status(403).send('Accès refusé — réservé au superadmin.');
 }
