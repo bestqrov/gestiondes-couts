@@ -2,28 +2,180 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Connexion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion — Déclaration Douanière</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 360px; margin: 120px auto; padding: 0 20px; color: #1a1a1a; }
-    h1 { font-size: 20px; }
-    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
-    input { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-    button {
-      width: 100%; margin-top: 20px; padding: 12px; font-size: 15px; font-weight: 600;
-      background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;
+    :root {
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --ink-400: #94a3b8;
+      --line: #e2e8f0;
+      --line-soft: #eef2f7;
+      --brand: #4338ca;
+      --brand-600: #4f46e5;
+      --brand-700: #3730a3;
+      --brand-soft: #eef2ff;
+      --danger: #b91c1c;
+      --danger-bg: #fef2f2;
+      --danger-line: #fecaca;
     }
-    .error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 13px; }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink-900);
+      background:
+        radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 110%, #f0fdfa 0%, transparent 55%),
+        #f8fafc;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 380px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 20px 50px -12px rgba(15, 23, 42, 0.14);
+      padding: 36px 32px 32px;
+    }
+
+    .badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 16px -6px rgba(67, 56, 202, 0.45);
+    }
+
+    .badge svg { width: 24px; height: 24px; }
+
+    h1 {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0 0 4px;
+      color: var(--ink-900);
+    }
+
+    .subtitle {
+      font-size: 13.5px;
+      color: var(--ink-500);
+      margin: 0 0 24px;
+      line-height: 1.5;
+    }
+
+    .error {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid var(--danger-line);
+      border-radius: 10px;
+      padding: 11px 13px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .error svg { flex: none; margin-top: 1px; }
+
+    label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-700);
+      margin: 0 0 6px;
+      letter-spacing: 0.01em;
+    }
+
+    .field { margin-bottom: 16px; }
+
+    input {
+      width: 100%;
+      padding: 11px 13px;
+      font-size: 14.5px;
+      font-family: inherit;
+      color: var(--ink-900);
+      background: #f8fafc;
+      border: 1.5px solid var(--line);
+      border-radius: 9px;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    input::placeholder { color: var(--ink-400); }
+    input:hover { border-color: #cbd5e1; }
+    input:focus {
+      outline: none;
+      background: #ffffff;
+      border-color: var(--brand-600);
+      box-shadow: 0 0 0 3.5px rgba(79, 70, 229, 0.14);
+    }
+
+    button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px;
+      font-size: 14.5px;
+      font-weight: 600;
+      font-family: inherit;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px -4px rgba(67, 56, 202, 0.45);
+      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+    }
+    button:hover { filter: brightness(1.06); }
+    button:active { transform: translateY(1px); box-shadow: 0 3px 10px -4px rgba(67, 56, 202, 0.4); }
+
+    .footer-note {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--ink-400);
+      margin-top: 22px;
+    }
   </style>
 </head>
 <body>
-  <h1>Connexion</h1>
-  {{ERROR_BLOCK}}
-  <form method="post" action="/login">
-    <label for="username">Identifiant</label>
-    <input type="text" id="username" name="username" autocomplete="username" required />
-    <label for="password">Mot de passe</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" required />
-    <button type="submit">Se connecter</button>
-  </form>
+  <div class="card">
+    <div class="badge">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7 3.5h7l5 5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5A1.5 1.5 0 0 1 6.5 3.5H7Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M14 3.5V8a1 1 0 0 0 1 1h4.5" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 13.2l2.1 2.1 4.3-4.5" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>Connexion</h1>
+    <p class="subtitle">Accédez à l'outil de génération Excel pour les déclarations douanières.</p>
+
+    {{ERROR_BLOCK}}
+
+    <form method="post" action="/login">
+      <div class="field">
+        <label for="username">Identifiant</label>
+        <input type="text" id="username" name="username" autocomplete="username" placeholder="Votre identifiant" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" required />
+      </div>
+      <button type="submit">Se connecter</button>
+    </form>
+
+    <p class="footer-note">Accès réservé — usage interne</p>
+  </div>
 </body>
 </html>

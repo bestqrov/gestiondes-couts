@@ -53,7 +53,8 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
   if (!username || !password || !checkCredentials(username, password)) {
-    const errorBlock = '<div class="error">Identifiant ou mot de passe incorrect.</div>';
+    const errorBlock =
+      '<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Identifiant ou mot de passe incorrect.</span></div>';
     res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
     return;
   }

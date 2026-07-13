@@ -2,62 +2,263 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Customs Declaration → Excel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Déclaration Douanière → Excel</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
-    h1 { font-size: 20px; }
+    :root {
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --ink-400: #94a3b8;
+      --line: #e2e8f0;
+      --line-soft: #eef2f7;
+      --brand: #4338ca;
+      --brand-600: #4f46e5;
+      --brand-700: #3730a3;
+      --brand-soft: #eef2ff;
+      --ok: #059669;
+      --ok-bg: #ecfdf5;
+      --danger: #b91c1c;
+      --danger-bg: #fef2f2;
+      --danger-line: #fecaca;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 48px 20px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink-900);
+      background:
+        radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #f0fdfa 0%, transparent 55%),
+        #f8fafc;
+    }
+
+    .wrap { max-width: 640px; margin: 0 auto; }
+
+    .top { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+
+    .badge {
+      width: 40px;
+      height: 40px;
+      flex: none;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 16px -6px rgba(67, 56, 202, 0.4);
+    }
+    .badge svg { width: 21px; height: 21px; }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--ink-900);
+    }
+
+    .lede {
+      font-size: 14px;
+      color: var(--ink-500);
+      margin: 10px 0 26px;
+      line-height: 1.55;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 20px 50px -16px rgba(15, 23, 42, 0.12);
+      padding: 28px;
+    }
+
+    .error {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid var(--danger-line);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .error svg { flex: none; margin-top: 2px; }
+
     .drop-zone {
-      border: 2px dashed #999; border-radius: 8px; padding: 24px; margin: 16px 0;
-      text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+      position: relative;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 13px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      cursor: pointer;
+      background: #f8fafc;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
     }
-    .drop-zone.dragover { border-color: #2563eb; background: #eff6ff; }
+    .drop-zone:hover { border-color: var(--brand-600); background: var(--brand-soft); }
+    .drop-zone.dragover {
+      border-color: var(--brand-600);
+      background: var(--brand-soft);
+      box-shadow: 0 0 0 3.5px rgba(79, 70, 229, 0.14);
+    }
+    .drop-zone.filled { border-style: solid; border-color: var(--ok); background: var(--ok-bg); }
     .drop-zone input { display: none; }
-    .drop-zone .filename { margin-top: 8px; font-size: 13px; color: #2563eb; font-weight: 600; }
-    .drop-zone .label { font-weight: 600; }
-    .drop-zone .hint { font-size: 12px; color: #666; margin-top: 4px; }
-    button {
-      width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
-      background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;
+
+    .dz-icon {
+      flex: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: #eef2ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--brand-600);
+      transition: background 0.15s, color 0.15s;
     }
-    button:disabled { background: #9ca3af; cursor: not-allowed; }
-    .error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin-bottom: 16px; white-space: pre-wrap; font-size: 13px; }
-    #status { margin-top: 16px; font-size: 13px; color: #666; text-align: center; }
+    .drop-zone.filled .dz-icon { background: #d1fae5; color: var(--ok); }
+    .dz-icon svg { width: 19px; height: 19px; }
+
+    .dz-body { min-width: 0; flex: 1; }
+    .drop-zone .label { font-weight: 600; font-size: 14.5px; color: var(--ink-900); }
+    .drop-zone .hint { font-size: 12.5px; color: var(--ink-500); margin-top: 2px; }
+    .drop-zone .filename {
+      margin-top: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ok);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      overflow-wrap: anywhere;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 8px;
+      padding: 13px;
+      font-size: 14.5px;
+      font-weight: 600;
+      font-family: inherit;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px -4px rgba(67, 56, 202, 0.45);
+      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s, background 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.06); }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; }
+
+    #status {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--ink-500);
+      text-align: center;
+      min-height: 18px;
+    }
+    #status.busy { color: var(--brand-600); font-weight: 600; }
+    #status.done { color: var(--ok); font-weight: 600; }
+
+    .foot-note {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--ink-400);
+      margin-top: 24px;
+    }
   </style>
 </head>
 <body>
-  <h1>Déclaration douanière → Excel</h1>
-  <p>Déposez ou sélectionnez les 2 documents (Liquidation + DUM), puis générez.</p>
+  <div class="wrap">
+    <div class="top">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M7 3.5h7l5 5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5A1.5 1.5 0 0 1 6.5 3.5H7Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M14 3.5V8a1 1 0 0 0 1 1h4.5" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M8.5 13.2l2.1 2.1 4.3-4.5" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>Déclaration Douanière → Excel</h1>
+    </div>
+    <p class="lede">Déposez les deux documents (Liquidation et DUM) — l'ordre n'a pas d'importance, ils sont identifiés automatiquement. Un fichier Excel avec deux feuilles sera généré et téléchargé.</p>
 
-  {{ERROR_BLOCK}}
+    <div class="card">
+      {{ERROR_BLOCK}}
 
-  <form id="uploadForm" method="post" action="/generate" enctype="multipart/form-data">
-    <div class="drop-zone" id="zone-liquidation">
-      <div class="label">Liquidation Douanière (BE)</div>
-      <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
-      <div class="filename" id="name-liquidation"></div>
-      <input type="file" name="liquidation" id="input-liquidation" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+      <form id="uploadForm" method="post" action="/generate" enctype="multipart/form-data">
+        <div class="drop-zone" id="zone-liquidation">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">Liquidation Douanière (BE)</div>
+            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-liquidation"></div>
+          </div>
+          <input type="file" name="liquidation" id="input-liquidation" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <div class="drop-zone" id="zone-dum">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">DUM</div>
+            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-dum"></div>
+          </div>
+          <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <button type="submit" id="submitBtn">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Générer les fichiers Excel
+        </button>
+        <div id="status"></div>
+      </form>
     </div>
 
-    <div class="drop-zone" id="zone-dum">
-      <div class="label">DUM</div>
-      <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
-      <div class="filename" id="name-dum"></div>
-      <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
-    </div>
-
-    <button type="submit" id="submitBtn">Générer les fichiers Excel</button>
-    <div id="status"></div>
-  </form>
+    <p class="foot-note">Accès réservé — usage interne</p>
+  </div>
 
   <script>
     function wireDropZone(zoneId, inputId, nameId) {
       const zone = document.getElementById(zoneId);
       const input = document.getElementById(inputId);
       const nameEl = document.getElementById(nameId);
+      const checkIcon = '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      function setFile(name) {
+        nameEl.innerHTML = checkIcon + '<span>' + name + '</span>';
+        zone.classList.add('filled');
+      }
 
       zone.addEventListener('click', () => input.click());
       input.addEventListener('change', () => {
-        nameEl.textContent = input.files[0] ? input.files[0].name : '';
+        if (input.files[0]) setFile(input.files[0].name);
       });
       zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
       zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
@@ -66,7 +267,7 @@
         zone.classList.remove('dragover');
         if (e.dataTransfer.files.length > 0) {
           input.files = e.dataTransfer.files;
-          nameEl.textContent = input.files[0].name;
+          setFile(input.files[0].name);
         }
       });
     }
@@ -84,11 +285,13 @@
       const liquidationFile = document.getElementById('input-liquidation').files[0];
       const dumFile = document.getElementById('input-dum').files[0];
       if (!liquidationFile || !dumFile) {
+        statusEl.className = '';
         statusEl.textContent = 'Veuillez sélectionner les 2 fichiers avant de générer.';
         return;
       }
 
       submitBtn.disabled = true;
+      statusEl.className = 'busy';
       statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
 
       const formData = new FormData();
@@ -115,16 +318,19 @@
         link.remove();
         URL.revokeObjectURL(url);
 
+        statusEl.className = 'done';
         statusEl.textContent = 'Fichier téléchargé.';
         submitBtn.disabled = false;
       } catch (err) {
+        statusEl.className = '';
         statusEl.textContent = '';
         submitBtn.disabled = false;
         const existingError = document.querySelector('.error');
         if (existingError) existingError.remove();
         const errorDiv = document.createElement('div');
         errorDiv.className = 'error';
-        errorDiv.textContent = 'Échec : ' + err.message;
+        errorDiv.innerHTML = '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+        errorDiv.querySelector('span').textContent = 'Échec : ' + err.message;
         form.parentNode.insertBefore(errorDiv, form);
       }
     });
