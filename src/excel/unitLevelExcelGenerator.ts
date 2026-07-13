@@ -5,13 +5,17 @@ import { allocateTaxAcrossUnits, unionTaxCodes } from './unitLevelTaxHelpers.js'
 // Shared by the standalone File 2 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
 // to a workbook writer they own, so the sheet-building logic lives here once.
+// In the combined workbook this sheet is named "Global": every article's
+// unit rows, one after another, so an admin doesn't have to flip between
+// per-article sheets to see everything at once.
 export function addUnitLevelSheet(
   workbook: ExcelJS.stream.xlsx.WorkbookWriter,
-  declaration: Declaration
+  declaration: Declaration,
+  sheetName = 'Unit Detail'
 ): void {
   const taxCodes = unionTaxCodes(declaration.articles);
 
-  const sheet = workbook.addWorksheet('Unit Detail');
+  const sheet = workbook.addWorksheet(sheetName);
 
   sheet.columns = [
     { header: 'Nom Article', key: 'nomArticle', width: 30 },

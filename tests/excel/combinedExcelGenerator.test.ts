@@ -27,7 +27,7 @@ describe('generateCombinedExcel', () => {
     tempDir = undefined;
   });
 
-  it('writes a single .xlsx file containing the Articles summary plus one sheet per product', async () => {
+  it('writes a single .xlsx file containing the Articles summary, a combined Global sheet, plus one sheet per product', async () => {
     const declaration = loadRealDeclaration();
     const { filePath, dir } = createTempXlsxPath('combined');
     tempDir = dir;
@@ -37,10 +37,11 @@ describe('generateCombinedExcel', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    // 1 summary sheet + 1 sheet per article (2 articles in this fixture)
-    expect(workbook.worksheets).toHaveLength(3);
+    // 1 summary sheet + 1 combined "Global" sheet + 1 sheet per article (2 articles in this fixture)
+    expect(workbook.worksheets).toHaveLength(4);
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
       'Articles',
+      'Global',
       '1-T-SHIRT',
       '2-T-SHIRT',
     ]);
@@ -48,6 +49,16 @@ describe('generateCombinedExcel', () => {
     const articlesSheet = workbook.getWorksheet('Articles')!;
     expect(articlesSheet.getRow(1).getCell(1).value).toBe('Nom Article');
     expect(articlesSheet.rowCount).toBe(3); // header + 2 articles
+
+    const globalSheet = workbook.getWorksheet('Global')!;
+    expect(globalSheet.getRow(1).getCell(1).value).toBe('Nom Article');
+    expect(globalSheet.rowCount).toBe(555); // header + 354 + 200 unit rows, both articles combined
+    // First article's rows come before the second's, each stacked one under the other.
+    expect(globalSheet.getRow(2).getCell(1).value).toBe('T-SHIRT');
+    expect(globalSheet.getRow(2).getCell(3).value).toBe(1); // article 1, serial 1
+    expect(globalSheet.getRow(355).getCell(3).value).toBe(354); // article 1, serial 354 (last row)
+    expect(globalSheet.getRow(356).getCell(3).value).toBe(1); // article 2, serial 1 (first row after article 1)
+    expect(globalSheet.getRow(555).getCell(3).value).toBe(200); // article 2, serial 200 (last row)
 
     const article1Sheet = workbook.getWorksheet('1-T-SHIRT')!;
     expect(article1Sheet.getRow(1).getCell(1).value).toBe('Nom Article');
