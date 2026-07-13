@@ -1,4 +1,6 @@
 import type { User } from '../db/usersRepository.js';
+import type { Declaration } from '../domain/types.js';
+import type { CostCalculationResult } from '../domain/costCalculator.js';
 
 export type SuperAdminPage = 'dashboard' | 'users' | 'services' | 'costs' | 'settings';
 
@@ -215,6 +217,8 @@ function renderShell(activePage: SuperAdminPage, title: string, bodyHtml: string
     color: var(--ink-400); font-weight: 600; padding: 0 10px 10px; border-bottom: 1px solid var(--line); }
   td { padding: 12px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.cost { font-weight: 700; color: var(--brand-700); }
   .muted { color: var(--ink-400); }
   .status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
   .status-active { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-line); }
@@ -291,9 +295,13 @@ function renderShell(activePage: SuperAdminPage, title: string, bodyHtml: string
 </html>`;
 }
 
-function statCard(variant: 'brand' | 'success' | 'warn' | 'danger', value: number, label: string): string {
+function statCard(
+  variant: 'brand' | 'success' | 'warn' | 'danger',
+  value: string | number,
+  label: string
+): string {
   return `<div class="stat-card stat-card-${variant}">
-    <div class="stat-value">${value}</div>
+    <div class="stat-value">${escapeHtml(String(value))}</div>
     <div class="stat-label">${escapeHtml(label)}</div>
   </div>`;
 }
@@ -410,4 +418,57 @@ export function renderSuperAdminPlaceholder(
     </div>
   `;
   return renderShell(page, title, body);
+}
+
+function formatMoney(value: number): string {
+  return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Shows the cost breakdown of the single most recently generated declaration
+// (in-memory, same source as the admin tool's own "Coûts des produits"
+// panel) — not a persisted, cross-admin history, since declarations aren't
+// saved to the database yet (a separate, larger follow-up).
+export function renderSuperAdminCosts(declaration: Declaration, cost: CostCalculationResult): string {
+  const costByNumero = new Map(cost.articleCosts.map((c) => [c.numero, c.costPerUnit]));
+
+  const rows = declaration.articles
+    .map((article) => {
+      const costPerUnit = costByNumero.get(article.numero) ?? 0;
+      return `<tr>
+        <td>${escapeHtml(article.nomArticle)}</td>
+        <td>${escapeHtml(article.hsCode)}</td>
+        <td>${escapeHtml(article.pays)}</td>
+        <td class="num">${article.quantite}</td>
+        <td class="num cost">${formatMoney(costPerUnit)}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const partialNote = cost.partial
+    ? `<div class="error" style="background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Coût partiel — données d'expédition (fret, assurance, montant facturé) non détectées ou incomplètes ; seuls les droits et taxes sont inclus ci-dessous.</span>
+      </div>`
+    : '';
+
+  const totalCard = statCard(
+    cost.partial ? 'warn' : 'brand',
+    formatMoney(cost.totalLandedCost),
+    cost.partial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
+  );
+
+  const body = `
+    <p class="lede">Déclaration ${escapeHtml(declaration.code)} — ${escapeHtml(declaration.redevable)} (la plus récente générée sur l'application).</p>
+    ${partialNote}
+    <div class="stat-grid">${totalCard}</div>
+    <div class="card">
+      <h2>Coût par produit</h2>
+      <table>
+        <thead><tr><th>Produit</th><th>HSC</th><th>Pays</th><th>Qté</th><th>Coût / unité</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  return renderShell('costs', 'Coût de produit', body);
 }

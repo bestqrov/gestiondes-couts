@@ -16,7 +16,9 @@ import {
   renderSuperAdminOverview,
   renderSuperAdminUsers,
   renderSuperAdminPlaceholder,
+  renderSuperAdminCosts,
 } from './renderSuperAdminDashboard.js';
+import { calculateLandedCost, type PartialShipmentCost } from '../domain/costCalculator.js';
 import {
   createSession,
   requireAuth,
@@ -69,6 +71,7 @@ const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8'
 // preview can reference it without a database.
 let lastDeclaration: Declaration | undefined;
 let lastGeneratedFilePath: string | undefined;
+let lastShipmentCost: PartialShipmentCost | undefined;
 
 // multer's default disk storage strips the original file extension, but
 // extractDocumentText() dispatches on extension (.pdf vs image formats) —
@@ -197,6 +200,7 @@ app.post(
 
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
+      lastShipmentCost = dum.shipmentCost;
       await sendXlsxFile(res, generatedFilePath, 'Declaration.xlsx');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -272,13 +276,18 @@ app.get('/superadmin/services', requireSuperAdmin, (_req, res) => {
 });
 
 app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
-  res.send(
-    renderSuperAdminPlaceholder(
-      'costs',
-      'Coût de produit',
-      "Analyse des coûts par produit à l'échelle de l'application — nécessite l'historique des déclarations, à venir."
-    )
-  );
+  if (!lastDeclaration) {
+    res.send(
+      renderSuperAdminPlaceholder(
+        'costs',
+        'Coût de produit',
+        "Aucune déclaration n'a encore été générée sur l'application. Le coût par produit s'affichera ici après une génération."
+      )
+    );
+    return;
+  }
+  const cost = calculateLandedCost(lastDeclaration, lastShipmentCost ?? {});
+  res.send(renderSuperAdminCosts(lastDeclaration, cost));
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
