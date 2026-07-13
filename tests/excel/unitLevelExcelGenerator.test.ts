@@ -43,10 +43,11 @@ describe('generateUnitLevelExcel', () => {
     expect(headerRow.getCell(1).value).toBe('Nom Article');
     expect(headerRow.getCell(2).value).toBe('HSC');
     expect(headerRow.getCell(3).value).toBe('Serial Number');
+    expect(headerRow.getCell(4).value).toBe('Valeur Déclarée');
     // union of tax codes across both articles, sorted: 000110, 002109, 007217
-    expect(headerRow.getCell(4).value).toBe('000110');
-    expect(headerRow.getCell(5).value).toBe('002109');
-    expect(headerRow.getCell(6).value).toBe('007217');
+    expect(headerRow.getCell(5).value).toBe('000110');
+    expect(headerRow.getCell(6).value).toBe('002109');
+    expect(headerRow.getCell(7).value).toBe('007217');
 
     // article 1: 354 units, article 2: 200 units -> 554 data rows + 1 header = 555
     expect(sheet.rowCount).toBe(555);
@@ -55,6 +56,8 @@ describe('generateUnitLevelExcel', () => {
     const firstRow = sheet.getRow(2);
     expect(firstRow.getCell(1).value).toBe('T-SHIRT');
     expect(firstRow.getCell(3).value).toBe(1);
+    // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
+    expect(Number(firstRow.getCell(4).value)).toBeCloseTo(27147.0 / 354, 4);
 
     // last row of article 1 (row 355 = header + 354 units), first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(355);
@@ -62,6 +65,8 @@ describe('generateUnitLevelExcel', () => {
     const firstRowArticle2 = sheet.getRow(356);
     expect(firstRowArticle2.getCell(3).value).toBe(1);
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
+    // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
+    expect(Number(firstRowArticle2.getCell(4).value)).toBeCloseTo(12892.992 / 200, 4);
 
     // Reconciliation: sum each tax column across article 1's 354 rows (rows 2-355)
     // against the known source montants from the Liquidation fixture:
@@ -71,9 +76,9 @@ describe('generateUnitLevelExcel', () => {
     let sum007217 = 0;
     for (let rowNum = 2; rowNum <= 355; rowNum++) {
       const row = sheet.getRow(rowNum);
-      sum000110 += Number(row.getCell(4).value);
-      sum002109 += Number(row.getCell(5).value);
-      sum007217 += Number(row.getCell(6).value);
+      sum000110 += Number(row.getCell(5).value);
+      sum002109 += Number(row.getCell(6).value);
+      sum007217 += Number(row.getCell(7).value);
     }
     expect(sum000110).toBeCloseTo(0.0, 2);
     expect(sum002109).toBeCloseTo(5443.0, 2);
@@ -136,34 +141,35 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    // header: Nom Article | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union)
+    // header: Nom Article | HSC | Serial Number | Valeur Déclarée | 000110 | 002109 | 007217 (sorted union)
     const headerRow = sheet.getRow(1);
-    expect(headerRow.getCell(4).value).toBe('000110');
-    expect(headerRow.getCell(5).value).toBe('002109');
-    expect(headerRow.getCell(6).value).toBe('007217');
+    expect(headerRow.getCell(4).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(5).value).toBe('000110');
+    expect(headerRow.getCell(6).value).toBe('002109');
+    expect(headerRow.getCell(7).value).toBe('007217');
 
     // article A: 3 rows (rows 2-4), has 000110 and 007217 but NOT 002109 -> 002109 column must be 0
     for (let rowNum = 2; rowNum <= 4; rowNum++) {
       const row = sheet.getRow(rowNum);
-      expect(Number(row.getCell(5).value)).toBe(0); // 002109 column, article A doesn't have this code
+      expect(Number(row.getCell(6).value)).toBe(0); // 002109 column, article A doesn't have this code
     }
     // article A's 007217 column (montant=3 across 3 units) should reconcile to 3
     let sumA007217 = 0;
     for (let rowNum = 2; rowNum <= 4; rowNum++) {
-      sumA007217 += Number(sheet.getRow(rowNum).getCell(6).value);
+      sumA007217 += Number(sheet.getRow(rowNum).getCell(7).value);
     }
     expect(sumA007217).toBeCloseTo(3, 2);
 
     // article B: 2 rows (rows 5-6), has ONLY 002109 -> 000110 and 007217 columns must be 0
     for (let rowNum = 5; rowNum <= 6; rowNum++) {
       const row = sheet.getRow(rowNum);
-      expect(Number(row.getCell(4).value)).toBe(0); // 000110 column, article B doesn't have this code
-      expect(Number(row.getCell(6).value)).toBe(0); // 007217 column, article B doesn't have this code
+      expect(Number(row.getCell(5).value)).toBe(0); // 000110 column, article B doesn't have this code
+      expect(Number(row.getCell(7).value)).toBe(0); // 007217 column, article B doesn't have this code
     }
     // article B's 002109 column (montant=10 across 2 units) should reconcile to 10
     let sumB002109 = 0;
     for (let rowNum = 5; rowNum <= 6; rowNum++) {
-      sumB002109 += Number(sheet.getRow(rowNum).getCell(5).value);
+      sumB002109 += Number(sheet.getRow(rowNum).getCell(6).value);
     }
     expect(sumB002109).toBeCloseTo(10, 2);
   });

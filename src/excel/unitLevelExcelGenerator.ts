@@ -21,6 +21,7 @@ export function addUnitLevelSheet(
     { header: 'Nom Article', key: 'nomArticle', width: 30 },
     { header: 'HSC', key: 'hsCode', width: 15 },
     { header: 'Serial Number', key: 'serialNumber', width: 15 },
+    { header: 'Valeur Déclarée', key: 'valeurDeclaree', width: 16 },
     ...taxCodes.map((code) => ({ header: code, key: code, width: 14 })),
   ];
 
@@ -31,6 +32,12 @@ export function addUnitLevelSheet(
         `Article ${article.numero}: quantite (${article.quantite}) is not a whole number; cannot generate one row per unit`
       );
     }
+
+    // Valeur Déclarée / Unité — the same per-unit value on every row of this
+    // article, not a per-unit allocation that needs to reconcile back to a
+    // total the way tax montants do (allocateTaxAcrossUnits handles that
+    // reconciliation case; this is a plain division).
+    const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {
@@ -46,6 +53,7 @@ export function addUnitLevelSheet(
         nomArticle: article.nomArticle,
         hsCode: article.hsCode,
         serialNumber: unit + 1,
+        valeurDeclaree: valeurDeclareePerUnit,
       };
       for (const code of taxCodes) {
         row[code] = perCodeAllocations.get(code)![unit];
@@ -86,6 +94,7 @@ export function addPerArticleUnitSheets(
       { header: 'Nom Article', key: 'nomArticle', width: 30 },
       { header: 'HSC', key: 'hsCode', width: 15 },
       { header: 'Serial Number', key: 'serialNumber', width: 15 },
+      { header: 'Valeur Déclarée', key: 'valeurDeclaree', width: 16 },
       ...taxCodes.map((code) => ({ header: code, key: code, width: 14 })),
     ];
 
@@ -95,6 +104,8 @@ export function addPerArticleUnitSheets(
         `Article ${article.numero}: quantite (${article.quantite}) is not a whole number; cannot generate one row per unit`
       );
     }
+
+    const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const tax of article.taxes) {
@@ -106,6 +117,7 @@ export function addPerArticleUnitSheets(
         nomArticle: article.nomArticle,
         hsCode: article.hsCode,
         serialNumber: unit + 1,
+        valeurDeclaree: valeurDeclareePerUnit,
       };
       for (const code of taxCodes) {
         row[code] = perCodeAllocations.get(code)![unit];

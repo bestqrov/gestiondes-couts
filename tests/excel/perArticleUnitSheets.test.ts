@@ -81,22 +81,44 @@ describe('addPerArticleUnitSheets', () => {
 
     const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
     const header1 = sheet1.getRow(1);
-    expect([1, 2, 3, 4, 5].map((col) => header1.getCell(col).value)).toEqual([
+    expect([1, 2, 3, 4, 5, 6].map((col) => header1.getCell(col).value)).toEqual([
       'Nom Article',
       'HSC',
       'Serial Number',
+      'Valeur Déclarée',
       '000110',
       '007217',
     ]);
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
     const header2 = sheet2.getRow(1);
-    expect([1, 2, 3, 4].map((col) => header2.getCell(col).value)).toEqual([
+    expect([1, 2, 3, 4, 5].map((col) => header2.getCell(col).value)).toEqual([
       'Nom Article',
       'HSC',
       'Serial Number',
+      'Valeur Déclarée',
       '002109',
     ]);
+  });
+
+  it("gives every row of an article the same Valeur Déclarée / Unité value", async () => {
+    const declaration = makeDeclaration();
+    const { filePath, dir } = createTempXlsxPath('per-article-valeur-declaree');
+    tempDir = dir;
+
+    const workbook = await buildWorkbook(declaration, filePath);
+
+    const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
+    // article 1: valeurDeclaree 27147, quantite 3 -> 9049 per unit
+    for (let rowNum = 2; rowNum <= 4; rowNum++) {
+      expect(Number(sheet1.getRow(rowNum).getCell(4).value)).toBeCloseTo(27147 / 3, 4);
+    }
+
+    const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
+    // article 2: valeurDeclaree 9500, quantite 2 -> 4750 per unit
+    for (let rowNum = 2; rowNum <= 3; rowNum++) {
+      expect(Number(sheet2.getRow(rowNum).getCell(4).value)).toBeCloseTo(9500 / 2, 4);
+    }
   });
 
   it('writes exactly quantite rows per article, with correct serial numbers', async () => {
