@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function createDatabase(dbPath: string): Database.Database {
+  if (dbPath !== ':memory:') {
+    mkdirSync(path.dirname(dbPath), { recursive: true });
+  }
   const db = new Database(dbPath);
   if (dbPath !== ':memory:') {
     db.pragma('journal_mode = WAL');
@@ -11,6 +15,8 @@ export function createDatabase(dbPath: string): Database.Database {
   return db;
 }
 
+// Foreign keys (REFERENCES) are declared for documentation/future use but not enforced —
+// PRAGMA foreign_keys is not set. Revisit if orphaned-row bugs surface.
 function runMigrations(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
