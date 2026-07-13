@@ -87,4 +87,26 @@ describe('parseDum', () => {
 
     expect(result.articles[0].nomArticle).toBe('CHEMISE');
   });
+
+  it('extracts shipment-level cost fields (devise, montant facturé, taux de change, fret, assurance, valeur totale déclarée) from the real sample', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.shipmentCost).toEqual({
+      devise: 'EUR',
+      montantFacture: 2981.34,
+      tauxChange: 10.6675,
+      fret: 7467.0,
+      assurance: 118.0,
+      valeurTotaleDeclaree: 40039.992,
+    });
+  });
+
+  it('leaves shipmentCost undefined (not a hard failure) when the cluster is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.shipmentCost).toBeUndefined();
+  });
 });
