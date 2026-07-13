@@ -12,7 +12,11 @@ import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
-import { renderSuperAdminDashboard } from './renderSuperAdminDashboard.js';
+import {
+  renderSuperAdminOverview,
+  renderSuperAdminUsers,
+  renderSuperAdminPlaceholder,
+} from './renderSuperAdminDashboard.js';
 import {
   createSession,
   requireAuth,
@@ -249,8 +253,38 @@ app.get('/download', async (_req, res) => {
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
 
-app.get('/superadmin/dashboard', requireSuperAdmin, (req, res) => {
-  res.send(renderSuperAdminDashboard(listUsers(db), req.session!.userId));
+app.get('/superadmin/dashboard', requireSuperAdmin, (_req, res) => {
+  res.send(renderSuperAdminOverview(listUsers(db)));
+});
+
+app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
+  res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId));
+});
+
+app.get('/superadmin/services', requireSuperAdmin, (_req, res) => {
+  res.send(
+    renderSuperAdminPlaceholder(
+      'services',
+      'Services',
+      "Configuration des services externes (OCR, etc.) — à venir."
+    )
+  );
+});
+
+app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
+  res.send(
+    renderSuperAdminPlaceholder(
+      'costs',
+      'Coût de produit',
+      "Analyse des coûts par produit à l'échelle de l'application — nécessite l'historique des déclarations, à venir."
+    )
+  );
+});
+
+app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
+  res.send(
+    renderSuperAdminPlaceholder('settings', 'Réglages', "Paramètres de l'application — à venir.")
+  );
 });
 
 app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
@@ -261,7 +295,7 @@ app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
   };
 
   const renderWithError = (message: string) => {
-    res.status(400).send(renderSuperAdminDashboard(listUsers(db), req.session!.userId, message));
+    res.status(400).send(renderSuperAdminUsers(listUsers(db), req.session!.userId, message));
   };
 
   if (!username || !password) {
@@ -275,7 +309,7 @@ app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
 
   try {
     createUser(db, username, password, role as UserRole);
-    res.redirect('/superadmin/dashboard');
+    res.redirect('/superadmin/users');
   } catch (error) {
     // better-sqlite3 throws a raw SqliteError (code SQLITE_CONSTRAINT_UNIQUE)
     // on a duplicate username — the only realistic failure mode here, since
@@ -300,7 +334,7 @@ function setDisabledAndRedirect(disabled: boolean) {
       res
         .status(400)
         .send(
-          renderSuperAdminDashboard(
+          renderSuperAdminUsers(
             listUsers(db),
             req.session!.userId,
             'Vous ne pouvez pas désactiver votre propre compte.'
@@ -309,7 +343,7 @@ function setDisabledAndRedirect(disabled: boolean) {
       return;
     }
     setUserDisabled(db, targetId, disabled);
-    res.redirect('/superadmin/dashboard');
+    res.redirect('/superadmin/users');
   };
 }
 
