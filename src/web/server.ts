@@ -117,7 +117,10 @@ app.get('/download', (_req, res) => {
   res.download(combinedFilePath, 'Declaration.xlsx');
 });
 
-const port = Number(process.env.PORT ?? 4310);
+// Default matches Coolify's default "Ports Exposes" (3000) so the app works
+// out of the box even if the PORT environment variable doesn't reach the
+// running container (e.g. a Coolify env var scoped to build-time only).
+const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
