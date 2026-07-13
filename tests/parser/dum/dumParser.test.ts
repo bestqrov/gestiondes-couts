@@ -10,7 +10,12 @@ const fixturePath = path.join(
 );
 
 describe('parseDum', () => {
-  it('parses the crédit d\'enlèvement code and both articles from the real sample document', () => {
+  it('parses the crédit d\'enlèvement code and both articles from the real, jumbled pdfjs-extracted text', () => {
+    // This fixture is the actual raw text pdfjs-dist extracts from a real DUM
+    // PDF — labels and values are scattered non-adjacently (extraction
+    // follows the PDF's content-stream order, not visual reading order), so
+    // this is what the parser must handle in production, not a hand-cleaned
+    // approximation.
     const text = readFileSync(fixturePath, 'utf-8');
     const result = parseDum(text);
 
@@ -47,68 +52,39 @@ describe('parseDum', () => {
   });
 
   it('throws when the Crédit d\'enlèvement code is missing from the document', () => {
-    const text = `N° d'ordre de l'art. : 1
-Colis et désignation des marchandises : T-SHIRT 354.00 NB
-Code marchandises : 6109100010
-Valeur déclarée : 27 147.000
-Unités complémentaires : 354.0 U
-Pays d'origine (Nom et code) : ITALIE IT
-`;
+    const text =
+      '6109100010   27 147.000 43.69   AP 354.0 U ITALIE   IT  COLIS  T-SHIRT 354.00 NB 1';
     expect(() => parseDum(text)).toThrow("Crédit d'enlèvement code not found");
   });
 
-  it('throws mentioning the article number when a required article field is missing', () => {
-    // No "Code marchandises :" line for article 1.
-    const text = `N° d'ordre de l'art. : 1
-Colis et désignation des marchandises : T-SHIRT 354.00 NB
-Valeur déclarée : 27 147.000
-Unités complémentaires : 354.0 U
-Pays d'origine (Nom et code) : ITALIE IT
-
-Renseignements financiers et bancaires : 02 Crédit d'enlèvement 500001099
-`;
-    expect(() => parseDum(text)).toThrow(/DUM article 1/);
-  });
-
-  it('throws when the designation line does not match the expected "NAME QTY UNIT" format', () => {
-    const text = `N° d'ordre de l'art. : 1
-Colis et désignation des marchandises : SOMETHING WEIRD
-Code marchandises : 6109100010
-Valeur déclarée : 27 147.000
-Unités complémentaires : 354.0 U
-Pays d'origine (Nom et code) : ITALIE IT
-
-Renseignements financiers et bancaires : 02 Crédit d'enlèvement 500001099
-`;
-    expect(() => parseDum(text)).toThrow(/designation line does not match/);
-  });
-
-  it('parses a document with a single article, correctly terminating the block at end-of-string', () => {
-    // The credit code appears before the article block (not after) so that the article block's
-    // lookahead has no "Renseignements financiers" or next-article marker to stop at — it must
-    // rely on the "$" end-of-string alternative to terminate correctly.
-    const text = `Renseignements financiers et bancaires : 02 Crédit d'enlèvement 500001099
-
-N° d'ordre de l'art. : 1
-Colis et désignation des marchandises : T-SHIRT 354.00 NB
-Code marchandises : 6109100010
-Valeur déclarée : 27 147.000
-Unités complémentaires : 354.0 U
-Pays d'origine (Nom et code) : ITALIE IT
-`;
+  it('parses a single-article document with a different HS code, country, and product name (not overfit to the one real sample)', () => {
+    const text = `Crédit d'enlèvement 700002123
+8471300000   9 500.000 12.00   AP 40.0 U ESPAGNE   ES  MARCHANDISES EMBALLEES  ORDINATEUR PORTABLE 40.00 NB 1`;
     const result = parseDum(text);
 
-    expect(result.creditEnlevementCode).toBe('500001099');
-    expect(result.articles).toHaveLength(1);
-    expect(result.articles[0]).toEqual({
-      ordre: 1,
-      hsCode: '6109100010',
-      nomArticle: 'T-SHIRT',
-      paysNom: 'ITALIE',
-      paysCode: 'IT',
-      valeurDeclaree: 27147.0,
-      quantite: 354.0,
-      unite: 'U',
-    });
+    expect(result.creditEnlevementCode).toBe('700002123');
+    expect(result.articles).toEqual([
+      {
+        ordre: 1,
+        hsCode: '8471300000',
+        nomArticle: 'ORDINATEUR PORTABLE',
+        paysNom: 'ESPAGNE',
+        paysCode: 'ES',
+        valeurDeclaree: 9500.0,
+        quantite: 40.0,
+        unite: 'U',
+      },
+    ]);
+  });
+
+  it('does not sweep preceding boilerplate words (e.g. "COLIS") into the product name', () => {
+    // The désignation capture requires a 2+ space gap immediately before it —
+    // this test pins that a single-word boilerplate token right before the
+    // real name is correctly excluded.
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.articles[0].nomArticle).toBe('CHEMISE');
   });
 });

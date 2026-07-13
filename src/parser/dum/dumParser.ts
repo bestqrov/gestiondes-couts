@@ -16,8 +16,24 @@ export interface DumResult {
   articles: DumArticleResult[];
 }
 
-const ARTICLE_BLOCK_PATTERN =
-  /N°\s*d'ordre de l'art\.\s*:\s*(\d+)([\s\S]*?)(?=N°\s*d'ordre de l'art\.\s*:\s*\d+|Renseignements financiers|$)/g;
+// pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
+// stream order, not visual reading order — labels and their corresponding
+// values end up scattered non-adjacently in the resulting string (confirmed
+// against a real sample DUM PDF), so label-anchored regexes like
+// "Code marchandises\s*:\s*(\d+)" don't work here. What IS reliable is that
+// each article's DATA VALUES appear together, in a fixed relative order:
+// HS code, valeur déclarée, poids net, AP/SP, quantité, unité, pays (nom +
+// code), then — after a short run of variable boilerplate (déclaration
+// sommaire / colis-type text, which differs per article) — the product
+// designation and its ordre number. This pattern is matched positionally
+// instead of via labels.
+//
+// The désignation capture requires a run of 2+ spaces immediately before it
+// (a genuine field-boundary marker in this jumbled text) so that preceding
+// boilerplate words (e.g. "COLIS", "MARCHANDISES NON EMBALLEE") — which are
+// also capitalized and adjacent — aren't swept into the product name.
+const ARTICLE_PATTERN =
+  /(\d{10})\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+([\d.]+)\s+(U)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+[\d.,]+\s+(?:NB|U)\s+(\d+)\b/g;
 
 export function parseDum(text: string): DumResult {
   // Bounded to a short gap (\D{0,20}) rather than unbounded \D*, so that if OCR noise ever
@@ -29,45 +45,30 @@ export function parseDum(text: string): DumResult {
     throw new Error("Crédit d'enlèvement code not found in DUM document");
   }
 
+  // Note on failure mode: unlike the label-based approach this replaces,
+  // ARTICLE_PATTERN either matches an article fully or not at all — there is
+  // no per-field "missing X" error for a partially-matching article; a
+  // malformed one is simply absent from the result. This risks silently
+  // returning fewer articles than the document actually has. That risk is
+  // caught downstream: DeclarationMerger cross-checks the DUM's article set
+  // against the Liquidation's and throws if they don't match one-to-one, so
+  // a silently-dropped DUM article surfaces as a merge error rather than
+  // silently reaching Excel generation.
   const articles: DumArticleResult[] = [];
 
-  for (const match of text.matchAll(ARTICLE_BLOCK_PATTERN)) {
-    const ordre = Number.parseInt(match[1], 10);
-    const block = match[2];
-
-    const designationLine = extractFirst(block, /Colis et désignation des marchandises\s*:\s*(.+)/);
-    const hsCode = extractFirst(block, /Code marchandises\s*:\s*(\d+)/);
-    const valeurRaw = extractFirst(block, /Valeur déclarée\s*:\s*([\d\s.,]+)/);
-    const quantiteMatch = block.match(/Unités complémentaires\s*:\s*([\d.,]+)\s*(\S+)/);
-    const paysMatch = block.match(/Pays d'origine \(Nom et code\)\s*:\s*(\S+)\s+(\S+)/);
-
-    if (!designationLine || !hsCode || !valeurRaw || !quantiteMatch || !paysMatch) {
-      throw new Error(
-        `DUM article ${ordre}: missing one of designation / HS code / valeur / quantite / pays`
-      );
-    }
-
-    // The trailing "QTY UNIT" captured here (e.g. "354.00 NB") is intentionally discarded and
-    // not cross-validated against the "Unités complémentaires" quantity/unit below (e.g.
-    // "354.0 U") — the two use different unit vocabularies and are not reconciled, by design
-    // for now.
-    const designationMatch = designationLine.match(/^([A-Za-zÀ-ÿ\-\s]+?)\s+[\d.,]+\s+\S+$/);
-    if (!designationMatch) {
-      throw new Error(
-        `DUM article ${ordre}: designation line does not match the expected "NAME QTY UNIT" format: "${designationLine}"`
-      );
-    }
-    const nomArticle = designationMatch[1].trim();
+  for (const match of text.matchAll(ARTICLE_PATTERN)) {
+    const [, hsCode, valeurRaw, quantiteRaw, unite, paysNom, paysCode, nomArticleRaw, ordreRaw] =
+      match;
 
     articles.push({
-      ordre,
+      ordre: Number.parseInt(ordreRaw, 10),
       hsCode,
-      nomArticle,
-      paysNom: paysMatch[1],
-      paysCode: paysMatch[2],
+      nomArticle: nomArticleRaw.trim(),
+      paysNom,
+      paysCode,
       valeurDeclaree: parseFrenchNumber(valeurRaw),
-      quantite: parseFrenchNumber(quantiteMatch[1]),
-      unite: quantiteMatch[2],
+      quantite: parseFrenchNumber(quantiteRaw),
+      unite,
     });
   }
 
