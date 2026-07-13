@@ -13,7 +13,13 @@ import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
 import { renderSuperAdminDashboard } from './renderSuperAdminDashboard.js';
-import { createSession, requireAuth, requireSuperAdmin, setSessionCookie } from './auth.js';
+import {
+  createSession,
+  requireAuth,
+  requireSuperAdmin,
+  setSessionCookie,
+  destroySession,
+} from './auth.js';
 import { getDatabase } from '../db/database.js';
 import {
   findUserByUsername,
@@ -125,14 +131,30 @@ app.post('/login', (req, res) => {
   res.redirect(user.role === 'superadmin' ? '/superadmin/dashboard' : '/');
 });
 
+// Tolerant of a missing/already-expired session cookie — placed before the
+// requireAuth gate below so a logout attempt never itself 401s/redirects
+// into a loop; there's simply nothing to clear in that case.
+app.post('/logout', (req, res) => {
+  destroySession(req, res);
+  res.redirect('/login');
+});
+
 app.use(requireAuth);
 
 app.get('/', (req, res) => {
-  const navLink =
-    req.session?.role === 'superadmin'
-      ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:var(--brand-600);text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
-      : '';
-  res.send(uploadHtml.replace('{{ERROR_BLOCK}}', '').replace('{{NAV_LINK}}', navLink));
+  const isSuperAdmin = req.session?.role === 'superadmin';
+  const navLink = isSuperAdmin
+    ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:var(--brand-600);text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
+    : '';
+  const roleBadge = isSuperAdmin
+    ? '<span class="role-pill role-pill-superadmin">Superadmin</span>'
+    : '<span class="role-pill role-pill-admin">Admin</span>';
+  res.send(
+    uploadHtml
+      .replace('{{ERROR_BLOCK}}', '')
+      .replace('{{NAV_LINK}}', navLink)
+      .replace('{{ROLE_BADGE}}', roleBadge)
+  );
 });
 
 app.post(

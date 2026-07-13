@@ -68,27 +68,29 @@ export function renderSuperAdminDashboard(
   })();
 </script>
 <style>
+  /* Deliberately violet-accented (vs. the indigo/blue admin tool) so a
+     superadmin can tell at a glance which page they're on. */
   :root {
     --ink-900: #0f172a; --ink-700: #334155; --ink-500: #64748b; --ink-400: #94a3b8;
     --line: #e2e8f0; --line-soft: #eef2f7;
-    --brand: #4338ca; --brand-600: #4f46e5; --brand-700: #3730a3; --brand-soft: #eef2ff;
+    --brand: #6d28d9; --brand-600: #7c3aed; --brand-700: #6d28d9; --brand-soft: #f3e8ff;
     --danger: #b91c1c; --danger-bg: #fef2f2; --danger-line: #fecaca;
     --success: #15803d; --success-bg: #f0fdf4; --success-line: #bbf7d0;
     --card-bg: #ffffff; --input-bg: #f8fafc;
-    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%);
-    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #f0fdfa 0%, transparent 55%);
-    --page-bg-3: #f8fafc;
+    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #f3e8ff 0%, transparent 55%);
+    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #fdf4ff 0%, transparent 55%);
+    --page-bg-3: #faf8fc;
   }
   :root[data-theme="dark"] {
     --ink-900: #f1f5f9; --ink-700: #cbd5e1; --ink-500: #94a3b8; --ink-400: #64748b;
     --line: #334155; --line-soft: #1e293b;
-    --brand: #818cf8; --brand-600: #6366f1; --brand-700: #818cf8; --brand-soft: #1e1b4b;
+    --brand: #c084fc; --brand-600: #a855f7; --brand-700: #c084fc; --brand-soft: #3b0764;
     --danger: #f87171; --danger-bg: #3f1212; --danger-line: #7f1d1d;
     --success: #4ade80; --success-bg: #052e16; --success-line: #14532d;
     --card-bg: #0f172a; --input-bg: #1e293b;
-    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #1e1b4b 0%, transparent 55%);
-    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #052e2b 0%, transparent 55%);
-    --page-bg-3: #020617;
+    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #3b0764 0%, transparent 55%);
+    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #1e0a33 0%, transparent 55%);
+    --page-bg-3: #0a0414;
   }
   * { box-sizing: border-box; }
   body {
@@ -109,10 +111,31 @@ export function renderSuperAdminDashboard(
   .theme-toggle .icon-moon { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+  .logout-btn {
+    position: fixed; top: 16px; right: 64px; height: 38px; padding: 0 14px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--line-soft);
+    display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink-700);
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .logout-btn:hover { border-color: var(--danger-line); color: var(--danger); filter: none; }
+  .logout-btn svg { width: 15px; height: 15px; }
   .wrap { max-width: 820px; margin: 0 auto; }
-  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .header-badge {
+    width: 36px; height: 36px; flex: none; border-radius: 10px;
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 16px -6px rgba(124, 58, 237, 0.45);
+  }
+  .header-badge svg { width: 19px; height: 19px; }
   h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
-  a.back { font-size: 13px; color: var(--ink-500); text-decoration: none; }
+  .role-pill-superadmin {
+    display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+    background: var(--brand-soft); color: var(--brand-700);
+  }
+  a.back { font-size: 13px; color: var(--ink-500); text-decoration: none; margin-left: auto; }
   a.back:hover { color: var(--brand-600); }
   .lede { font-size: 13.5px; color: var(--ink-500); margin: 4px 0 24px; }
   .card {
@@ -152,7 +175,7 @@ export function renderSuperAdminDashboard(
   .create-form button {
     padding: 10px 16px; font-size: 13.5px; color: #fff;
     background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border: none;
-    box-shadow: 0 6px 16px -4px rgba(67, 56, 202, 0.4);
+    box-shadow: 0 6px 16px -4px rgba(124, 58, 237, 0.4);
   }
   .error {
     display: flex; gap: 8px; align-items: flex-start; background: var(--danger-bg); color: var(--danger);
@@ -173,9 +196,22 @@ export function renderSuperAdminDashboard(
       <path d="M17 11.3A7 7 0 1 1 8.7 3a5.5 5.5 0 0 0 8.3 8.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
     </svg>
   </button>
+  <form method="post" action="/logout">
+    <button class="logout-btn" type="submit">
+      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 17H5a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 5 3h3M13.5 14l3.5-4-3.5-4M17 10H7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Déconnexion
+    </button>
+  </form>
   <div class="wrap">
     <div class="top">
+      <div class="header-badge">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3l7 3v5.2c0 4.6-3 8.7-7 9.8-4-1.1-7-5.2-7-9.8V6l7-3Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M9 12l2 2 4-4.5" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <h1>Gestion des comptes</h1>
+      <span class="role-pill-superadmin">Superadmin</span>
       <a class="back" href="/">&larr; Retour à l'outil</a>
     </div>
     <p class="lede">Créez des comptes admin, et activez/désactivez l'accès. L'historique d'un compte désactivé reste intact.</p>

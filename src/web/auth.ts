@@ -44,6 +44,18 @@ export function setSessionCookie(res: Response, sessionId: string): void {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${sessionId}; HttpOnly; Path=/; SameSite=Lax`);
 }
 
+// Removes the session record (so the cookie can no longer be exchanged for
+// access) and clears the cookie itself. Tolerant of an already-missing or
+// already-expired cookie — logging out is idempotent, not an error case.
+export function destroySession(req: Request, res: Response): void {
+  const sessionId = getSessionIdFromCookie(req.headers.cookie);
+  if (sessionId) activeSessions.delete(sessionId);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+  );
+}
+
 function getSession(req: Request): SessionInfo | undefined {
   const sessionId = getSessionIdFromCookie(req.headers.cookie);
   if (!sessionId) return undefined;

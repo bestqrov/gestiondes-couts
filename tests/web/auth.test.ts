@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createSession, requireAuth, requireSuperAdmin, type SessionInfo } from '../../src/web/auth.js';
+import {
+  createSession,
+  requireAuth,
+  requireSuperAdmin,
+  destroySession,
+  type SessionInfo,
+} from '../../src/web/auth.js';
 import type { NextFunction, Request, Response } from 'express';
 
 function makeReqRes(cookieHeader: string | undefined, method = 'GET') {
@@ -7,6 +13,7 @@ function makeReqRes(cookieHeader: string | undefined, method = 'GET') {
   const redirectCalls: string[] = [];
   const jsonCalls: unknown[] = [];
   const sendCalls: unknown[] = [];
+  const headers: Record<string, string> = {};
   let statusCode: number | undefined;
   const res = {
     redirect: (url: string) => redirectCalls.push(url),
@@ -16,6 +23,9 @@ function makeReqRes(cookieHeader: string | undefined, method = 'GET') {
     },
     json: (body: unknown) => jsonCalls.push(body),
     send: (body: unknown) => sendCalls.push(body),
+    setHeader: (name: string, value: string) => {
+      headers[name] = value;
+    },
   } as unknown as Response;
   let nextCalled = false;
   const next: NextFunction = () => {
@@ -28,6 +38,7 @@ function makeReqRes(cookieHeader: string | undefined, method = 'GET') {
     redirectCalls,
     jsonCalls,
     sendCalls,
+    headers,
     wasNextCalled: () => nextCalled,
     getStatusCode: () => statusCode,
   };
@@ -111,5 +122,28 @@ describe('requireSuperAdmin', () => {
 
     expect(wasNextCalled()).toBe(false);
     expect(getStatusCode()).toBe(403);
+  });
+});
+
+describe('destroySession', () => {
+  it('invalidates the session so a subsequent requireAuth call fails, and clears the cookie', () => {
+    const sessionId = createSession({ userId: 4, username: 'bob', role: 'admin' });
+    const { req, res, headers } = makeReqRes(`session=${sessionId}`);
+
+    destroySession(req, res);
+
+    expect(headers['Set-Cookie']).toContain('Max-Age=0');
+
+    const afterLogout = makeReqRes(`session=${sessionId}`);
+    requireAuth(afterLogout.req, afterLogout.res, afterLogout.next);
+    expect(afterLogout.wasNextCalled()).toBe(false);
+    expect(afterLogout.redirectCalls).toEqual(['/login']);
+  });
+
+  it('is a no-op (does not throw) when there is no session cookie', () => {
+    const { req, res, headers } = makeReqRes(undefined);
+
+    expect(() => destroySession(req, res)).not.toThrow();
+    expect(headers['Set-Cookie']).toContain('Max-Age=0');
   });
 });
