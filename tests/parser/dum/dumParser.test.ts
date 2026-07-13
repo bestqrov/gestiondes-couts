@@ -102,6 +102,27 @@ describe('parseDum', () => {
     });
   });
 
+  it('maps each capture group to the correct field, independent of the real fixture\'s incidental value ordering', () => {
+    // Synthetic values are chosen to be pairwise distinct and not sorted by
+    // magnitude, so a transposed capture group (e.g. fret/assurance swapped)
+    // would fail this test even though it might not fail against the real
+    // fixture, where the values happen to differ enough in magnitude to mask
+    // such a bug.
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1
+USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
+    const result = parseDum(text);
+
+    expect(result.shipmentCost).toEqual({
+      devise: 'USD',
+      montantFacture: 1111.11,
+      tauxChange: 22.2,
+      fret: 3333.33,
+      assurance: 44.4,
+      valeurTotaleDeclaree: 5555.55,
+    });
+  });
+
   it('leaves shipmentCost undefined (not a hard failure) when the cluster is not found', () => {
     const text = `Crédit d'enlèvement 700002123
 6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;

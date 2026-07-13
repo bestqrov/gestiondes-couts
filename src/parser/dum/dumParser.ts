@@ -52,6 +52,13 @@ const ARTICLE_PATTERN =
 // anchor. Optional: if not found, shipmentCost is simply omitted rather
 // than treated as a parse failure — the app's core function doesn't depend
 // on it.
+//
+// The currency alternation (EUR|MAD|USD|GBP) is derived from the single real
+// sample this pattern was built against. A shipment invoiced in a currency
+// outside this list won't match and falls through to the same "not found" /
+// undefined result as a genuinely malformed document, with no distinct
+// signal for which case occurred. Broaden this list if a shipment in another
+// currency is encountered.
 const SHIPMENT_COST_PATTERN =
   /\b(EUR|MAD|USD|GBP)\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d+\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d{2}\s+\d{2}\s+\d{4}/;
 
