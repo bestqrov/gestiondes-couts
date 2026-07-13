@@ -1,8 +1,10 @@
 import { mkdirSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
-import express from 'express';
+import express, { type Response } from 'express';
 import multer from 'multer';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../parser/detectAndParsePair.js';
@@ -29,7 +31,7 @@ const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8'
 // recently generated declaration in memory so /download and the results
 // preview can reference it without a database.
 let lastDeclaration: Declaration | undefined;
-const combinedFilePath = path.join(OUTPUT_DIR, 'Declaration.xlsx');
+let lastGeneratedFilePath: string | undefined;
 
 // multer's default disk storage strips the original file extension, but
 // extractDocumentText() dispatches on extension (.pdf vs image formats) —
@@ -42,6 +44,27 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+// Express's res.download()/res.sendFile() run the path through encodeURI()
+// before using it as a filesystem path (see node_modules/express/lib/
+// response.js) — harmless for a path made only of URL-safe characters, but
+// this project's own directory name ("gestion de couts") contains spaces,
+// which encodeURI turns into "%20", so Express ends up looking for a file
+// at a path that doesn't exist on disk (confirmed: reproduced locally and
+// matches the exact "NotFoundError: Not Found ... at
+// ServerResponse.download" stack trace seen in production logs). Reading
+// the file ourselves and sending the buffer directly sidesteps this
+// entirely — no URI encoding is ever applied to the filesystem path.
+async function sendXlsxFile(res: Response, filePath: string, downloadName: string): Promise<void> {
+  const buffer = await readFile(filePath);
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+  res.send(buffer);
+}
+
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 
@@ -95,10 +118,18 @@ app.post(
         validateArticle(article);
       }
 
-      await generateCombinedExcel(declaration, combinedFilePath);
+      // Each request writes to its own uniquely-named file rather than a
+      // fixed shared path — two overlapping /generate requests (e.g. a
+      // double-submit, or two users at once) were racing on the same fixed
+      // "Declaration.xlsx" path, so a request could try to res.download() a
+      // file that a concurrent request had just truncated/replaced,
+      // producing a spurious "Not Found" (confirmed in production logs).
+      const generatedFilePath = path.join(OUTPUT_DIR, `declaration-${randomUUID()}.xlsx`);
+      await generateCombinedExcel(declaration, generatedFilePath);
 
       lastDeclaration = declaration;
-      res.download(combinedFilePath, 'Declaration.xlsx');
+      lastGeneratedFilePath = generatedFilePath;
+      await sendXlsxFile(res, generatedFilePath, 'Declaration.xlsx');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ success: false, error: message });
@@ -114,8 +145,12 @@ app.get('/results', (_req, res) => {
   res.send(renderResultsPage(lastDeclaration));
 });
 
-app.get('/download', (_req, res) => {
-  res.download(combinedFilePath, 'Declaration.xlsx');
+app.get('/download', async (_req, res) => {
+  if (!lastGeneratedFilePath) {
+    res.redirect('/');
+    return;
+  }
+  await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
 
 // Default matches Coolify's default "Ports Exposes" (3000) so the app works
