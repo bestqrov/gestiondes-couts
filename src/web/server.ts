@@ -36,6 +36,12 @@ if (!process.env.SUPERADMIN_USERNAME || !process.env.SUPERADMIN_PASSWORD) {
 }
 seedSuperAdminIfEmpty(db, superAdminUsername, superAdminPassword);
 
+// Fixed bcrypt hash (cost 10, matching usersRepository's hashing cost) with
+// no corresponding real password — used so a login attempt against a
+// nonexistent username still pays bcrypt's ~50-100ms cost, instead of
+// returning near-instantly and leaking which usernames exist via timing.
+const DUMMY_PASSWORD_HASH = '$2a$10$r2UyLAu1mdPlxnjaJGSsP.XJFU3ietRR/a.INq8TYvFMb4rSxugbC';
+
 const uploadHtml = readFileSync(path.join(__dirname, 'views/upload.html'), 'utf-8');
 const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8');
 
@@ -95,7 +101,12 @@ app.post('/login', (req, res) => {
   }
 
   const user = findUserByUsername(db, username);
-  if (!user || user.disabledAt || !verifyPassword(user.passwordHash, password)) {
+  // Always run a bcrypt compare, even for a nonexistent username, against a
+  // fixed dummy hash — otherwise a missing user short-circuits before the
+  // ~50-100ms bcrypt call a wrong-password attempt incurs, letting response
+  // timing reveal which usernames exist.
+  const passwordMatches = verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, password);
+  if (!user || user.disabledAt || !passwordMatches) {
     res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
     return;
   }
