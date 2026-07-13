@@ -122,7 +122,7 @@ app.post('/login', (req, res) => {
 
   const sessionId = createSession({ userId: user.id, username: user.username, role: user.role });
   setSessionCookie(res, sessionId);
-  res.redirect('/');
+  res.redirect(user.role === 'superadmin' ? '/superadmin/dashboard' : '/');
 });
 
 app.use(requireAuth);
