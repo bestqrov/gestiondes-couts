@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import sharp from 'sharp';
-import { createWorker, PSM } from 'tesseract.js';
+import { createWorker, OEM, PSM } from 'tesseract.js';
 import type { OcrResult } from './types.js';
 
 // Liquidation-style documents are printed as a fixed-width ASCII table
@@ -24,10 +24,23 @@ async function preprocessForOcr(filePath: string): Promise<Buffer> {
 export async function extractImageText(filePath: string): Promise<OcrResult> {
   const preprocessed = await preprocessForOcr(filePath);
 
-  // Tesseract downloads/caches language data (fra.traineddata) on first use.
-  // Point that at the OS temp dir rather than the process's cwd, since cwd
-  // isn't guaranteed writable in a container.
-  const worker = await createWorker('fra', undefined, { cachePath: tmpdir() });
+  // OEM.TESSERACT_ONLY (the "legacy" recognizer) reads this document's
+  // monospace/dot-matrix-style font dramatically more accurately than the
+  // modern LSTM engine (tesseract.js's default) — empirically confirmed
+  // against a real sample: LSTM misread digits throughout the tax table
+  // (e.g. "0" as "e"), while the legacy engine transcribed every tax code
+  // and amount correctly. legacyCore/legacyLang request the traineddata
+  // variant that includes the legacy engine's tables (the default
+  // LSTM-only data doesn't have them).
+  //
+  // Tesseract downloads/caches language data (fra.traineddata) on first
+  // use. Point that at the OS temp dir rather than the process's cwd, since
+  // cwd isn't guaranteed writable in a container.
+  const worker = await createWorker(
+    'fra',
+    OEM.TESSERACT_ONLY,
+    { legacyCore: true, legacyLang: true, cachePath: tmpdir() }
+  );
   try {
     await worker.setParameters({
       tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
