@@ -75,6 +75,43 @@ describe('declarationsRepository', () => {
       excelFilePath: '/data/declaration-1.xlsx',
     });
 
+    const articleRows = db
+      .prepare('SELECT * FROM declaration_articles WHERE declaration_id = ?')
+      .all(id) as Array<{
+        numero: number;
+        hs_code: string;
+        nom_article: string;
+        pays: string;
+        valeur_declaree: number;
+        quantite: number;
+        total_article: number;
+        cost_per_unit: number;
+        taxes_json: string;
+      }>;
+
+    expect(articleRows).toHaveLength(1);
+    expect(articleRows[0]).toMatchObject({
+      numero: 1,
+      hs_code: '6109100010',
+      nom_article: 'T-SHIRT',
+      pays: 'ITALIE',
+      valeur_declaree: 27147,
+      quantite: 354,
+      total_article: 5511,
+      cost_per_unit: 42.5,
+    });
+    expect(JSON.parse(articleRows[0].taxes_json)).toEqual([
+      { code: '000110', assiette: 27147, taux: 0, montant: 0 },
+      { code: '007217', assiette: 27147, taux: 0.25, montant: 68 },
+      { code: '002109', assiette: 27215, taux: 20, montant: 5443 },
+    ]);
+
+    db.close();
+  });
+
+  it('returns undefined from getDeclarationById for a nonexistent id', () => {
+    const db = createDatabase(':memory:');
+    expect(getDeclarationById(db, 999)).toBeUndefined();
     db.close();
   });
 
