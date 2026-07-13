@@ -76,4 +76,28 @@ describe('calculateLandedCost', () => {
       expect(Number.isFinite(cost.costPerUnit)).toBe(true);
     }
   });
+
+  it('marks the result partial (and omits shipment cost from the total) when every article has a zero declared value, even with full shipment data', () => {
+    const { declaration, shipmentCost } = loadRealDeclaration();
+    for (const article of declaration.articles) {
+      article.valeurDeclaree = 0;
+    }
+
+    const result = calculateLandedCost(declaration, shipmentCost);
+
+    expect(result.partial).toBe(true);
+
+    const totalTaxes = declaration.articles.reduce(
+      (sum, a) => sum + a.taxes.reduce((s, t) => s + t.montant, 0),
+      0
+    );
+    expect(result.totalLandedCost).toBeCloseTo(totalTaxes, 2);
+  });
+
+  it('throws when an article has a non-positive quantite instead of silently returning a 0 cost per unit', () => {
+    const { declaration, shipmentCost } = loadRealDeclaration();
+    declaration.articles[0].quantite = 0;
+
+    expect(() => calculateLandedCost(declaration, shipmentCost)).toThrow('quantite must be > 0');
+  });
 });
