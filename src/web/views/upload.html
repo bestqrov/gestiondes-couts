@@ -4,6 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Déclaration Douanière → Excel</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('theme');
+      var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <style>
     :root {
       --ink-900: #0f172a;
@@ -25,6 +32,40 @@
       --warn: #b45309;
       --warn-bg: #fffbeb;
       --warn-line: #fde68a;
+      --card-bg: #ffffff;
+      --input-bg: #f8fafc;
+      --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%);
+      --page-bg-2: radial-gradient(900px 500px at 100% 0%, #f0fdfa 0%, transparent 55%);
+      --page-bg-3: #f8fafc;
+      --overlay: rgba(15, 23, 42, 0.45);
+    }
+
+    :root[data-theme="dark"] {
+      --ink-900: #f1f5f9;
+      --ink-700: #cbd5e1;
+      --ink-500: #94a3b8;
+      --ink-400: #64748b;
+      --line: #334155;
+      --line-soft: #1e293b;
+      --brand: #818cf8;
+      --brand-600: #6366f1;
+      --brand-700: #818cf8;
+      --brand-soft: #1e1b4b;
+      --ok: #4ade80;
+      --ok-bg: #052e16;
+      --ok-line: #14532d;
+      --danger: #f87171;
+      --danger-bg: #3f1212;
+      --danger-line: #7f1d1d;
+      --warn: #fbbf24;
+      --warn-bg: #422006;
+      --warn-line: #92400e;
+      --card-bg: #0f172a;
+      --input-bg: #1e293b;
+      --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #1e1b4b 0%, transparent 55%);
+      --page-bg-2: radial-gradient(900px 500px at 100% 0%, #052e2b 0%, transparent 55%);
+      --page-bg-3: #020617;
+      --overlay: rgba(0, 0, 0, 0.6);
     }
 
     * { box-sizing: border-box; }
@@ -35,11 +76,32 @@
       padding: 48px 20px 64px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       color: var(--ink-900);
-      background:
-        radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #f0fdfa 0%, transparent 55%),
-        #f8fafc;
+      background: var(--page-bg-1), var(--page-bg-2), var(--page-bg-3);
+      transition: background 0.2s, color 0.2s;
     }
+
+    .theme-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--line-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink-700);
+      transition: background 0.15s, border-color 0.15s;
+      z-index: 60;
+    }
+    .theme-toggle:hover { border-color: var(--brand-600); }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
 
     .wrap { max-width: 640px; margin: 0 auto; }
 
@@ -75,11 +137,12 @@
     }
 
     .card {
-      background: #ffffff;
+      background: var(--card-bg);
       border: 1px solid var(--line);
       border-radius: 18px;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 20px 50px -16px rgba(15, 23, 42, 0.12);
       padding: 28px;
+      transition: background 0.2s, border-color 0.2s;
     }
 
     .error {
@@ -100,12 +163,12 @@
 
     .drop-zone {
       position: relative;
-      border: 1.5px dashed #cbd5e1;
+      border: 1.5px dashed var(--line);
       border-radius: 13px;
       padding: 22px 20px;
       margin-bottom: 14px;
       cursor: pointer;
-      background: #f8fafc;
+      background: var(--input-bg);
       transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
       display: flex;
       gap: 14px;
@@ -125,14 +188,14 @@
       width: 38px;
       height: 38px;
       border-radius: 10px;
-      background: #eef2ff;
+      background: var(--brand-soft);
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--brand-600);
       transition: background 0.15s, color 0.15s;
     }
-    .drop-zone.filled .dz-icon { background: #d1fae5; color: var(--ok); }
+    .drop-zone.filled .dz-icon { background: var(--ok-bg); color: var(--ok); }
     .dz-icon svg { width: 19px; height: 19px; }
 
     .dz-body { min-width: 0; flex: 1; }
@@ -170,15 +233,15 @@
     }
     button:hover:not(:disabled) { filter: brightness(1.06); }
     button:active:not(:disabled) { transform: translateY(1px); }
-    button:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; }
+    button:disabled { background: var(--line); box-shadow: none; cursor: not-allowed; }
 
     button.secondary {
-      background: #ffffff;
+      background: var(--card-bg);
       color: var(--ink-700);
       border: 1.5px solid var(--line);
       box-shadow: none;
     }
-    button.secondary:hover:not(:disabled) { background: #f8fafc; filter: none; border-color: #cbd5e1; }
+    button.secondary:hover:not(:disabled) { background: var(--input-bg); filter: none; border-color: var(--brand-600); }
 
     button.ghost {
       background: transparent;
@@ -236,12 +299,12 @@
     /* Validation dialog */
     .modal-overlay {
       display: none;
-      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      position: fixed; inset: 0; background: var(--overlay);
       align-items: center; justify-content: center; padding: 20px; z-index: 50;
     }
     .modal-overlay.visible { display: flex; }
     .modal-card {
-      background: #ffffff; border-radius: 16px; max-width: 360px; width: 100%;
+      background: var(--card-bg); border-radius: 16px; max-width: 360px; width: 100%;
       padding: 26px; box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35);
       text-align: center;
     }
@@ -256,6 +319,15 @@
   </style>
 </head>
 <body>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Changer de thème">
+    <svg class="icon-sun" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M10 2v1.5M10 16.5V18M18 10h-1.5M3.5 10H2M15.5 4.5l-1 1M5.5 14.5l-1 1M15.5 15.5l-1-1M5.5 5.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17 11.3A7 7 0 1 1 8.7 3a5.5 5.5 0 0 0 8.3 8.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+  </button>
   <div class="wrap">
     <div class="top" id="pageHeader">
       <div class="badge">
@@ -353,6 +425,12 @@
   </div>
 
   <script>
+    document.getElementById('themeToggle').addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    });
+
     function wireDropZone(zoneId, inputId, nameId) {
       const zone = document.getElementById(zoneId);
       const input = document.getElementById(inputId);

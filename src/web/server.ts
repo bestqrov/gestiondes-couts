@@ -130,7 +130,7 @@ app.use(requireAuth);
 app.get('/', (req, res) => {
   const navLink =
     req.session?.role === 'superadmin'
-      ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:#4f46e5;text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
+      ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:var(--brand-600);text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
       : '';
   res.send(uploadHtml.replace('{{ERROR_BLOCK}}', '').replace('{{NAV_LINK}}', navLink));
 });

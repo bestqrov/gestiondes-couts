@@ -60,6 +60,13 @@ export function renderSuperAdminDashboard(
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Superadmin — Gestion des comptes</title>
+<script>
+  (function () {
+    var saved = localStorage.getItem('theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 <style>
   :root {
     --ink-900: #0f172a; --ink-700: #334155; --ink-500: #64748b; --ink-400: #94a3b8;
@@ -67,15 +74,41 @@ export function renderSuperAdminDashboard(
     --brand: #4338ca; --brand-600: #4f46e5; --brand-700: #3730a3; --brand-soft: #eef2ff;
     --danger: #b91c1c; --danger-bg: #fef2f2; --danger-line: #fecaca;
     --success: #15803d; --success-bg: #f0fdf4; --success-line: #bbf7d0;
+    --card-bg: #ffffff; --input-bg: #f8fafc;
+    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%);
+    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #f0fdfa 0%, transparent 55%);
+    --page-bg-3: #f8fafc;
+  }
+  :root[data-theme="dark"] {
+    --ink-900: #f1f5f9; --ink-700: #cbd5e1; --ink-500: #94a3b8; --ink-400: #64748b;
+    --line: #334155; --line-soft: #1e293b;
+    --brand: #818cf8; --brand-600: #6366f1; --brand-700: #818cf8; --brand-soft: #1e1b4b;
+    --danger: #f87171; --danger-bg: #3f1212; --danger-line: #7f1d1d;
+    --success: #4ade80; --success-bg: #052e16; --success-line: #14532d;
+    --card-bg: #0f172a; --input-bg: #1e293b;
+    --page-bg-1: radial-gradient(1100px 600px at 12% -10%, #1e1b4b 0%, transparent 55%);
+    --page-bg-2: radial-gradient(900px 500px at 100% 110%, #052e2b 0%, transparent 55%);
+    --page-bg-3: #020617;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; padding: 32px 24px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: var(--ink-900);
-    background: radial-gradient(1100px 600px at 12% -10%, #eef2ff 0%, transparent 55%),
-      radial-gradient(900px 500px at 100% 110%, #f0fdfa 0%, transparent 55%), #f8fafc;
+    background: var(--page-bg-1), var(--page-bg-2), var(--page-bg-3);
+    transition: background 0.2s, color 0.2s;
   }
+  .theme-toggle {
+    position: fixed; top: 16px; right: 16px; width: 38px; height: 38px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--line-soft);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    color: var(--ink-700); transition: background 0.15s, border-color 0.15s;
+  }
+  .theme-toggle:hover { border-color: var(--brand-600); }
+  .theme-toggle svg { width: 18px; height: 18px; }
+  .theme-toggle .icon-moon { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
   .wrap { max-width: 820px; margin: 0 auto; }
   .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
   h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
@@ -83,7 +116,7 @@ export function renderSuperAdminDashboard(
   a.back:hover { color: var(--brand-600); }
   .lede { font-size: 13.5px; color: var(--ink-500); margin: 4px 0 24px; }
   .card {
-    background: #ffffff; border: 1px solid var(--line); border-radius: 16px;
+    background: var(--card-bg); border: 1px solid var(--line); border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 20px 50px -12px rgba(15, 23, 42, 0.1);
     padding: 24px; margin-bottom: 20px;
   }
@@ -112,9 +145,9 @@ export function renderSuperAdminDashboard(
   label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-700); margin: 0 0 6px; }
   input, select {
     width: 100%; padding: 10px 12px; font-size: 14px; font-family: inherit; color: var(--ink-900);
-    background: #f8fafc; border: 1.5px solid var(--line); border-radius: 9px;
+    background: var(--input-bg); border: 1.5px solid var(--line); border-radius: 9px;
   }
-  input:focus, select:focus { outline: none; background: #fff; border-color: var(--brand-600); box-shadow: 0 0 0 3.5px rgba(79, 70, 229, 0.14); }
+  input:focus, select:focus { outline: none; background: var(--card-bg); border-color: var(--brand-600); box-shadow: 0 0 0 3.5px rgba(79, 70, 229, 0.14); }
   .create-form { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr auto; gap: 12px; align-items: end; }
   .create-form button {
     padding: 10px 16px; font-size: 13.5px; color: #fff;
@@ -131,6 +164,15 @@ export function renderSuperAdminDashboard(
 </style>
 </head>
 <body>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Changer de thème">
+    <svg class="icon-sun" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M10 2v1.5M10 16.5V18M18 10h-1.5M3.5 10H2M15.5 4.5l-1 1M5.5 14.5l-1 1M15.5 15.5l-1-1M5.5 5.5l-1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17 11.3A7 7 0 1 1 8.7 3a5.5 5.5 0 0 0 8.3 8.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+  </button>
   <div class="wrap">
     <div class="top">
       <h1>Gestion des comptes</h1>
@@ -169,6 +211,13 @@ export function renderSuperAdminDashboard(
       </table>
     </div>
   </div>
+  <script>
+    document.getElementById('themeToggle').addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    });
+  </script>
 </body>
 </html>`;
 }
