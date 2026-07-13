@@ -27,7 +27,7 @@ describe('generateCombinedExcel', () => {
     tempDir = undefined;
   });
 
-  it('writes a single .xlsx file containing both the Articles and Unit Detail sheets', async () => {
+  it('writes a single .xlsx file containing the Articles summary plus one sheet per product', async () => {
     const declaration = loadRealDeclaration();
     const { filePath, dir } = createTempXlsxPath('combined');
     tempDir = dir;
@@ -37,15 +37,23 @@ describe('generateCombinedExcel', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    expect(workbook.worksheets).toHaveLength(2);
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Articles', 'Unit Detail']);
+    // 1 summary sheet + 1 sheet per article (2 articles in this fixture)
+    expect(workbook.worksheets).toHaveLength(3);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      'Articles',
+      '1-T-SHIRT',
+      '2-T-SHIRT',
+    ]);
 
     const articlesSheet = workbook.getWorksheet('Articles')!;
     expect(articlesSheet.getRow(1).getCell(1).value).toBe('Nom Article');
     expect(articlesSheet.rowCount).toBe(3); // header + 2 articles
 
-    const unitSheet = workbook.getWorksheet('Unit Detail')!;
-    expect(unitSheet.getRow(1).getCell(1).value).toBe('Nom Article');
-    expect(unitSheet.rowCount).toBe(555); // header + 354 + 200 unit rows
+    const article1Sheet = workbook.getWorksheet('1-T-SHIRT')!;
+    expect(article1Sheet.getRow(1).getCell(1).value).toBe('Nom Article');
+    expect(article1Sheet.rowCount).toBe(355); // header + 354 unit rows
+
+    const article2Sheet = workbook.getWorksheet('2-T-SHIRT')!;
+    expect(article2Sheet.rowCount).toBe(201); // header + 200 unit rows
   });
 });

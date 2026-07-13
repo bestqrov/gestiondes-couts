@@ -145,6 +145,38 @@ app.get('/results', (_req, res) => {
   res.send(renderResultsPage(lastDeclaration));
 });
 
+// Duty-only cost per unit (sum of this article's tax montants / quantite) —
+// not full landed cost (purchase price + freight + insurance), which needs
+// the shipment-cost fields and persistence work tracked separately. Labeled
+// clearly on the client as "coût douanier" so it isn't mistaken for the
+// complete landed cost.
+app.get('/last-declaration-cost-summary', (_req, res) => {
+  if (!lastDeclaration) {
+    res.status(404).json({ success: false, error: 'Aucune déclaration générée pour le moment.' });
+    return;
+  }
+
+  const articles = lastDeclaration.articles.map((article) => {
+    const totalTaxes = article.taxes.reduce((sum, tax) => sum + tax.montant, 0);
+    return {
+      numero: article.numero,
+      nomArticle: article.nomArticle,
+      hsCode: article.hsCode,
+      pays: article.pays,
+      quantite: article.quantite,
+      totalTaxes,
+      dutyCostPerUnit: article.quantite > 0 ? totalTaxes / article.quantite : 0,
+    };
+  });
+
+  res.json({
+    success: true,
+    code: lastDeclaration.code,
+    redevable: lastDeclaration.redevable,
+    articles,
+  });
+});
+
 app.get('/download', async (_req, res) => {
   if (!lastGeneratedFilePath) {
     res.redirect('/');
