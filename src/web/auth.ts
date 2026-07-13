@@ -15,6 +15,14 @@ export interface SessionInfo {
   role: UserRole;
 }
 
+declare global {
+  namespace Express {
+    interface Request {
+      session?: SessionInfo;
+    }
+  }
+}
+
 const activeSessions = new Map<string, SessionInfo>();
 
 export function createSession(user: SessionInfo): string {
@@ -45,7 +53,7 @@ function getSession(req: Request): SessionInfo | undefined {
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const session = getSession(req);
   if (session) {
-    (req as Request & { session?: SessionInfo }).session = session;
+    req.session = session;
     next();
     return;
   }
@@ -62,10 +70,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 export function requireSuperAdmin(req: Request, res: Response, next: NextFunction): void {
-  const existing = (req as Request & { session?: SessionInfo }).session;
-  const session = existing ?? getSession(req);
+  const session = req.session ?? getSession(req);
   if (session?.role === 'superadmin') {
-    (req as Request & { session?: SessionInfo }).session = session;
+    req.session = session;
     next();
     return;
   }

@@ -12,9 +12,18 @@ import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
 import { renderResultsPage } from './renderResultsPage.js';
-import { createSession, requireAuth, setSessionCookie } from './auth.js';
+import { renderSuperAdminDashboard } from './renderSuperAdminDashboard.js';
+import { createSession, requireAuth, requireSuperAdmin, setSessionCookie } from './auth.js';
 import { getDatabase } from '../db/database.js';
-import { findUserByUsername, verifyPassword, seedSuperAdminIfEmpty } from '../db/usersRepository.js';
+import {
+  findUserByUsername,
+  verifyPassword,
+  seedSuperAdminIfEmpty,
+  listUsers,
+  createUser,
+  setUserDisabled,
+  type UserRole,
+} from '../db/usersRepository.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,8 +127,12 @@ app.post('/login', (req, res) => {
 
 app.use(requireAuth);
 
-app.get('/', (_req, res) => {
-  res.send(uploadHtml.replace('{{ERROR_BLOCK}}', ''));
+app.get('/', (req, res) => {
+  const navLink =
+    req.session?.role === 'superadmin'
+      ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:#4f46e5;text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
+      : '';
+  res.send(uploadHtml.replace('{{ERROR_BLOCK}}', '').replace('{{NAV_LINK}}', navLink));
 });
 
 app.post(
@@ -213,6 +226,73 @@ app.get('/download', async (_req, res) => {
   }
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
+
+app.get('/superadmin/dashboard', requireSuperAdmin, (req, res) => {
+  res.send(renderSuperAdminDashboard(listUsers(db), req.session!.userId));
+});
+
+app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
+  const { username, password, role } = req.body as {
+    username?: string;
+    password?: string;
+    role?: string;
+  };
+
+  const renderWithError = (message: string) => {
+    res.status(400).send(renderSuperAdminDashboard(listUsers(db), req.session!.userId, message));
+  };
+
+  if (!username || !password) {
+    renderWithError("Identifiant et mot de passe sont requis.");
+    return;
+  }
+  if (role !== 'admin' && role !== 'superadmin') {
+    renderWithError('Rôle invalide.');
+    return;
+  }
+
+  try {
+    createUser(db, username, password, role as UserRole);
+    res.redirect('/superadmin/dashboard');
+  } catch (error) {
+    // better-sqlite3 throws a raw SqliteError (code SQLITE_CONSTRAINT_UNIQUE)
+    // on a duplicate username — the only realistic failure mode here, since
+    // username/password/role are already validated above.
+    if (error instanceof Error && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      renderWithError(`L'identifiant « ${username} » est déjà utilisé.`);
+      return;
+    }
+    throw error;
+  }
+});
+
+function setDisabledAndRedirect(disabled: boolean) {
+  return (req: express.Request, res: express.Response) => {
+    const targetId = Number(req.params.id);
+    // Self-lockout only applies to disabling — a superadmin re-enabling
+    // their own account can't happen anyway (a disabled account can't log
+    // in to reach this route), but guarding disable is essential: the UI
+    // already hides the button for one's own row, but that's not a
+    // substitute for a server-side check against a direct POST.
+    if (disabled && targetId === req.session!.userId) {
+      res
+        .status(400)
+        .send(
+          renderSuperAdminDashboard(
+            listUsers(db),
+            req.session!.userId,
+            'Vous ne pouvez pas désactiver votre propre compte.'
+          )
+        );
+      return;
+    }
+    setUserDisabled(db, targetId, disabled);
+    res.redirect('/superadmin/dashboard');
+  };
+}
+
+app.post('/superadmin/users/:id/disable', requireSuperAdmin, setDisabledAndRedirect(true));
+app.post('/superadmin/users/:id/enable', requireSuperAdmin, setDisabledAndRedirect(false));
 
 // Default matches Coolify's default "Ports Exposes" (3000) so the app works
 // out of the box even if the PORT environment variable doesn't reach the
