@@ -315,7 +315,7 @@
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12.5l4.5 4.5L19 7" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div class="success-title">Génération réussie</div>
-        <div class="success-subtitle" id="successSubtitle">Le fichier Excel a été téléchargé avec succès.</div>
+        <div class="success-subtitle" id="successSubtitle">Le fichier Excel est prêt.</div>
 
         <div class="success-actions">
           <button type="button" class="secondary" id="downloadAgainBtn">
@@ -474,8 +474,11 @@
           throw new Error(`Erreur serveur (${response.status})`);
         }
 
-        const blob = await response.blob();
-        triggerBlobDownload(blob);
+        // Don't auto-download — the user downloads explicitly via the
+        // "Télécharger" button in the success panel below. We still need to
+        // consume the response body, otherwise the connection is left
+        // dangling.
+        await response.blob();
 
         statusEl.className = '';
         statusEl.textContent = '';
