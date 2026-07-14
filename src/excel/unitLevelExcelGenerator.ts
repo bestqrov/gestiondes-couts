@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
 import { allocateTaxAcrossUnits, unionTaxCodes } from './unitLevelTaxHelpers.js';
+import { styleHeaderRow, styleDataRow } from './excelStyling.js';
 
 // Shared by the standalone File 2 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
@@ -14,17 +15,35 @@ export function addUnitLevelSheet(
   sheetName = 'Unit Detail'
 ): void {
   const taxCodes = unionTaxCodes(declaration.articles);
+  // Valeur Déclarée is the last column, after every tax code column.
+  const columnCount = 3 + taxCodes.length + 1;
+  const valeurDeclareeColumn = columnCount;
+  const moneyColumns = new Set<number>([
+    valeurDeclareeColumn,
+    ...taxCodes.map((_, i) => 4 + i),
+  ]);
 
-  const sheet = workbook.addWorksheet(sheetName);
+  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
 
   sheet.columns = [
-    { header: 'Nom Article', key: 'nomArticle', width: 30 },
-    { header: 'HSC', key: 'hsCode', width: 15 },
-    { header: 'Serial Number', key: 'serialNumber', width: 15 },
-    { header: 'Valeur Déclarée', key: 'valeurDeclaree', width: 16 },
-    ...taxCodes.map((code) => ({ header: code, key: code, width: 14 })),
+    { key: 'nomArticle', width: 30 },
+    { key: 'hsCode', width: 15 },
+    { key: 'serialNumber', width: 15 },
+    ...taxCodes.map((code) => ({ key: code, width: 14 })),
+    { key: 'valeurDeclaree', width: 16 },
   ];
 
+  const headerRow = sheet.addRow([
+    'Nom Article',
+    'HSC',
+    'Serial Number',
+    ...taxCodes,
+    'Valeur Déclarée',
+  ]);
+  styleHeaderRow(headerRow, columnCount);
+  headerRow.commit();
+
+  let dataRowIndex = 0;
   for (const article of declaration.articles) {
     const quantite = Math.round(article.quantite);
     if (Math.abs(article.quantite - quantite) > 0.01) {
@@ -49,16 +68,19 @@ export function addUnitLevelSheet(
     }
 
     for (let unit = 0; unit < quantite; unit++) {
-      const row: Record<string, string | number> = {
+      const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
         hsCode: article.hsCode,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,
       };
       for (const code of taxCodes) {
-        row[code] = perCodeAllocations.get(code)![unit];
+        rowValues[code] = perCodeAllocations.get(code)![unit];
       }
-      sheet.addRow(row).commit();
+      const row = sheet.addRow(rowValues);
+      styleDataRow(row, columnCount, dataRowIndex, moneyColumns);
+      row.commit();
+      dataRowIndex++;
     }
   }
 
@@ -88,15 +110,31 @@ export function addPerArticleUnitSheets(
   for (const article of declaration.articles) {
     const sheetName = sheetNameForArticle(article);
     const taxCodes = article.taxes.map((tax) => tax.code).sort();
+    const columnCount = 3 + taxCodes.length + 1;
+    const valeurDeclareeColumn = columnCount;
+    const moneyColumns = new Set<number>([
+      valeurDeclareeColumn,
+      ...taxCodes.map((_, i) => 4 + i),
+    ]);
 
-    const sheet = workbook.addWorksheet(sheetName);
+    const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
     sheet.columns = [
-      { header: 'Nom Article', key: 'nomArticle', width: 30 },
-      { header: 'HSC', key: 'hsCode', width: 15 },
-      { header: 'Serial Number', key: 'serialNumber', width: 15 },
-      { header: 'Valeur Déclarée', key: 'valeurDeclaree', width: 16 },
-      ...taxCodes.map((code) => ({ header: code, key: code, width: 14 })),
+      { key: 'nomArticle', width: 30 },
+      { key: 'hsCode', width: 15 },
+      { key: 'serialNumber', width: 15 },
+      ...taxCodes.map((code) => ({ key: code, width: 14 })),
+      { key: 'valeurDeclaree', width: 16 },
     ];
+
+    const headerRow = sheet.addRow([
+      'Nom Article',
+      'HSC',
+      'Serial Number',
+      ...taxCodes,
+      'Valeur Déclarée',
+    ]);
+    styleHeaderRow(headerRow, columnCount);
+    headerRow.commit();
 
     const quantite = Math.round(article.quantite);
     if (Math.abs(article.quantite - quantite) > 0.01) {
@@ -113,16 +151,18 @@ export function addPerArticleUnitSheets(
     }
 
     for (let unit = 0; unit < quantite; unit++) {
-      const row: Record<string, string | number> = {
+      const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
         hsCode: article.hsCode,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,
       };
       for (const code of taxCodes) {
-        row[code] = perCodeAllocations.get(code)![unit];
+        rowValues[code] = perCodeAllocations.get(code)![unit];
       }
-      sheet.addRow(row).commit();
+      const row = sheet.addRow(rowValues);
+      styleDataRow(row, columnCount, unit, moneyColumns);
+      row.commit();
     }
 
     sheet.commit();
@@ -135,7 +175,7 @@ export async function generateUnitLevelExcel(
 ): Promise<void> {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     filename: outputPath,
-    useStyles: false,
+    useStyles: true,
   });
   addUnitLevelSheet(workbook, declaration);
   await workbook.commit();

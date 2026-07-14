@@ -85,9 +85,9 @@ describe('addPerArticleUnitSheets', () => {
       'Nom Article',
       'HSC',
       'Serial Number',
-      'Valeur Déclarée',
       '000110',
       '007217',
+      'Valeur Déclarée',
     ]);
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
@@ -96,8 +96,8 @@ describe('addPerArticleUnitSheets', () => {
       'Nom Article',
       'HSC',
       'Serial Number',
-      'Valeur Déclarée',
       '002109',
+      'Valeur Déclarée',
     ]);
   });
 
@@ -109,15 +109,15 @@ describe('addPerArticleUnitSheets', () => {
     const workbook = await buildWorkbook(declaration, filePath);
 
     const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
-    // article 1: valeurDeclaree 27147, quantite 3 -> 9049 per unit
+    // article 1: valeurDeclaree 27147, quantite 3 -> 9049 per unit; Valeur Déclarée is the last column (6)
     for (let rowNum = 2; rowNum <= 4; rowNum++) {
-      expect(Number(sheet1.getRow(rowNum).getCell(4).value)).toBeCloseTo(27147 / 3, 4);
+      expect(Number(sheet1.getRow(rowNum).getCell(6).value)).toBeCloseTo(27147 / 3, 4);
     }
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
-    // article 2: valeurDeclaree 9500, quantite 2 -> 4750 per unit
+    // article 2: valeurDeclaree 9500, quantite 2 -> 4750 per unit; last column here is 5
     for (let rowNum = 2; rowNum <= 3; rowNum++) {
-      expect(Number(sheet2.getRow(rowNum).getCell(4).value)).toBeCloseTo(9500 / 2, 4);
+      expect(Number(sheet2.getRow(rowNum).getCell(5).value)).toBeCloseTo(9500 / 2, 4);
     }
   });
 

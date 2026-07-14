@@ -10,7 +10,7 @@ import { addPerArticleUnitSheets, addUnitLevelSheet } from './unitLevelExcelGene
 export async function generateCombinedExcel(declaration: Declaration, outputPath: string): Promise<void> {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     filename: outputPath,
-    useStyles: false,
+    useStyles: true,
   });
 
   addArticleSummarySheet(workbook, declaration);
