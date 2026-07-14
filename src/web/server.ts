@@ -18,6 +18,7 @@ import {
   renderSuperAdminPlaceholder,
   renderSuperAdminCosts,
   renderSuperAdminSettings,
+  renderSuperAdminGenerate,
 } from './renderSuperAdminDashboard.js';
 import { calculateLandedCost } from '../domain/costCalculator.js';
 import {
@@ -320,6 +321,14 @@ app.get('/superadmin/dashboard', requireSuperAdmin, (_req, res) => {
   res.send(
     renderSuperAdminOverview(listUsers(db), listAllDeclarations(db).length, getAppSettings(db))
   );
+});
+
+// Lets a superadmin generate a declaration without leaving the sidebar
+// dashboard — reuses the exact same /generate, /download,
+// /last-declaration-cost-summary, and /last-declaration-results endpoints
+// as the standalone admin tool at "/", just wrapped in the sidebar shell.
+app.get('/superadmin/generate', requireSuperAdmin, (_req, res) => {
+  res.send(renderSuperAdminGenerate(getAppSettings(db)));
 });
 
 app.get('/superadmin/users', requireSuperAdmin, (req, res) => {

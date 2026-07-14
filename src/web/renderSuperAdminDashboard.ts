@@ -3,7 +3,7 @@ import type { SavedDeclarationSummary, SavedArticleCost } from '../db/declaratio
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
 
-export type SuperAdminPage = 'dashboard' | 'users' | 'costs' | 'settings';
+export type SuperAdminPage = 'dashboard' | 'generate' | 'users' | 'costs' | 'settings';
 
 function escapeHtml(value: string): string {
   return value
@@ -26,6 +26,12 @@ const NAV_ITEMS: Array<{ page: SuperAdminPage; href: string; label: string; icon
     href: '/superadmin/dashboard',
     label: 'Tableau de bord',
     icon: '<path d="M3 10.5l7-6 7 6M5 9v7.5A1.5 1.5 0 0 0 6.5 18h7a1.5 1.5 0 0 0 1.5-1.5V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  {
+    page: 'generate',
+    href: '/superadmin/generate',
+    label: 'Générer une déclaration',
+    icon: '<path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   },
   {
     page: 'users',
@@ -101,7 +107,8 @@ function renderShell(
   activePage: SuperAdminPage,
   title: string,
   bodyHtml: string,
-  settings: AppSettings
+  settings: AppSettings,
+  extraStyle = ''
 ): string {
   return `<!doctype html>
 <html lang="fr">
@@ -276,6 +283,7 @@ function renderShell(
   }
   @media (max-width: 640px) { .create-form { grid-template-columns: 1fr; } }
 </style>
+<style>${extraStyle}</style>
 ${renderBrandOverrideStyle(settings)}
 </head>
 <body>
@@ -539,4 +547,470 @@ export function renderSuperAdminSettings(
   `;
 
   return renderShell('settings', 'Réglages', body, settings);
+}
+
+// The visual language here (big drop zones, full-width submit button, the
+// success/cost/results panels) deliberately overrides the shell's compact
+// admin-form styling — those rules live in renderShell's shared <style>
+// too, but this extraStyle block is appended after it in the same
+// document, so it wins for this page only without affecting the others.
+const GENERATE_PAGE_STYLE = `
+  .drop-zone {
+    position: relative; border: 1.5px dashed var(--line); border-radius: 13px;
+    padding: 22px 20px; margin-bottom: 14px; cursor: pointer; background: var(--input-bg);
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .drop-zone:hover { border-color: var(--brand-600); background: var(--brand-soft); }
+  .drop-zone.dragover { border-color: var(--brand-600); background: var(--brand-soft); box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.14); }
+  .drop-zone.filled { border-style: solid; border-color: var(--success); background: var(--success-bg); }
+  .drop-zone input { display: none; }
+  .dz-icon {
+    flex: none; width: 38px; height: 38px; border-radius: 10px; background: var(--brand-soft);
+    display: flex; align-items: center; justify-content: center; color: var(--brand-600);
+    transition: background 0.15s, color 0.15s;
+  }
+  .drop-zone.filled .dz-icon { background: var(--success-bg); color: var(--success); }
+  .dz-icon svg { width: 19px; height: 19px; }
+  .dz-body { min-width: 0; flex: 1; }
+  .drop-zone .label { font-weight: 600; font-size: 14.5px; color: var(--ink-900); }
+  .drop-zone .hint { font-size: 12.5px; color: var(--ink-500); margin-top: 2px; }
+  .drop-zone .filename {
+    margin-top: 7px; font-size: 12.5px; font-weight: 600; color: var(--success);
+    display: flex; align-items: center; gap: 5px; overflow-wrap: anywhere;
+  }
+  #generateForm button[type="submit"] {
+    width: 100%; margin-top: 8px; padding: 13px; font-size: 14.5px; font-weight: 600;
+    color: #fff; background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border: none;
+    box-shadow: 0 6px 16px -4px rgba(124, 58, 237, 0.45);
+    transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  #generateForm button[type="submit"]:hover:not(:disabled) { filter: brightness(1.06); }
+  #generateForm button[type="submit"]:disabled { background: var(--line); box-shadow: none; cursor: not-allowed; }
+  #status { margin-top: 14px; font-size: 13px; color: var(--ink-500); text-align: center; min-height: 18px; }
+  #status.busy { color: var(--brand-600); font-weight: 600; }
+
+  #successPanel { display: none; }
+  #successPanel.visible { display: block; }
+  .success-icon {
+    width: 56px; height: 56px; border-radius: 50%; background: var(--success-bg); border: 1.5px solid var(--success-line);
+    display: flex; align-items: center; justify-content: center; margin: 4px auto 16px;
+  }
+  .success-icon svg { width: 26px; height: 26px; }
+  .success-title { text-align: center; font-size: 17px; font-weight: 700; color: var(--ink-900); }
+  .success-subtitle { text-align: center; font-size: 13px; color: var(--ink-500); margin-top: 4px; margin-bottom: 22px; }
+  .success-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .success-actions button { flex: 1; min-width: 130px; margin-top: 0; padding: 10px 14px; }
+  button.secondary {
+    background: var(--card-bg); color: var(--ink-700); border: 1.5px solid var(--line); box-shadow: none;
+  }
+  button.secondary:hover:not(:disabled) { background: var(--input-bg); border-color: var(--brand-600); }
+  button.ghost { background: transparent; color: var(--ink-500); box-shadow: none; font-weight: 500; font-size: 13px; padding: 9px; width: auto; }
+  button.ghost:hover { background: var(--line-soft); }
+
+  .cost-panel { margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 18px; display: none; }
+  .cost-panel.visible { display: block; }
+  .cost-panel .note {
+    font-size: 12px; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line);
+    border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; line-height: 1.5;
+  }
+  table.cost-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.cost-table th, table.cost-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line-soft); }
+  table.cost-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.cost-table td.cost { font-weight: 700; color: var(--brand-700); }
+
+  .results-section { margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 18px; display: none; }
+  .results-section.visible { display: block; }
+  .results-toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .results-toolbar button { width: auto; margin-top: 0; padding: 9px 14px; font-size: 12.5px; }
+  .results-heading { font-size: 14px; margin: 0 0 14px; }
+  .results-columns { display: flex; gap: 20px; flex-wrap: wrap; }
+  .results-column { flex: 1; min-width: 260px; }
+  .results-column h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-500); margin: 0 0 8px; }
+  .results-table-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .results-table-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .results-table-scroll th, .results-table-scroll td {
+    border-bottom: 1px solid var(--line-soft); padding: 6px 9px; text-align: left; white-space: nowrap; color: var(--ink-900);
+  }
+  .results-table-scroll th { background: var(--input-bg); position: sticky; top: 0; color: var(--ink-500); font-weight: 600; }
+  .results-section .note {
+    font-size: 12px; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line);
+    border-radius: 8px; padding: 9px 11px; margin-bottom: 10px; line-height: 1.5;
+  }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+    align-items: center; justify-content: center; padding: 20px; z-index: 80;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal-card {
+    background: var(--card-bg); border-radius: 16px; max-width: 360px; width: 100%;
+    padding: 26px; box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35); text-align: center;
+  }
+  .modal-icon {
+    width: 48px; height: 48px; border-radius: 50%; margin: 0 auto 14px;
+    background: var(--warn-bg); border: 1.5px solid var(--warn-line);
+    display: flex; align-items: center; justify-content: center; color: var(--warn);
+  }
+  .modal-card h2 { font-size: 16px; margin: 0 0 8px; color: var(--ink-900); }
+  .modal-card p { font-size: 13.5px; color: var(--ink-500); margin: 0 0 20px; line-height: 1.5; }
+  .modal-card button { margin-top: 0; width: auto; padding: 10px 18px; }
+
+  @media print {
+    .app-shell > *:not(.main), .topbar, .results-toolbar { display: none !important; }
+    .content > *:not(#successPanel) { display: none !important; }
+    #successPanel > *:not(.results-section) { display: none !important; }
+    .results-section { border: none; margin: 0; padding: 0; }
+  }
+`;
+
+export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: string): string {
+  const errorBlock = errorMessage
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(errorMessage)}</span></div>`
+    : '';
+
+  const body = `
+    <p class="lede">Déposez les deux documents (Liquidation et DUM) — l'ordre n'a pas d'importance, ils sont identifiés automatiquement.</p>
+    <div class="card">
+      ${errorBlock}
+      <form id="generateForm" method="post" action="/generate" enctype="multipart/form-data">
+        <div class="drop-zone" id="zone-liquidation">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">Liquidation Douanière (BE)</div>
+            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-liquidation"></div>
+          </div>
+          <input type="file" name="liquidation" id="input-liquidation" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <div class="drop-zone" id="zone-dum">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">DUM</div>
+            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-dum"></div>
+          </div>
+          <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <button type="submit" id="submitBtn">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Générer les fichiers Excel
+        </button>
+        <div id="status"></div>
+      </form>
+
+      <div id="successPanel">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12.5l4.5 4.5L19 7" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="success-title">Génération réussie</div>
+        <div class="success-subtitle" id="successSubtitle">Le fichier Excel est prêt.</div>
+
+        <div class="success-actions">
+          <button type="button" class="secondary" id="downloadAgainBtn">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Télécharger
+          </button>
+          <button type="button" id="showCostsBtn">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 16.5V9M8 16.5V4M13 16.5v-6M17.5 16.5V7" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Coûts des produits
+          </button>
+          <button type="button" class="secondary" id="showResultsBtn">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5h14M3 10h14M3 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            Afficher résultats
+          </button>
+        </div>
+
+        <div class="cost-panel" id="costPanel">
+          <div class="note">Coût douanier uniquement (droits &amp; taxes ÷ quantité) — le coût total avec achat, fret et assurance arrive dans une prochaine mise à jour.</div>
+          <div id="costTableContainer"></div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+          <div class="results-toolbar">
+            <button type="button" class="secondary" id="exportExcelBtn">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Exporter Excel
+            </button>
+            <button type="button" class="secondary" id="exportPdfBtn">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3v3a1 1 0 0 0 1 1h3" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              Exporter PDF
+            </button>
+          </div>
+          <div id="resultsContent"></div>
+        </div>
+
+        <button type="button" class="ghost" id="newDeclarationBtn">← Nouvelle déclaration</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="validationModal">
+      <div class="modal-card">
+        <div class="modal-icon">
+          <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h2>Fichiers manquants</h2>
+        <p id="validationModalMessage">Veuillez sélectionner les 2 fichiers (Liquidation et DUM) avant de générer.</p>
+        <button type="button" id="validationModalOk">Compris</button>
+      </div>
+    </div>
+
+    <script>
+      function wireDropZone(zoneId, inputId, nameId) {
+        const zone = document.getElementById(zoneId);
+        const input = document.getElementById(inputId);
+        const nameEl = document.getElementById(nameId);
+        const checkIcon = '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+        function setFile(name) {
+          nameEl.innerHTML = checkIcon + '<span>' + name + '</span>';
+          zone.classList.add('filled');
+        }
+
+        zone.addEventListener('click', () => input.click());
+        input.addEventListener('change', () => {
+          if (input.files[0]) setFile(input.files[0].name);
+        });
+        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          zone.classList.remove('dragover');
+          if (e.dataTransfer.files.length > 0) {
+            input.files = e.dataTransfer.files;
+            setFile(input.files[0].name);
+          }
+        });
+      }
+
+      wireDropZone('zone-liquidation', 'input-liquidation', 'name-liquidation');
+      wireDropZone('zone-dum', 'input-dum', 'name-dum');
+
+      const form = document.getElementById('generateForm');
+      const submitBtn = document.getElementById('submitBtn');
+      const statusEl = document.getElementById('status');
+      const successPanel = document.getElementById('successPanel');
+      const successSubtitle = document.getElementById('successSubtitle');
+      const costPanel = document.getElementById('costPanel');
+      const costTableContainer = document.getElementById('costTableContainer');
+      const showCostsBtn = document.getElementById('showCostsBtn');
+      const downloadAgainBtn = document.getElementById('downloadAgainBtn');
+      const newDeclarationBtn = document.getElementById('newDeclarationBtn');
+      const validationModal = document.getElementById('validationModal');
+      const validationModalOk = document.getElementById('validationModalOk');
+      const resultsSection = document.getElementById('resultsSection');
+      const resultsContent = document.getElementById('resultsContent');
+      const showResultsBtn = document.getElementById('showResultsBtn');
+      const exportExcelBtn = document.getElementById('exportExcelBtn');
+      const exportPdfBtn = document.getElementById('exportPdfBtn');
+      let cachedCostSummary = null;
+      let resultsLoaded = false;
+
+      async function fetchCostSummary() {
+        if (cachedCostSummary) return cachedCostSummary;
+        const response = await fetch('/last-declaration-cost-summary');
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Impossible de charger les coûts.');
+        }
+        cachedCostSummary = result;
+        return result;
+      }
+
+      function showValidationModal(message) {
+        document.getElementById('validationModalMessage').textContent = message;
+        validationModal.classList.add('visible');
+      }
+      validationModalOk.addEventListener('click', () => validationModal.classList.remove('visible'));
+      validationModal.addEventListener('click', (e) => {
+        if (e.target === validationModal) validationModal.classList.remove('visible');
+      });
+
+      function triggerBlobDownload(blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'Declaration.xlsx';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function showFormError(message) {
+        const existingError = document.querySelector('#generateForm .error, .card > .error');
+        if (existingError) existingError.remove();
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.innerHTML = '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+        errorDiv.querySelector('span').textContent = 'Échec : ' + message;
+        form.parentNode.insertBefore(errorDiv, form);
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const liquidationFile = document.getElementById('input-liquidation').files[0];
+        const dumFile = document.getElementById('input-dum').files[0];
+        if (!liquidationFile || !dumFile) {
+          const missing = [];
+          if (!liquidationFile) missing.push('Liquidation Douanière');
+          if (!dumFile) missing.push('DUM');
+          showValidationModal('Fichier(s) manquant(s) : ' + missing.join(', ') + '. Sélectionnez-les avant de générer.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        statusEl.className = 'busy';
+        statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
+
+        const formData = new FormData();
+        formData.append('liquidation', liquidationFile);
+        formData.append('dum', dumFile);
+
+        try {
+          const response = await fetch('/generate', { method: 'POST', body: formData });
+
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const result = await response.json();
+              if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+              }
+              throw new Error(result.error || 'Erreur serveur (' + response.status + ')');
+            }
+            throw new Error('Erreur serveur (' + response.status + ')');
+          }
+
+          await response.blob();
+
+          statusEl.className = '';
+          statusEl.textContent = '';
+          submitBtn.disabled = false;
+
+          form.style.display = 'none';
+          successPanel.classList.add('visible');
+          costPanel.classList.remove('visible');
+          cachedCostSummary = null;
+          resultsSection.classList.remove('visible');
+          resultsContent.innerHTML = '';
+          resultsLoaded = false;
+
+          fetchCostSummary()
+            .then((data) => {
+              successSubtitle.textContent = 'Déclaration ' + data.code + ' — ' + data.redevable;
+            })
+            .catch(() => {});
+        } catch (err) {
+          statusEl.className = '';
+          statusEl.textContent = '';
+          submitBtn.disabled = false;
+          showFormError(err.message);
+        }
+      });
+
+      downloadAgainBtn.addEventListener('click', async () => {
+        downloadAgainBtn.disabled = true;
+        try {
+          const response = await fetch('/download');
+          if (!response.ok) throw new Error('Impossible de retélécharger le fichier.');
+          const blob = await response.blob();
+          triggerBlobDownload(blob);
+        } catch (err) {
+          showFormError(err.message);
+        } finally {
+          downloadAgainBtn.disabled = false;
+        }
+      });
+
+      function escapeHtmlClient(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      function renderCostTable(data) {
+        successSubtitle.textContent = 'Déclaration ' + data.code + ' — ' + data.redevable;
+
+        const rows = data.articles.map((article) => (
+          '<tr>' +
+          '<td>' + escapeHtmlClient(article.nomArticle) + '</td>' +
+          '<td>' + escapeHtmlClient(article.hsCode) + '</td>' +
+          '<td>' + escapeHtmlClient(article.pays) + '</td>' +
+          '<td class="num">' + article.quantite + '</td>' +
+          '<td class="num">' + article.totalTaxes.toFixed(2) + '</td>' +
+          '<td class="num cost">' + article.dutyCostPerUnit.toFixed(2) + '</td>' +
+          '</tr>'
+        )).join('');
+
+        costTableContainer.innerHTML =
+          '<table class="cost-table"><thead><tr>' +
+          '<th>Produit</th><th>HSC</th><th>Pays</th><th>Qté</th><th>Droits &amp; taxes</th><th>Coût / unité</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table>';
+      }
+
+      showCostsBtn.addEventListener('click', async () => {
+        const isVisible = costPanel.classList.contains('visible');
+        if (isVisible) {
+          costPanel.classList.remove('visible');
+          return;
+        }
+
+        showCostsBtn.disabled = true;
+        try {
+          const result = await fetchCostSummary();
+          renderCostTable(result);
+          costPanel.classList.add('visible');
+        } catch (err) {
+          showFormError(err.message);
+        } finally {
+          showCostsBtn.disabled = false;
+        }
+      });
+
+      showResultsBtn.addEventListener('click', async () => {
+        const isVisible = resultsSection.classList.contains('visible');
+        if (isVisible) {
+          resultsSection.classList.remove('visible');
+          return;
+        }
+
+        showResultsBtn.disabled = true;
+        try {
+          if (!resultsLoaded) {
+            const response = await fetch('/last-declaration-results');
+            if (!response.ok) throw new Error('Impossible de charger les résultats.');
+            resultsContent.innerHTML = await response.text();
+            resultsLoaded = true;
+          }
+          resultsSection.classList.add('visible');
+        } catch (err) {
+          showFormError(err.message);
+        } finally {
+          showResultsBtn.disabled = false;
+        }
+      });
+
+      exportExcelBtn.addEventListener('click', () => downloadAgainBtn.click());
+      exportPdfBtn.addEventListener('click', () => window.print());
+
+      newDeclarationBtn.addEventListener('click', () => {
+        window.location.reload();
+      });
+    </script>
+  `;
+
+  return renderShell('generate', 'Générer une déclaration', body, settings, GENERATE_PAGE_STYLE);
 }
