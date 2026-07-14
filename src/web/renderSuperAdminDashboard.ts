@@ -583,8 +583,8 @@ export function renderSuperAdminSettings(
     : '';
 
   const currentLogo = settings.logoDataUri
-    ? `<div style="margin-bottom:10px;"><img src="${settings.logoDataUri}" alt="Logo actuel" style="height:48px;max-width:220px;object-fit:contain;border-radius:8px;border:1px solid var(--line);padding:6px;" /></div>`
-    : '';
+    ? `<img src="${settings.logoDataUri}" alt="Logo actuel" class="logo-preview" />`
+    : `<div class="logo-preview logo-preview-empty"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.4"/><path d="M4 6l2.5-2.5h7L16 6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="11" r="2" stroke="currentColor" stroke-width="1.3"/></svg></div>`;
 
   const selectedFont = settings.fontFamily ?? 'system';
   const fontOptions = FONT_OPTIONS.map(
@@ -596,41 +596,129 @@ export function renderSuperAdminSettings(
     <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale, police, et coordonnées affichées sur la page de connexion.</p>
     ${errorBlock}
     ${successBlock}
-    <div class="card">
-      <h2>Identité</h2>
-      <form method="post" action="/superadmin/settings" enctype="multipart/form-data">
+    <form method="post" action="/superadmin/settings" enctype="multipart/form-data">
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 8h1M11.5 8h1M7.5 11h1M11.5 11h1M8.5 17v-3h3v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+          <div>
+            <h2>Société</h2>
+            <p class="settings-section-hint">Nom et logo affichés dans l'application et sur la page de connexion.</p>
+          </div>
+        </div>
         <div class="field">
-          <label for="companyName">Nom de la société</label>
+          <label for="companyName"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.4"/></svg> Nom de la société</label>
           <input type="text" id="companyName" name="companyName" value="${escapeHtml(settings.companyName ?? '')}" placeholder="ex. Global Trade Logistics SARL" />
         </div>
         <div class="field">
-          <label for="logo">Logo</label>
-          ${currentLogo}
-          <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+          <label for="logo"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.3"/></svg> Logo</label>
+          <div class="logo-field">
+            ${currentLogo}
+            <div class="logo-field-input">
+              <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+              <span class="field-hint">PNG, JPEG, WEBP ou SVG — 2 Mo maximum.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-amber"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13" stroke="currentColor" stroke-width="1.5"/></svg></div>
+          <div>
+            <h2>Apparence</h2>
+            <p class="settings-section-hint">Couleur d'accent et police utilisées dans toute l'application.</p>
+          </div>
         </div>
         <div class="field">
-          <label for="brandColor">Couleur principale</label>
-          <input type="color" id="brandColor" name="brandColor" value="${escapeHtml(settings.brandColor ?? '#4f46e5')}" style="height:44px;padding:4px;cursor:pointer;" />
+          <label for="brandColor"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.4"/></svg> Couleur principale</label>
+          <div class="color-field">
+            <input type="color" id="brandColor" name="brandColor" value="${escapeHtml(settings.brandColor ?? '#4f46e5')}" />
+            <span class="color-field-hex" id="brandColorHex">${escapeHtml(settings.brandColor ?? '#4f46e5')}</span>
+          </div>
         </div>
         <div class="field">
-          <label for="fontFamily">Police</label>
+          <label for="fontFamily"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 16l3.5-10h1L13 16M6.2 12.5h6.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Police</label>
           <select id="fontFamily" name="fontFamily">${fontOptions}</select>
         </div>
+      </div>
+
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-green"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 5.8l6.5 5 6.5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div>
+            <h2>Contact</h2>
+            <p class="settings-section-hint">Affichés dans le pied de page de l'écran de connexion.</p>
+          </div>
+        </div>
         <div class="field">
-          <label for="contactEmail">Email de contact (page de connexion)</label>
+          <label for="contactEmail"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.3"/></svg> Email de contact</label>
           <input type="email" id="contactEmail" name="contactEmail" value="${escapeHtml(settings.contactEmail ?? '')}" placeholder="ex. contact@societe.com" />
         </div>
         <div class="field">
-          <label for="contactWhatsapp">Téléphone / WhatsApp (page de connexion)</label>
+          <label for="contactWhatsapp"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 3.5h2.2l1 4-1.6 1.3a9 9 0 0 0 4.6 4.6l1.3-1.6 4 1v2.2c0 .8-.7 1.4-1.4 1.3A13.5 13.5 0 0 1 3.7 4.9C3.6 4.2 4.2 3.5 5 3.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg> Téléphone / WhatsApp</label>
           <input type="text" id="contactWhatsapp" name="contactWhatsapp" value="${escapeHtml(settings.contactWhatsapp ?? '')}" placeholder="ex. +212 6 00 00 00 00" />
         </div>
-        <button type="submit">Enregistrer</button>
-      </form>
-    </div>
+      </div>
+
+      <button type="submit" class="settings-save">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Enregistrer
+      </button>
+    </form>
+    <script>
+      var brandColorInput = document.getElementById('brandColor');
+      var brandColorHex = document.getElementById('brandColorHex');
+      if (brandColorInput && brandColorHex) {
+        brandColorInput.addEventListener('input', function () {
+          brandColorHex.textContent = brandColorInput.value;
+        });
+      }
+    </script>
   `;
 
-  return renderShell('settings', 'Réglages', body, settings);
+  return renderShell('settings', 'Réglages', body, settings, SETTINGS_PAGE_STYLE);
 }
+
+const SETTINGS_PAGE_STYLE = `
+  .settings-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .settings-section-head h2 { margin: 0 0 3px; }
+  .settings-section-hint { margin: 0; font-size: 12px; color: var(--ink-500); line-height: 1.4; }
+  .settings-icon {
+    width: 34px; height: 34px; flex: none; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .settings-icon svg { width: 18px; height: 18px; }
+  .settings-icon-violet { background: var(--brand-soft); color: var(--brand-700); }
+  .settings-icon-amber { background: var(--warn-bg); color: var(--warn); }
+  .settings-icon-green { background: var(--success-bg); color: var(--success); }
+
+  label svg { width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px; color: var(--ink-400); }
+
+  .logo-field { display: flex; align-items: center; gap: 14px; }
+  .logo-field-input { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .field-hint { font-size: 11.5px; color: var(--ink-400); }
+  .logo-preview {
+    width: 56px; height: 56px; flex: none; border-radius: 12px; object-fit: contain;
+    border: 1px solid var(--line); padding: 6px; background: var(--input-bg);
+  }
+  .logo-preview-empty { display: flex; align-items: center; justify-content: center; color: var(--ink-400); }
+  .logo-preview-empty svg { width: 24px; height: 24px; }
+
+  .color-field { display: flex; align-items: center; gap: 10px; }
+  .color-field input[type="color"] { width: 52px; height: 44px; padding: 4px; cursor: pointer; flex: none; }
+  .color-field-hex {
+    font-family: 'Courier New', monospace; font-size: 13px; font-weight: 600; color: var(--ink-700);
+    background: var(--input-bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
+  }
+
+  .settings-save {
+    width: 100%; padding: 13px; font-size: 14px; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border: none; border-radius: 10px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 8px 18px -6px rgba(124, 58, 237, 0.4);
+  }
+  .settings-save:hover { filter: brightness(1.05); }
+`;
 
 // The visual language here (big drop zones, full-width submit button, the
 // success/cost/results panels) deliberately overrides the shell's compact
