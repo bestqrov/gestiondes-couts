@@ -402,10 +402,31 @@ export function renderSuperAdminUsers(
   const body = `
     <p class="lede">Comptes de l'application. L'historique d'un compte désactivé reste intact.</p>
     ${errorBlock}
-    <div class="card placeholder-card">
-      <div class="placeholder-icon"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">${PLACEHOLDER_ICON}</svg></div>
-      <h2>Bientôt disponible</h2>
-      <p>L'ajout de nouveaux comptes admin sera bientôt disponible ici.</p>
+    <div class="card settings-section">
+      <div class="settings-section-head">
+        <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4"/></svg></div>
+        <div>
+          <h2>Nouveau compte</h2>
+          <p class="settings-section-hint">Accès limité à « Générer une déclaration » — pas de tableau de bord ni de réglages.</p>
+        </div>
+      </div>
+      <form method="post" action="/superadmin/users">
+        <input type="hidden" name="role" value="admin" />
+        <div class="settings-field-grid">
+          <div class="field">
+            <label for="newUserUsername">Nom d'utilisateur</label>
+            <input type="text" id="newUserUsername" name="username" required />
+          </div>
+          <div class="field">
+            <label for="newUserPassword">Mot de passe</label>
+            <input type="password" id="newUserPassword" name="password" required autocomplete="new-password" />
+          </div>
+        </div>
+        <button type="submit" class="settings-save">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 4.5v11M4.5 10h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Créer le compte
+        </button>
+      </form>
     </div>
     <div class="card">
       <h2>Comptes (${users.length})</h2>
@@ -415,7 +436,7 @@ export function renderSuperAdminUsers(
       </table>
     </div>
   `;
-  return renderShell('users', 'Utilisateurs', body, settings);
+  return renderShell('users', 'Utilisateurs', body, settings, SETTINGS_PAGE_STYLE);
 }
 
 const PLACEHOLDER_ICON =
