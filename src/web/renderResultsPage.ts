@@ -87,12 +87,12 @@ export function renderResultsFragment(declaration: Declaration): string {
   return `
     <h2 class="results-heading">Déclaration ${escapeHtml(declaration.code)} — ${escapeHtml(declaration.redevable)}</h2>
     <div class="results-columns">
-      <div class="results-column">
-        <h3>Résumé Articles</h3>
+      <div class="results-column results-column-a">
+        <h3><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4.5h12v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11Z" stroke="currentColor" stroke-width="1.4"/><path d="M4 8h12M7.5 8v8.5" stroke="currentColor" stroke-width="1.4"/></svg> Résumé Articles</h3>
         <div class="results-table-scroll">${file1Table}</div>
       </div>
-      <div class="results-column">
-        <h3>Détail par unité</h3>
+      <div class="results-column results-column-b">
+        <h3><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 16.5V9M8 16.5V4M13 16.5v-6M17.5 16.5V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Détail par unité</h3>
         ${previewNote}
         <div class="results-table-scroll">${file2Table}</div>
       </div>

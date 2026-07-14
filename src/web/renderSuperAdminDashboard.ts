@@ -804,15 +804,29 @@ const GENERATE_PAGE_STYLE = `
   .results-toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
   .results-toolbar button { width: auto; margin-top: 0; padding: 9px 14px; font-size: 12.5px; }
   .results-heading { font-size: 14px; margin: 0 0 14px; }
-  .results-columns { display: flex; gap: 20px; flex-wrap: wrap; }
-  .results-column { flex: 1; min-width: 260px; }
-  .results-column h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-500); margin: 0 0 8px; }
-  .results-table-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .results-columns { display: flex; flex-direction: column; gap: 20px; }
+  .results-column {
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--input-bg);
+    border-left-width: 3px;
+  }
+  .results-column-a { border-left-color: var(--brand-600); }
+  .results-column-b { border-left-color: var(--success); }
+  .results-column h3 {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 10px;
+  }
+  .results-column h3 svg { width: 15px; height: 15px; flex: none; }
+  .results-column-a h3 { color: var(--brand-700); }
+  .results-column-a h3 svg { color: var(--brand-600); }
+  .results-column-b h3 { color: var(--success); }
+  .results-column-b h3 svg { color: var(--success); }
+  .results-table-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); }
   .results-table-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .results-table-scroll th, .results-table-scroll td {
     border-bottom: 1px solid var(--line-soft); padding: 6px 9px; text-align: left; white-space: nowrap; color: var(--ink-900);
   }
-  .results-table-scroll th { background: var(--input-bg); position: sticky; top: 0; color: var(--ink-500); font-weight: 600; }
+  .results-column-a .results-table-scroll th { background: var(--brand-soft); position: sticky; top: 0; color: var(--brand-700); font-weight: 600; }
+  .results-column-b .results-table-scroll th { background: var(--success-bg); position: sticky; top: 0; color: var(--success); font-weight: 600; }
   .results-section .note {
     font-size: 12px; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line);
     border-radius: 8px; padding: 9px 11px; margin-bottom: 10px; line-height: 1.5;
@@ -917,10 +931,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Exporter Excel
             </button>
-            <button type="button" class="secondary" id="exportPdfBtn">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3v3a1 1 0 0 0 1 1h3" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-              Exporter PDF
-            </button>
           </div>
           <div id="resultsContent"></div>
         </div>
@@ -987,7 +997,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const resultsContent = document.getElementById('resultsContent');
       const showResultsBtn = document.getElementById('showResultsBtn');
       const exportExcelBtn = document.getElementById('exportExcelBtn');
-      const exportPdfBtn = document.getElementById('exportPdfBtn');
       let cachedCostSummary = null;
       let resultsLoaded = false;
 
@@ -1184,7 +1193,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       });
 
       exportExcelBtn.addEventListener('click', () => downloadAgainBtn.click());
-      exportPdfBtn.addEventListener('click', () => window.print());
 
       newDeclarationBtn.addEventListener('click', () => {
         window.location.reload();
