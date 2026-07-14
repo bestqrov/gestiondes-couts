@@ -6,6 +6,7 @@ import {
   listDeclarationsForUser,
   listAllDeclarations,
   getDeclarationById,
+  getArticlesForDeclaration,
 } from '../../src/db/declarationsRepository.js';
 import type { Declaration } from '../../src/domain/types.js';
 
@@ -166,6 +167,44 @@ describe('declarationsRepository', () => {
     expect(listDeclarationsForUser(db, bob.id)).toHaveLength(1);
     expect(listAllDeclarations(db)).toHaveLength(2);
 
+    db.close();
+  });
+
+  it('reads back a saved declaration\'s per-article cost breakdown via getArticlesForDeclaration', () => {
+    const db = createDatabase(':memory:');
+    const user = createUser(db, 'admin1', 'pw', 'admin');
+    const declaration = makeDeclaration();
+
+    const id = saveDeclaration(db, {
+      ownerUserId: user.id,
+      declaration,
+      shipmentCostFields: {},
+      articleCosts: [{ numero: 1, costPerUnit: 42.5 }],
+      totalLandedCost: 15045.0,
+      costEstimatePartial: true,
+      excelFilePath: '/data/declaration-1.xlsx',
+    });
+
+    const articles = getArticlesForDeclaration(db, id);
+    expect(articles).toEqual([
+      {
+        numero: 1,
+        hsCode: '6109100010',
+        nomArticle: 'T-SHIRT',
+        pays: 'ITALIE',
+        valeurDeclaree: 27147,
+        quantite: 354,
+        totalArticle: 5511,
+        costPerUnit: 42.5,
+      },
+    ]);
+
+    db.close();
+  });
+
+  it('returns an empty array from getArticlesForDeclaration for a declaration with no articles saved', () => {
+    const db = createDatabase(':memory:');
+    expect(getArticlesForDeclaration(db, 999)).toEqual([]);
     db.close();
   });
 });

@@ -156,3 +156,51 @@ export function getDeclarationById(
     | undefined;
   return row ? rowToSummary(row) : undefined;
 }
+
+export interface SavedArticleCost {
+  numero: number;
+  hsCode: string;
+  nomArticle: string;
+  pays: string;
+  valeurDeclaree: number;
+  quantite: number;
+  totalArticle: number;
+  costPerUnit: number;
+}
+
+interface ArticleRow {
+  id: number;
+  declaration_id: number;
+  numero: number;
+  hs_code: string;
+  nom_article: string;
+  pays: string;
+  valeur_declaree: number;
+  quantite: number;
+  total_article: number;
+  cost_per_unit: number;
+  taxes_json: string;
+}
+
+function rowToArticleCost(row: ArticleRow): SavedArticleCost {
+  return {
+    numero: row.numero,
+    hsCode: row.hs_code,
+    nomArticle: row.nom_article,
+    pays: row.pays,
+    valeurDeclaree: row.valeur_declaree,
+    quantite: row.quantite,
+    totalArticle: row.total_article,
+    costPerUnit: row.cost_per_unit,
+  };
+}
+
+export function getArticlesForDeclaration(
+  db: Database.Database,
+  declarationId: number
+): SavedArticleCost[] {
+  const rows = db
+    .prepare('SELECT * FROM declaration_articles WHERE declaration_id = ? ORDER BY numero ASC')
+    .all(declarationId) as ArticleRow[];
+  return rows.map(rowToArticleCost);
+}

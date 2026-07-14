@@ -18,7 +18,7 @@ import {
   renderSuperAdminPlaceholder,
   renderSuperAdminCosts,
 } from './renderSuperAdminDashboard.js';
-import { calculateLandedCost, type PartialShipmentCost } from '../domain/costCalculator.js';
+import { calculateLandedCost } from '../domain/costCalculator.js';
 import {
   createSession,
   requireAuth,
@@ -36,6 +36,11 @@ import {
   setUserDisabled,
   type UserRole,
 } from '../db/usersRepository.js';
+import {
+  saveDeclaration,
+  listAllDeclarations,
+  getArticlesForDeclaration,
+} from '../db/declarationsRepository.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,7 +76,6 @@ const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8'
 // preview can reference it without a database.
 let lastDeclaration: Declaration | undefined;
 let lastGeneratedFilePath: string | undefined;
-let lastShipmentCost: PartialShipmentCost | undefined;
 
 // multer's default disk storage strips the original file extension, but
 // extractDocumentText() dispatches on extension (.pdf vs image formats) —
@@ -200,7 +204,23 @@ app.post(
 
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
-      lastShipmentCost = dum.shipmentCost;
+
+      // Persisted (unlike the in-memory `last*` state above, which only
+      // serves this admin's own immediate results/download/cost-preview and
+      // is wiped on every restart) so the superadmin's "Coût de produit"
+      // page survives redeploys instead of going blank until someone
+      // generates again.
+      const cost = calculateLandedCost(declaration, dum.shipmentCost ?? {});
+      saveDeclaration(db, {
+        ownerUserId: req.session!.userId,
+        declaration,
+        shipmentCostFields: dum.shipmentCost ?? {},
+        articleCosts: cost.articleCosts,
+        totalLandedCost: cost.totalLandedCost,
+        costEstimatePartial: cost.partial,
+        excelFilePath: generatedFilePath,
+      });
+
       await sendXlsxFile(res, generatedFilePath, 'Declaration.xlsx');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -269,7 +289,7 @@ app.get('/download', async (_req, res) => {
 });
 
 app.get('/superadmin/dashboard', requireSuperAdmin, (_req, res) => {
-  res.send(renderSuperAdminOverview(listUsers(db)));
+  res.send(renderSuperAdminOverview(listUsers(db), listAllDeclarations(db).length));
 });
 
 app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
@@ -287,7 +307,12 @@ app.get('/superadmin/services', requireSuperAdmin, (_req, res) => {
 });
 
 app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
-  if (!lastDeclaration) {
+  // Reads from the database (most recent declaration across all admins),
+  // not the in-memory `lastDeclaration` — that state is per-process and
+  // wiped on every restart/redeploy, which made this page go blank even
+  // though declarations had already been generated before the restart.
+  const [mostRecent] = listAllDeclarations(db);
+  if (!mostRecent) {
     res.send(
       renderSuperAdminPlaceholder(
         'costs',
@@ -297,8 +322,8 @@ app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
     );
     return;
   }
-  const cost = calculateLandedCost(lastDeclaration, lastShipmentCost ?? {});
-  res.send(renderSuperAdminCosts(lastDeclaration, cost));
+  const articles = getArticlesForDeclaration(db, mostRecent.id);
+  res.send(renderSuperAdminCosts(mostRecent, articles));
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {

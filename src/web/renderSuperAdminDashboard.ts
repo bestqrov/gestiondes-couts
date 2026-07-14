@@ -1,6 +1,5 @@
 import type { User } from '../db/usersRepository.js';
-import type { Declaration } from '../domain/types.js';
-import type { CostCalculationResult } from '../domain/costCalculator.js';
+import type { SavedDeclarationSummary, SavedArticleCost } from '../db/declarationsRepository.js';
 
 export type SuperAdminPage = 'dashboard' | 'users' | 'services' | 'costs' | 'settings';
 
@@ -306,23 +305,26 @@ function statCard(
   </div>`;
 }
 
-export function renderSuperAdminOverview(users: User[]): string {
+export function renderSuperAdminOverview(users: User[], declarationCount: number): string {
   const total = users.length;
   const active = users.filter((u) => u.disabledAt === null).length;
   const disabled = users.filter((u) => u.disabledAt !== null).length;
   const superadmins = users.filter((u) => u.role === 'superadmin').length;
 
   const body = `
-    <p class="lede">Vue d'ensemble des comptes de l'application.</p>
+    <p class="lede">Vue d'ensemble des comptes et de l'activité de l'application.</p>
     <div class="stat-grid">
       ${statCard('brand', total, 'Comptes au total')}
       ${statCard('success', active, 'Comptes actifs')}
       ${statCard('warn', superadmins, 'Superadmins')}
       ${statCard('danger', disabled, 'Comptes désactivés')}
     </div>
+    <div class="stat-grid">
+      ${statCard('brand', declarationCount, 'Déclarations générées (total)')}
+    </div>
     <div class="card">
       <h2>Accès rapide</h2>
-      <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>.</p>
+      <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>, ou consultez <a href="/superadmin/costs" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Coût de produit</a>.</p>
     </div>
   `;
   return renderShell('dashboard', 'Tableau de bord', body);
@@ -424,27 +426,28 @@ function formatMoney(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Shows the cost breakdown of the single most recently generated declaration
-// (in-memory, same source as the admin tool's own "Coûts des produits"
-// panel) — not a persisted, cross-admin history, since declarations aren't
-// saved to the database yet (a separate, larger follow-up).
-export function renderSuperAdminCosts(declaration: Declaration, cost: CostCalculationResult): string {
-  const costByNumero = new Map(cost.articleCosts.map((c) => [c.numero, c.costPerUnit]));
-
-  const rows = declaration.articles
-    .map((article) => {
-      const costPerUnit = costByNumero.get(article.numero) ?? 0;
-      return `<tr>
+// Shows the cost breakdown of the most recently *persisted* declaration
+// (across all admins — matches the superadmin's "sees everything" role),
+// read from the database rather than the admin tool's own in-memory
+// last-generated-declaration state. Persisted means this survives a
+// redeploy/restart, unlike the earlier in-memory-only version.
+export function renderSuperAdminCosts(
+  summary: SavedDeclarationSummary,
+  articles: SavedArticleCost[]
+): string {
+  const rows = articles
+    .map(
+      (article) => `<tr>
         <td>${escapeHtml(article.nomArticle)}</td>
         <td>${escapeHtml(article.hsCode)}</td>
         <td>${escapeHtml(article.pays)}</td>
         <td class="num">${article.quantite}</td>
-        <td class="num cost">${formatMoney(costPerUnit)}</td>
-      </tr>`;
-    })
+        <td class="num cost">${formatMoney(article.costPerUnit)}</td>
+      </tr>`
+    )
     .join('');
 
-  const partialNote = cost.partial
+  const partialNote = summary.costEstimatePartial
     ? `<div class="error" style="background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Coût partiel — données d'expédition (fret, assurance, montant facturé) non détectées ou incomplètes ; seuls les droits et taxes sont inclus ci-dessous.</span>
@@ -452,13 +455,13 @@ export function renderSuperAdminCosts(declaration: Declaration, cost: CostCalcul
     : '';
 
   const totalCard = statCard(
-    cost.partial ? 'warn' : 'brand',
-    formatMoney(cost.totalLandedCost),
-    cost.partial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
+    summary.costEstimatePartial ? 'warn' : 'brand',
+    formatMoney(summary.totalLandedCost),
+    summary.costEstimatePartial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
   );
 
   const body = `
-    <p class="lede">Déclaration ${escapeHtml(declaration.code)} — ${escapeHtml(declaration.redevable)} (la plus récente générée sur l'application).</p>
+    <p class="lede">Déclaration ${escapeHtml(summary.code)} — ${escapeHtml(summary.redevable)} (la plus récente générée sur l'application, tous admins confondus).</p>
     ${partialNote}
     <div class="stat-grid">${totalCard}</div>
     <div class="card">
