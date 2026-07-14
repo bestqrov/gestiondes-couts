@@ -40,12 +40,6 @@ const NAV_ITEMS: Array<{ page: SuperAdminPage; href: string; label: string; icon
     icon: '<circle cx="7.5" cy="7" r="2.75" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 17c0-2.9 2.24-5 5-5s5 2.1 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="14.5" cy="7.5" r="2.1" stroke="currentColor" stroke-width="1.5"/><path d="M13 12.3c1.9.2 3.5 1.9 3.5 4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
   {
-    page: 'costs',
-    href: '/superadmin/costs',
-    label: 'Coût de produit',
-    icon: '<path d="M10 2.5v15M13.5 5.5c0-1.4-1.6-2-3.5-2s-3.5.9-3.5 2.3c0 3 7 1.4 7 4.3 0 1.4-1.6 2.4-3.5 2.4s-3.5-.9-3.5-2.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  },
-  {
     page: 'settings',
     href: '/superadmin/settings',
     label: 'Réglages',
@@ -348,7 +342,7 @@ export function renderSuperAdminOverview(
     </div>
     <div class="card">
       <h2>Accès rapide</h2>
-      <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>, ou consultez <a href="/superadmin/costs" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Coût de produit</a>.</p>
+      <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>.</p>
     </div>
   `;
   return renderShell('dashboard', 'Tableau de bord', body, settings);
