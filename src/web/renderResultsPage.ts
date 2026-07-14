@@ -69,6 +69,37 @@ function renderUnitLevelPreviewTable(declaration: Declaration): { html: string; 
   };
 }
 
+// Renders just the results content (heading + the two tables), with no
+// <html>/<head>/<body> wrapper and no download link — meant to be fetched
+// and injected inline into the upload page's own success panel (see
+// GET /last-declaration-results in server.ts), which supplies its own
+// export buttons around this fragment. renderResultsPage() below still
+// wraps the same tables in a full standalone page for the separate
+// GET /results route.
+export function renderResultsFragment(declaration: Declaration): string {
+  const file1Table = renderArticleSummaryTable(declaration);
+  const { html: file2Table, totalRows } = renderUnitLevelPreviewTable(declaration);
+  const previewNote =
+    totalRows > UNIT_PREVIEW_ROW_LIMIT
+      ? `<p class="note">Aperçu limité à ${UNIT_PREVIEW_ROW_LIMIT} lignes sur ${totalRows} — téléchargez le fichier complet pour tout voir.</p>`
+      : '';
+
+  return `
+    <h2 class="results-heading">Déclaration ${escapeHtml(declaration.code)} — ${escapeHtml(declaration.redevable)}</h2>
+    <div class="results-columns">
+      <div class="results-column">
+        <h3>Résumé Articles</h3>
+        <div class="results-table-scroll">${file1Table}</div>
+      </div>
+      <div class="results-column">
+        <h3>Détail par unité</h3>
+        ${previewNote}
+        <div class="results-table-scroll">${file2Table}</div>
+      </div>
+    </div>
+  `;
+}
+
 export function renderResultsPage(declaration: Declaration): string {
   const file1Table = renderArticleSummaryTable(declaration);
   const { html: file2Table, totalRows } = renderUnitLevelPreviewTable(declaration);

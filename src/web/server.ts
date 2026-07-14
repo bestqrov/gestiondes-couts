@@ -11,7 +11,7 @@ import { detectAndParsePair } from '../parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
-import { renderResultsPage } from './renderResultsPage.js';
+import { renderResultsPage, renderResultsFragment } from './renderResultsPage.js';
 import {
   renderSuperAdminOverview,
   renderSuperAdminUsers,
@@ -215,6 +215,17 @@ app.get('/results', (_req, res) => {
     return;
   }
   res.send(renderResultsPage(lastDeclaration));
+});
+
+// Same tables as /results, but as an HTML fragment (no page wrapper) meant
+// to be fetched and injected inline into the upload page's success panel —
+// "Afficher résultats" shows this in place instead of navigating away.
+app.get('/last-declaration-results', (_req, res) => {
+  if (!lastDeclaration) {
+    res.status(404).send('<p>Aucune déclaration générée pour le moment.</p>');
+    return;
+  }
+  res.send(renderResultsFragment(lastDeclaration));
 });
 
 // Duty-only cost per unit (sum of this article's tax montants / quantite) —
