@@ -697,6 +697,15 @@ const GENERATE_PAGE_STYLE = `
     font-size: 12px; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line);
     border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; line-height: 1.5;
   }
+
+  #successPanel.cost-exclusive .success-icon,
+  #successPanel.cost-exclusive .success-title,
+  #successPanel.cost-exclusive .success-subtitle,
+  #successPanel.cost-exclusive .results-section,
+  #successPanel.cost-exclusive #newDeclarationBtn,
+  #successPanel.cost-exclusive #downloadAgainBtn,
+  #successPanel.cost-exclusive #showResultsBtn { display: none; }
+  #successPanel.cost-exclusive .cost-panel { border-top: none; margin-top: 0; }
   table.cost-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   table.cost-table th, table.cost-table td { text-align: center; padding: 7px 9px; border-bottom: 1px solid var(--line-soft); }
   table.cost-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
@@ -1037,10 +1046,15 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
           '</tr></thead><tbody>' + rows + '</tbody></table>';
       }
 
+      const showCostsBtnOriginalHtml = showCostsBtn.innerHTML;
+      const backIcon = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.5 15.5L7 10l5.5-5.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
       showCostsBtn.addEventListener('click', async () => {
         const isVisible = costPanel.classList.contains('visible');
         if (isVisible) {
           costPanel.classList.remove('visible');
+          successPanel.classList.remove('cost-exclusive');
+          showCostsBtn.innerHTML = showCostsBtnOriginalHtml;
           return;
         }
 
@@ -1049,6 +1063,8 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
           const result = await fetchCostSummary();
           renderCostTable(result);
           costPanel.classList.add('visible');
+          successPanel.classList.add('cost-exclusive');
+          showCostsBtn.innerHTML = backIcon + 'Retour';
         } catch (err) {
           showFormError(err.message);
         } finally {
