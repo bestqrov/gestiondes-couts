@@ -478,13 +478,15 @@ app.post(
     });
   },
   (req, res) => {
-    const { companyName, brandColor, fontFamily, contactEmail, contactWhatsapp } = req.body as {
-      companyName?: string;
-      brandColor?: string;
-      fontFamily?: string;
-      contactEmail?: string;
-      contactWhatsapp?: string;
-    };
+    const { companyName, brandColor, fontFamily, contactEmail, contactWhatsapp, removeLogo } =
+      req.body as {
+        companyName?: string;
+        brandColor?: string;
+        fontFamily?: string;
+        contactEmail?: string;
+        contactWhatsapp?: string;
+        removeLogo?: string;
+      };
 
     if (brandColor && !isValidHexColor(brandColor)) {
       res
@@ -527,7 +529,9 @@ app.post(
       contactWhatsapp: contactWhatsapp?.trim() ? contactWhatsapp.trim() : null,
       ...(logoFile
         ? { logoDataUri: `data:${logoFile.mimetype};base64,${logoFile.buffer.toString('base64')}` }
-        : {}),
+        : removeLogo === '1'
+          ? { logoDataUri: null }
+          : {}),
     });
 
     res.send(

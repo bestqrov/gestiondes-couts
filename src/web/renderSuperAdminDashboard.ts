@@ -611,71 +611,120 @@ export function renderSuperAdminSettings(
       `<option value="${opt.value}"${opt.value === selectedFont ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
   ).join('');
 
+  const defaultTab = credentialsError || credentialsSuccess ? 'identifiants' : 'profil';
+
   const body = `
-    <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale, police, et coordonnées affichées sur la page de connexion.</p>
-    ${errorBlock}
-    ${successBlock}
+    <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale, police, coordonnées et identifiants de connexion.</p>
+
+    <div class="settings-tabs" role="tablist">
+      <button type="button" class="settings-tab" data-tab="profil">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 8h1M11.5 8h1M7.5 11h1M11.5 11h1M8.5 17v-3h3v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Profil École
+      </button>
+      <button type="button" class="settings-tab" data-tab="apparence">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13" stroke="currentColor" stroke-width="1.5"/></svg>
+        Thème
+      </button>
+      <button type="button" class="settings-tab" data-tab="contact">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 5.8l6.5 5 6.5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Contact
+      </button>
+      <button type="button" class="settings-tab" data-tab="identifiants">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4"/></svg>
+        Identifiants
+      </button>
+    </div>
+
     <form method="post" action="/superadmin/settings" enctype="multipart/form-data">
-      <div class="card settings-section">
-        <div class="settings-section-head">
-          <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 8h1M11.5 8h1M7.5 11h1M11.5 11h1M8.5 17v-3h3v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
-          <div>
-            <h2>Société</h2>
-            <p class="settings-section-hint">Nom et logo affichés dans l'application et sur la page de connexion.</p>
+      <div class="tab-panel" data-panel="profil">
+        ${errorBlock}
+        ${successBlock}
+        <div class="card settings-section logo-card">
+          <div class="settings-section-head">
+            <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.3"/></svg></div>
+            <div>
+              <h2>Logo de l'école</h2>
+              <p class="settings-section-hint">Téléchargez le logo de votre établissement. Il sera affiché dans la barre latérale et sur tous les documents.</p>
+            </div>
+          </div>
+          <div class="logo-field">
+            <span id="logoPreviewWrap">${currentLogo}</span>
+            <div class="logo-field-input">
+              <div class="logo-field-buttons">
+                <label for="logo" class="btn-upload">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 13V4M6.5 7.5 10 4l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  Télécharger un logo
+                </label>
+                <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;" />
+                <button type="button" id="removeLogoBtn" class="btn-remove-logo"${settings.logoDataUri ? '' : ' style="display:none;"'}>Supprimer</button>
+                <input type="hidden" id="removeLogo" name="removeLogo" value="" />
+              </div>
+              <span class="field-hint">Formats acceptés : PNG, JPEG, WEBP ou SVG — 2 Mo maximum.</span>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label for="companyName"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.4"/></svg> Nom de la société</label>
-          <input type="text" id="companyName" name="companyName" value="${escapeHtml(settings.companyName ?? '')}" placeholder="ex. Global Trade Logistics SARL" />
-        </div>
-        <div class="field">
-          <label for="logo"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.3"/></svg> Logo</label>
-          <div class="logo-field">
-            ${currentLogo}
-            <div class="logo-field-input">
-              <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
-              <span class="field-hint">PNG, JPEG, WEBP ou SVG — 2 Mo maximum.</span>
+
+        <div class="card settings-section">
+          <div class="settings-section-head">
+            <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 8h1M11.5 8h1M7.5 11h1M11.5 11h1M8.5 17v-3h3v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+            <div>
+              <h2>Société</h2>
+              <p class="settings-section-hint">Nom affiché dans l'application et sur la page de connexion.</p>
+            </div>
+          </div>
+          <div class="settings-field-grid">
+            <div class="field">
+              <label for="companyName">Nom de l'école</label>
+              <input type="text" id="companyName" name="companyName" value="${escapeHtml(settings.companyName ?? '')}" placeholder="ex. Global Trade Logistics SARL" />
             </div>
           </div>
         </div>
       </div>
 
-      <div class="card settings-section">
-        <div class="settings-section-head">
-          <div class="settings-icon settings-icon-amber"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13" stroke="currentColor" stroke-width="1.5"/></svg></div>
-          <div>
-            <h2>Apparence</h2>
-            <p class="settings-section-hint">Couleur d'accent et police utilisées dans toute l'application.</p>
+      <div class="tab-panel" data-panel="apparence" hidden>
+        <div class="card settings-section">
+          <div class="settings-section-head">
+            <div class="settings-icon settings-icon-amber"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13" stroke="currentColor" stroke-width="1.5"/></svg></div>
+            <div>
+              <h2>Apparence</h2>
+              <p class="settings-section-hint">Couleur d'accent et police utilisées dans toute l'application.</p>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="brandColor"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.4"/></svg> Couleur principale</label>
-          <div class="color-field">
-            <input type="color" id="brandColor" name="brandColor" value="${escapeHtml(settings.brandColor ?? '#4f46e5')}" />
-            <span class="color-field-hex" id="brandColorHex">${escapeHtml(settings.brandColor ?? '#4f46e5')}</span>
+          <div class="settings-field-grid">
+            <div class="field">
+              <label for="brandColor">Couleur principale</label>
+              <div class="color-field">
+                <input type="color" id="brandColor" name="brandColor" value="${escapeHtml(settings.brandColor ?? '#4f46e5')}" />
+                <span class="color-field-hex" id="brandColorHex">${escapeHtml(settings.brandColor ?? '#4f46e5')}</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="fontFamily">Police</label>
+              <select id="fontFamily" name="fontFamily">${fontOptions}</select>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="fontFamily"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 16l3.5-10h1L13 16M6.2 12.5h6.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Police</label>
-          <select id="fontFamily" name="fontFamily">${fontOptions}</select>
         </div>
       </div>
 
-      <div class="card settings-section">
-        <div class="settings-section-head">
-          <div class="settings-icon settings-icon-green"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 5.8l6.5 5 6.5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div>
-            <h2>Contact</h2>
-            <p class="settings-section-hint">Affichés dans le pied de page de l'écran de connexion.</p>
+      <div class="tab-panel" data-panel="contact" hidden>
+        <div class="card settings-section">
+          <div class="settings-section-head">
+            <div class="settings-icon settings-icon-green"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 5.8l6.5 5 6.5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div>
+              <h2>Contact</h2>
+              <p class="settings-section-hint">Affichés dans le pied de page de l'écran de connexion.</p>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="contactEmail"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.5h14v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9Z" stroke="currentColor" stroke-width="1.3"/></svg> Email de contact</label>
-          <input type="email" id="contactEmail" name="contactEmail" value="${escapeHtml(settings.contactEmail ?? '')}" placeholder="ex. contact@societe.com" />
-        </div>
-        <div class="field">
-          <label for="contactWhatsapp"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 3.5h2.2l1 4-1.6 1.3a9 9 0 0 0 4.6 4.6l1.3-1.6 4 1v2.2c0 .8-.7 1.4-1.4 1.3A13.5 13.5 0 0 1 3.7 4.9C3.6 4.2 4.2 3.5 5 3.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg> Téléphone / WhatsApp</label>
-          <input type="text" id="contactWhatsapp" name="contactWhatsapp" value="${escapeHtml(settings.contactWhatsapp ?? '')}" placeholder="ex. +212 6 00 00 00 00" />
+          <div class="settings-field-grid">
+            <div class="field">
+              <label for="contactEmail">Email de contact</label>
+              <input type="email" id="contactEmail" name="contactEmail" value="${escapeHtml(settings.contactEmail ?? '')}" placeholder="ex. contact@societe.com" />
+            </div>
+            <div class="field">
+              <label for="contactWhatsapp">Téléphone / WhatsApp</label>
+              <input type="text" id="contactWhatsapp" name="contactWhatsapp" value="${escapeHtml(settings.contactWhatsapp ?? '')}" placeholder="ex. +212 6 00 00 00 00" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -685,31 +734,36 @@ export function renderSuperAdminSettings(
       </button>
     </form>
 
-    <div class="card settings-section">
-      <div class="settings-section-head">
-        <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4.5" y="9" width="11" height="7.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" stroke-width="1.4"/></svg></div>
-        <div>
-          <h2>Identifiants de connexion</h2>
-          <p class="settings-section-hint">Nom d'utilisateur et mot de passe de votre propre compte superadmin.</p>
+    <div class="tab-panel" data-panel="identifiants" hidden>
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4.5" y="9" width="11" height="7.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" stroke-width="1.4"/></svg></div>
+          <div>
+            <h2>Identifiants de connexion</h2>
+            <p class="settings-section-hint">Nom d'utilisateur et mot de passe de votre propre compte superadmin.</p>
+          </div>
         </div>
+        ${credentialsErrorBlock}
+        ${credentialsSuccessBlock}
+        <form method="post" action="/superadmin/settings/credentials">
+          <div class="settings-field-grid">
+            <div class="field">
+              <label for="username">Nom d'utilisateur</label>
+              <input type="text" id="username" name="username" value="${escapeHtml(currentUsername ?? '')}" required />
+            </div>
+            <div class="field">
+              <label for="newPassword">Nouveau mot de passe</label>
+              <input type="password" id="newPassword" name="newPassword" placeholder="Laisser vide pour ne pas changer" autocomplete="new-password" />
+            </div>
+          </div>
+          <button type="submit" class="settings-save">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Mettre à jour les identifiants
+          </button>
+        </form>
       </div>
-      ${credentialsErrorBlock}
-      ${credentialsSuccessBlock}
-      <form method="post" action="/superadmin/settings/credentials">
-        <div class="field">
-          <label for="username"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4"/></svg> Nom d'utilisateur</label>
-          <input type="text" id="username" name="username" value="${escapeHtml(currentUsername ?? '')}" required />
-        </div>
-        <div class="field">
-          <label for="newPassword"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4.5" y="9" width="11" height="7.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" stroke-width="1.4"/></svg> Nouveau mot de passe</label>
-          <input type="password" id="newPassword" name="newPassword" placeholder="Laisser vide pour ne pas changer" autocomplete="new-password" />
-        </div>
-        <button type="submit" class="settings-save">
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Mettre à jour les identifiants
-        </button>
-      </form>
     </div>
+
     <script>
       var brandColorInput = document.getElementById('brandColor');
       var brandColorHex = document.getElementById('brandColorHex');
@@ -718,6 +772,34 @@ export function renderSuperAdminSettings(
           brandColorHex.textContent = brandColorInput.value;
         });
       }
+
+      var removeLogoBtn = document.getElementById('removeLogoBtn');
+      var removeLogoInput = document.getElementById('removeLogo');
+      var logoPreviewWrap = document.getElementById('logoPreviewWrap');
+      if (removeLogoBtn && removeLogoInput && logoPreviewWrap) {
+        removeLogoBtn.addEventListener('click', function () {
+          removeLogoInput.value = '1';
+          logoPreviewWrap.innerHTML = '<div class="logo-preview logo-preview-empty"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.4"/><path d="M4 6l2.5-2.5h7L16 6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="11" r="2" stroke="currentColor" stroke-width="1.3"/></svg></div>';
+          removeLogoBtn.style.display = 'none';
+        });
+      }
+
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.settings-tab'));
+      var panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
+      function activateTab(name) {
+        tabs.forEach(function (tab) {
+          tab.classList.toggle('active', tab.getAttribute('data-tab') === name);
+        });
+        panels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-panel') !== name;
+        });
+      }
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          activateTab(tab.getAttribute('data-tab'));
+        });
+      });
+      activateTab('${defaultTab}');
     </script>
   `;
 
@@ -725,6 +807,39 @@ export function renderSuperAdminSettings(
 }
 
 const SETTINGS_PAGE_STYLE = `
+  .settings-tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 24px; overflow-x: auto;
+  }
+  .settings-tab {
+    display: flex; align-items: center; gap: 8px; padding: 12px 18px; font-family: inherit;
+    font-size: 14px; font-weight: 700; color: var(--ink-500); background: none; border: none;
+    border-bottom: 2.5px solid transparent; cursor: pointer; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .settings-tab svg { width: 17px; height: 17px; flex: none; }
+  .settings-tab:hover { color: var(--ink-700); }
+  .settings-tab.active { color: var(--brand-600); border-bottom-color: var(--brand-600); background: var(--brand-soft); border-radius: 8px 8px 0 0; }
+  .tab-panel[hidden] { display: none; }
+
+  .logo-card {
+    background: linear-gradient(135deg, var(--brand-soft), var(--card-bg) 70%);
+  }
+  .logo-field { display: flex; align-items: flex-start; gap: 20px; }
+  .logo-field-buttons { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .btn-upload {
+    display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; font-size: 13.5px; font-weight: 700;
+    color: #fff; background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border-radius: 9px;
+    cursor: pointer; border: none;
+  }
+  .btn-upload:hover { filter: brightness(1.05); }
+  .btn-remove-logo {
+    padding: 10px 16px; font-size: 13.5px; font-weight: 700; color: var(--danger);
+    background: var(--danger-bg); border: 1px solid var(--danger-line); border-radius: 9px; cursor: pointer;
+  }
+  .btn-remove-logo:hover { filter: brightness(0.97); }
+
+  .settings-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 20px; }
+
   .settings-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
   .settings-section-head h2 { margin: 0 0 3px; }
   .settings-section-hint { margin: 0; font-size: 12px; color: var(--ink-500); line-height: 1.4; }
@@ -743,8 +858,8 @@ const SETTINGS_PAGE_STYLE = `
   .logo-field-input { flex: 1; display: flex; flex-direction: column; gap: 6px; }
   .field-hint { font-size: 11.5px; color: var(--ink-400); }
   .logo-preview {
-    width: 56px; height: 56px; flex: none; border-radius: 12px; object-fit: contain;
-    border: 1px solid var(--line); padding: 6px; background: var(--input-bg);
+    width: 96px; height: 96px; flex: none; border-radius: 14px; object-fit: contain;
+    border: 1.5px dashed var(--line); padding: 8px; background: var(--card-bg);
   }
   .logo-preview-empty { display: flex; align-items: center; justify-content: center; color: var(--ink-400); }
   .logo-preview-empty svg { width: 24px; height: 24px; }
