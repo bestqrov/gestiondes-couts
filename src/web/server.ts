@@ -50,7 +50,14 @@ import {
   type TransactionDocument,
 } from '../db/transactionsRepository.js';
 import { isValidHexColor } from '../domain/colorUtils.js';
-import { FONT_OPTIONS, renderBrandOverrideStyle, renderLogoImg } from './brandingStyles.js';
+import {
+  FONT_OPTIONS,
+  renderBrandOverrideStyle,
+  renderLogoImg,
+  renderLoginBadge,
+  renderLoginTitle,
+  renderContactRows,
+} from './brandingStyles.js';
 import { generateDeclarationPdf } from '../pdf/declarationPdfGenerator.js';
 import type { Declaration } from '../domain/types.js';
 
@@ -139,9 +146,14 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 
 function renderLoginHtml(errorBlock: string): string {
+  const settings = getAppSettings(db);
   return loginHtml
     .replace('{{ERROR_BLOCK}}', errorBlock)
-    .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(getAppSettings(db)));
+    .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(settings))
+    .replace('{{BRAND_LOGO_LEFT}}', renderLoginBadge(settings))
+    .replace('{{BRAND_LOGO_RIGHT}}', renderLoginBadge(settings))
+    .replace('{{BRAND_TITLE}}', renderLoginTitle(settings))
+    .replace('{{CONTACT_ROWS}}', renderContactRows(settings));
 }
 
 app.get('/login', (_req, res) => {
@@ -455,10 +467,12 @@ app.post(
     });
   },
   (req, res) => {
-    const { companyName, brandColor, fontFamily } = req.body as {
+    const { companyName, brandColor, fontFamily, contactEmail, contactWhatsapp } = req.body as {
       companyName?: string;
       brandColor?: string;
       fontFamily?: string;
+      contactEmail?: string;
+      contactWhatsapp?: string;
     };
 
     if (brandColor && !isValidHexColor(brandColor)) {
@@ -490,6 +504,8 @@ app.post(
       companyName: companyName?.trim() ? companyName.trim() : null,
       brandColor: brandColor || null,
       fontFamily: fontFamily || null,
+      contactEmail: contactEmail?.trim() ? contactEmail.trim() : null,
+      contactWhatsapp: contactWhatsapp?.trim() ? contactWhatsapp.trim() : null,
       ...(logoFile
         ? { logoDataUri: `data:${logoFile.mimetype};base64,${logoFile.buffer.toString('base64')}` }
         : {}),

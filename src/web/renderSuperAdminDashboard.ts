@@ -599,7 +599,7 @@ export function renderSuperAdminSettings(
   ).join('');
 
   const body = `
-    <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale et police.</p>
+    <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale, police, et coordonnées affichées sur la page de connexion.</p>
     ${errorBlock}
     ${successBlock}
     <div class="card">
@@ -621,6 +621,14 @@ export function renderSuperAdminSettings(
         <div class="field">
           <label for="fontFamily">Police</label>
           <select id="fontFamily" name="fontFamily">${fontOptions}</select>
+        </div>
+        <div class="field">
+          <label for="contactEmail">Email de contact (page de connexion)</label>
+          <input type="email" id="contactEmail" name="contactEmail" value="${escapeHtml(settings.contactEmail ?? '')}" placeholder="ex. contact@societe.com" />
+        </div>
+        <div class="field">
+          <label for="contactWhatsapp">Téléphone / WhatsApp (page de connexion)</label>
+          <input type="text" id="contactWhatsapp" name="contactWhatsapp" value="${escapeHtml(settings.contactWhatsapp ?? '')}" placeholder="ex. +212 6 00 00 00 00" />
         </div>
         <button type="submit">Enregistrer</button>
       </form>

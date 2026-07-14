@@ -33,7 +33,7 @@ function runMigrations(db: Database.Database): void {
     -- name, logo (stored as a data: URI directly in the row — small enough
     -- in practice, and guarantees it persists in the same place/volume as
     -- everything else, no separate file storage/volume to configure), an
-    -- accent color, and a font choice.
+    -- accent color, a font choice, and login-page contact details.
     CREATE TABLE IF NOT EXISTS app_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       company_name TEXT,
@@ -43,6 +43,23 @@ function runMigrations(db: Database.Database): void {
       updated_at TEXT NOT NULL
     );
   `);
+
+  // CREATE TABLE IF NOT EXISTS only affects a brand-new database — an
+  // already-deployed one keeps its original column set. SQLite has no
+  // "ADD COLUMN IF NOT EXISTS", so add any columns introduced after the
+  // table's first release individually, guarded by a table_info check,
+  // to keep this migration safe to run repeatedly against an existing file.
+  const existingColumns = new Set(
+    (db.prepare('PRAGMA table_info(app_settings)').all() as Array<{ name: string }>).map(
+      (col) => col.name
+    )
+  );
+  if (!existingColumns.has('contact_email')) {
+    db.exec('ALTER TABLE app_settings ADD COLUMN contact_email TEXT');
+  }
+  if (!existingColumns.has('contact_whatsapp')) {
+    db.exec('ALTER TABLE app_settings ADD COLUMN contact_whatsapp TEXT');
+  }
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

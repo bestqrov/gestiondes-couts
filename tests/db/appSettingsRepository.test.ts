@@ -10,6 +10,8 @@ describe('appSettingsRepository', () => {
       logoDataUri: null,
       brandColor: null,
       fontFamily: null,
+      contactEmail: null,
+      contactWhatsapp: null,
     });
     db.close();
   });
@@ -21,6 +23,8 @@ describe('appSettingsRepository', () => {
       brandColor: '#4f46e5',
       fontFamily: 'serif',
       logoDataUri: 'data:image/png;base64,abc123',
+      contactEmail: 'contact@acme.example',
+      contactWhatsapp: '+212600000000',
     });
 
     expect(result).toEqual({
@@ -28,6 +32,8 @@ describe('appSettingsRepository', () => {
       brandColor: '#4f46e5',
       fontFamily: 'serif',
       logoDataUri: 'data:image/png;base64,abc123',
+      contactEmail: 'contact@acme.example',
+      contactWhatsapp: '+212600000000',
     });
     expect(getAppSettings(db)).toEqual(result);
     db.close();
@@ -44,6 +50,8 @@ describe('appSettingsRepository', () => {
       brandColor: '#4f46e5',
       fontFamily: 'mono',
       logoDataUri: null,
+      contactEmail: null,
+      contactWhatsapp: null,
     });
     db.close();
   });
