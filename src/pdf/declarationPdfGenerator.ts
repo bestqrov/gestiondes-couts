@@ -2,20 +2,18 @@ import PDFDocument from 'pdfkit';
 import type { Declaration } from '../domain/types.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { allocateTaxAcrossUnits, unionTaxCodes } from '../excel/unitLevelTaxHelpers.js';
-import { isValidHexColor, darken } from '../domain/colorUtils.js';
+import { isValidHexColor } from '../domain/colorUtils.js';
 
 const DEFAULT_BRAND_COLOR = '#4F46E5';
-const UNIT_PREVIEW_ROW_LIMIT = 200; // same cap as the on-screen results preview
 
 const PAGE_MARGIN = 36;
-const HEADER_HEIGHT = 64;
-const FOOTER_HEIGHT = 28;
+const HEADER_HEIGHT = 76;
+const FOOTER_HEIGHT = 26;
 const LOGO_MAX_MIME = new Set(['image/png', 'image/jpeg']); // pdfkit has no SVG/WEBP support
 
 interface Column {
   header: string;
   width: number;
-  key: string;
 }
 
 function parseLogoBuffer(logoDataUri: string | null): Buffer | undefined {
@@ -31,15 +29,18 @@ function parseLogoBuffer(logoDataUri: string | null): Buffer | undefined {
   }
 }
 
-// Draws the letterhead (logo + company name + generation date, top) and
-// footer (company name, bottom) on every buffered page — done as a final
-// pass over doc.bufferedPageRange() rather than on each addPage(), so the
-// table-drawing code below doesn't need to know about the letterhead at
-// all; it just draws rows and calls addPage() when it runs out of room.
+// Draws the letterhead — a solid brand-colored band (company name +
+// document title, white text, logo if set) — and a footer (company name)
+// on every buffered page. Done as a final pass over doc.bufferedPageRange()
+// rather than on each addPage(), so the table-drawing code below doesn't
+// need to know about the letterhead at all; it just draws rows and calls
+// addPage() when it runs out of room.
 function drawLetterheadOnAllPages(
   doc: PDFKit.PDFDocument,
+  documentTitle: string,
   companyName: string | null,
   logoBuffer: Buffer | undefined,
+  brand600: string,
   generatedAt: Date
 ): void {
   const range = doc.bufferedPageRange();
@@ -54,50 +55,53 @@ function drawLetterheadOnAllPages(
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
 
-    // Header
+    // Header band — filled with the app/brand color so the letterhead is
+    // clearly branded, not just colored table headers further down.
+    doc.rect(0, 0, pageWidth, HEADER_HEIGHT).fill(brand600);
+
     let logoWidth = 0;
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, PAGE_MARGIN, PAGE_MARGIN - 6, { fit: [50, 36] });
-        logoWidth = 60;
+        doc.image(logoBuffer, PAGE_MARGIN, 14, { fit: [46, 46] });
+        logoWidth = 58;
       } catch {
         // Corrupt/unsupported image data — skip the logo rather than fail the whole PDF.
       }
     }
+    const textX = PAGE_MARGIN + logoWidth;
+    const textWidth = pageWidth - PAGE_MARGIN * 2 - logoWidth - 150;
     doc
       .font('Helvetica-Bold')
-      .fontSize(13)
-      .fillColor('#0f172a')
-      .text(companyName ?? 'Déclaration Douanière', PAGE_MARGIN + logoWidth, PAGE_MARGIN - 4, {
-        width: pageWidth - PAGE_MARGIN * 2 - logoWidth - 140,
-      });
+      .fontSize(15)
+      .fillColor('#ffffff')
+      .text(companyName ?? 'Déclaration Douanière', textX, 16, { width: textWidth });
+    doc
+      .font('Helvetica')
+      .fontSize(10)
+      .fillColor('#e0e7ff')
+      .text(documentTitle, textX, 38, { width: textWidth });
     doc
       .font('Helvetica')
       .fontSize(9)
-      .fillColor('#64748b')
-      .text(`Généré le ${dateLabel}`, pageWidth - PAGE_MARGIN - 140, PAGE_MARGIN - 2, {
-        width: 140,
+      .fillColor('#ffffff')
+      .text(`Généré le ${dateLabel}`, pageWidth - PAGE_MARGIN - 150, 16, {
+        width: 150,
         align: 'right',
       });
-    doc
-      .moveTo(PAGE_MARGIN, HEADER_HEIGHT)
-      .lineTo(pageWidth - PAGE_MARGIN, HEADER_HEIGHT)
-      .strokeColor('#e2e8f0')
-      .lineWidth(1)
-      .stroke();
 
     // Footer
     doc
       .moveTo(PAGE_MARGIN, pageHeight - FOOTER_HEIGHT)
       .lineTo(pageWidth - PAGE_MARGIN, pageHeight - FOOTER_HEIGHT)
       .strokeColor('#e2e8f0')
+      .lineWidth(1)
       .stroke();
     if (companyName) {
       doc
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#94a3b8')
-        .text(companyName, PAGE_MARGIN, pageHeight - FOOTER_HEIGHT + 8, {
+        .text(companyName, PAGE_MARGIN, pageHeight - FOOTER_HEIGHT + 7, {
           width: pageWidth - PAGE_MARGIN * 2,
           align: 'center',
         });
@@ -116,11 +120,11 @@ function drawTable(
   startY: number,
   brand600: string
 ): number {
-  const rowHeight = 18;
+  const rowHeight = 16;
   const headerHeight = 20;
   const tableX = PAGE_MARGIN;
   const tableWidth = columns.reduce((sum, c) => sum + c.width, 0);
-  const maxY = doc.page.height - FOOTER_HEIGHT - 12;
+  const maxY = doc.page.height - FOOTER_HEIGHT - 10;
 
   function drawHeaderRow(y: number): number {
     doc.rect(tableX, y, tableWidth, headerHeight).fill(brand600);
@@ -147,7 +151,7 @@ function drawTable(
     doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
     row.forEach((cell, colIndex) => {
       const col = columns[colIndex];
-      doc.text(cell, x + 4, y + 5, { width: col.width - 8, ellipsis: true });
+      doc.text(cell, x + 4, y + 4, { width: col.width - 8, ellipsis: true });
       x += col.width;
     });
     doc
@@ -162,29 +166,26 @@ function drawTable(
   return y;
 }
 
-function buildArticleSummaryRows(declaration: Declaration): string[][] {
-  return declaration.articles.map((article) => [
-    article.nomArticle,
-    article.hsCode,
-    article.pays,
-    article.valeurDeclaree.toFixed(2),
-    String(article.quantite),
-  ]);
-}
-
-function buildUnitLevelTable(declaration: Declaration): { columns: Column[]; rows: string[][] } {
+// Mirrors the Excel export's "Global" sheet exactly: every article's unit
+// rows, one after another, with Nom Article / HSC / Serial Number / [sorted
+// tax codes] / Valeur Déclarée (per-unit, same value repeated across an
+// article's rows) — no row cap, unlike the on-screen results preview,
+// since this is meant to be the same complete data as the Excel sheet.
+function buildGlobalSheetTable(declaration: Declaration): { columns: Column[]; rows: string[][] } {
   const taxCodes = unionTaxCodes(declaration.articles);
-  const codeColumnWidth = Math.max(40, Math.min(60, 380 / Math.max(taxCodes.length, 1)));
+  const codeColumnWidth = Math.max(38, Math.min(56, 340 / Math.max(taxCodes.length, 1)));
   const columns: Column[] = [
-    { header: 'Nom Article', width: 140, key: 'nomArticle' },
-    { header: 'HSC', width: 80, key: 'hsCode' },
-    { header: 'N°', width: 40, key: 'serial' },
-    ...taxCodes.map((code) => ({ header: code, width: codeColumnWidth, key: code })),
+    { header: 'Nom Article', width: 130 },
+    { header: 'HSC', width: 75 },
+    { header: 'N°', width: 36 },
+    ...taxCodes.map((code) => ({ header: code, width: codeColumnWidth })),
+    { header: 'Valeur Déclarée', width: 80 },
   ];
 
   const rows: string[][] = [];
-  outer: for (const article of declaration.articles) {
+  for (const article of declaration.articles) {
     const quantite = Math.round(article.quantite);
+    const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {
       const tax = article.taxes.find((t) => t.code === code);
@@ -194,12 +195,12 @@ function buildUnitLevelTable(declaration: Declaration): { columns: Column[]; row
       );
     }
     for (let unit = 0; unit < quantite; unit++) {
-      if (rows.length >= UNIT_PREVIEW_ROW_LIMIT) break outer;
       rows.push([
         article.nomArticle,
         article.hsCode,
         String(unit + 1),
         ...taxCodes.map((code) => perCodeAllocations.get(code)![unit].toFixed(2)),
+        valeurDeclareePerUnit.toFixed(2),
       ]);
     }
   }
@@ -207,11 +208,11 @@ function buildUnitLevelTable(declaration: Declaration): { columns: Column[]; row
   return { columns, rows };
 }
 
-// Generates a landscape A4 PDF replicating the on-screen "Afficher
-// résultats" tables (Article Summary + a unit-level preview, same 200-row
-// cap as the on-screen version) with the same colored-header/banded-row
-// look as the Excel export, plus a letterhead (logo, company name,
-// generation date) and footer (company name) repeated on every page.
+// Generates a landscape A4 PDF containing exactly the same data as the
+// Excel export's "Global" sheet — every article's unit rows, colored like
+// the Excel table — with a brand-colored letterhead (logo, company name,
+// document title, generation date) and footer (company name) repeated on
+// every page.
 export function generateDeclarationPdf(
   declaration: Declaration,
   settings: AppSettings
@@ -228,47 +229,12 @@ export function generateDeclarationPdf(
     bufferPages: true,
   });
 
-  let y = HEADER_HEIGHT + 20;
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(
-    `Déclaration ${declaration.code} — ${declaration.redevable}`,
-    PAGE_MARGIN,
-    y
-  );
-  y += 22;
+  const { columns, rows } = buildGlobalSheetTable(declaration);
+  drawTable(doc, columns, rows, HEADER_HEIGHT + 12, brand600);
 
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#334155').text('Résumé Articles', PAGE_MARGIN, y);
-  y += 16;
-  y = drawTable(
-    doc,
-    [
-      { header: 'Nom Article', width: 200, key: 'nomArticle' },
-      { header: 'HSC', width: 100, key: 'hsCode' },
-      { header: 'Pays', width: 120, key: 'pays' },
-      { header: 'Valeur déclarée', width: 120, key: 'valeurDeclaree' },
-      { header: 'Unité', width: 80, key: 'quantite' },
-    ],
-    buildArticleSummaryRows(declaration),
-    y,
-    brand600
-  );
-  y += 24;
-
-  if (y > doc.page.height - FOOTER_HEIGHT - 60) {
-    doc.addPage();
-    y = HEADER_HEIGHT + 20;
-  }
-
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(10)
-    .fillColor('#334155')
-    .text('Détail par unité (aperçu)', PAGE_MARGIN, y);
-  y += 16;
-  const { columns, rows } = buildUnitLevelTable(declaration);
-  drawTable(doc, columns, rows, y, darken(brand600, 0.1));
-
+  const documentTitle = `Déclaration ${declaration.code} — ${declaration.redevable}`;
   const logoBuffer = parseLogoBuffer(settings.logoDataUri);
-  drawLetterheadOnAllPages(doc, settings.companyName, logoBuffer, new Date());
+  drawLetterheadOnAllPages(doc, documentTitle, settings.companyName, logoBuffer, brand600, new Date());
 
   return doc;
 }
