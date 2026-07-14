@@ -1,9 +1,5 @@
 import type { User } from '../db/usersRepository.js';
-import type {
-  SavedDeclarationSummary,
-  SavedArticleCost,
-  DeclarationSearchResult,
-} from '../db/declarationsRepository.js';
+import type { TransactionDocument } from '../db/transactionsRepository.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
 
@@ -454,7 +450,7 @@ function renderCostsSearchForm(searchQuery: string): string {
   `;
 }
 
-function renderSearchResultCard(result: DeclarationSearchResult): string {
+function renderSearchResultCard(result: TransactionDocument): string {
   const valeurDeclaree =
     result.valeurTotaleDeclaree !== null ? formatMoney(result.valeurTotaleDeclaree) : '—';
   return `
@@ -472,22 +468,21 @@ function renderSearchResultCard(result: DeclarationSearchResult): string {
   `;
 }
 
-// Shows the cost breakdown of the most recently *persisted* declaration
+// Shows the cost breakdown of the most recently *persisted* transaction
 // (across all admins — matches the superadmin's "sees everything" role),
-// read from the database rather than the admin tool's own in-memory
+// read from MongoDB rather than the admin tool's own in-memory
 // last-generated-declaration state. Persisted means this survives a
 // redeploy/restart, unlike the earlier in-memory-only version.
 //
 // A search box (by redevable/company name, across every persisted
-// declaration) sits above this — when a query is active, its results
+// transaction) sits above this — when a query is active, its results
 // (each a compact header+footer card with the three totals) replace the
 // single most-recent detail view below.
 export function renderSuperAdminCosts(
-  summary: SavedDeclarationSummary,
-  articles: SavedArticleCost[],
+  mostRecent: TransactionDocument,
   settings: AppSettings,
   searchQuery = '',
-  searchResults?: DeclarationSearchResult[]
+  searchResults?: TransactionDocument[]
 ): string {
   const searchForm = renderCostsSearchForm(searchQuery);
 
@@ -504,7 +499,7 @@ export function renderSuperAdminCosts(
     return renderShell('costs', 'Coût de produit', body, settings, COSTS_SEARCH_STYLE);
   }
 
-  const rows = articles
+  const rows = mostRecent.articles
     .map(
       (article) => `<tr>
         <td>${escapeHtml(article.nomArticle)}</td>
@@ -516,7 +511,7 @@ export function renderSuperAdminCosts(
     )
     .join('');
 
-  const partialNote = summary.costEstimatePartial
+  const partialNote = mostRecent.costEstimatePartial
     ? `<div class="error" style="background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Coût partiel — données d'expédition (fret, assurance, montant facturé) non détectées ou incomplètes ; seuls les droits et taxes sont inclus ci-dessous.</span>
@@ -524,13 +519,13 @@ export function renderSuperAdminCosts(
     : '';
 
   const totalCard = statCard(
-    summary.costEstimatePartial ? 'warn' : 'brand',
-    formatMoney(summary.totalLandedCost),
-    summary.costEstimatePartial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
+    mostRecent.costEstimatePartial ? 'warn' : 'brand',
+    formatMoney(mostRecent.totalLandedCost),
+    mostRecent.costEstimatePartial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
   );
 
   const body = `
-    <p class="lede">Déclaration ${escapeHtml(summary.code)} — ${escapeHtml(summary.redevable)} (la plus récente générée sur l'application, tous admins confondus).</p>
+    <p class="lede">Déclaration ${escapeHtml(mostRecent.code)} — ${escapeHtml(mostRecent.redevable)} (la plus récente générée sur l'application, tous admins confondus).</p>
     ${searchForm}
     ${partialNote}
     <div class="stat-grid">${totalCard}</div>
@@ -741,13 +736,6 @@ const GENERATE_PAGE_STYLE = `
   .modal-card h2 { font-size: 16px; margin: 0 0 8px; color: var(--ink-900); }
   .modal-card p { font-size: 13.5px; color: var(--ink-500); margin: 0 0 20px; line-height: 1.5; }
   .modal-card button { margin-top: 0; width: auto; padding: 10px 18px; }
-
-  @media print {
-    .app-shell > *:not(.main), .topbar, .results-toolbar { display: none !important; }
-    .content > *:not(#successPanel) { display: none !important; }
-    #successPanel > *:not(.results-section) { display: none !important; }
-    .results-section { border: none; margin: 0; padding: 0; }
-  }
 `;
 
 export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: string): string {
@@ -924,11 +912,11 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         if (e.target === validationModal) validationModal.classList.remove('visible');
       });
 
-      function triggerBlobDownload(blob) {
+      function triggerBlobDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'Declaration.xlsx';
+        link.download = filename || 'Declaration.xlsx';
         document.body.appendChild(link);
         link.click();
         link.remove();

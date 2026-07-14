@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import express, { type Response } from 'express';
 import multer from 'multer';
+import type { Collection } from 'mongodb';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../parser/detectAndParsePair.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
@@ -38,15 +39,19 @@ import {
   setUserDisabled,
   type UserRole,
 } from '../db/usersRepository.js';
-import {
-  saveDeclaration,
-  listAllDeclarations,
-  getArticlesForDeclaration,
-  searchDeclarationsByRedevable,
-} from '../db/declarationsRepository.js';
 import { getAppSettings, updateAppSettings } from '../db/appSettingsRepository.js';
+import { getMongoDb } from '../db/mongoClient.js';
+import {
+  saveTransaction,
+  getMostRecentTransaction,
+  countTransactions,
+  searchTransactionsByRedevable,
+  TRANSACTIONS_COLLECTION,
+  type TransactionDocument,
+} from '../db/transactionsRepository.js';
 import { isValidHexColor } from '../domain/colorUtils.js';
 import { FONT_OPTIONS, renderBrandOverrideStyle, renderLogoImg } from './brandingStyles.js';
+import { generateDeclarationPdf } from '../pdf/declarationPdfGenerator.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -235,21 +240,46 @@ app.post(
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
 
-      // Persisted (unlike the in-memory `last*` state above, which only
-      // serves this admin's own immediate results/download/cost-preview and
-      // is wiped on every restart) so the superadmin's "Coût de produit"
-      // page survives redeploys instead of going blank until someone
-      // generates again.
+      // Persisted to MongoDB (unlike the in-memory `last*` state above,
+      // which only serves this admin's own immediate results/download/
+      // cost-preview and is wiped on every restart) so the superadmin's
+      // "Coût de produit" page survives redeploys instead of going blank
+      // until someone generates again. Only totals/metadata are saved —
+      // the generated .xlsx file itself is never persisted to the database
+      // (it stays a short-lived file on disk, referenced only by the
+      // in-memory `lastGeneratedFilePath` above, for this same request's
+      // immediate re-download).
       const cost = calculateLandedCost(declaration, dum.shipmentCost ?? {});
-      saveDeclaration(db, {
-        ownerUserId: req.session!.userId,
-        declaration,
-        shipmentCostFields: dum.shipmentCost ?? {},
-        articleCosts: cost.articleCosts,
-        totalLandedCost: cost.totalLandedCost,
-        costEstimatePartial: cost.partial,
-        excelFilePath: generatedFilePath,
-      });
+      const totalTaxes = declaration.articles.reduce(
+        (sum, article) => sum + article.taxes.reduce((s, tax) => s + tax.montant, 0),
+        0
+      );
+      try {
+        const mongoDb = await getMongoDb();
+        const collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
+        await saveTransaction(collection, {
+          ownerUserId: req.session!.userId,
+          code: declaration.code,
+          redevable: declaration.redevable,
+          valeurTotaleDeclaree: dum.shipmentCost?.valeurTotaleDeclaree ?? null,
+          totalTaxes,
+          totalLandedCost: cost.totalLandedCost,
+          costEstimatePartial: cost.partial,
+          articles: declaration.articles.map((article) => ({
+            numero: article.numero,
+            hsCode: article.hsCode,
+            nomArticle: article.nomArticle,
+            pays: article.pays,
+            quantite: article.quantite,
+            costPerUnit: cost.articleCosts.find((c) => c.numero === article.numero)!.costPerUnit,
+          })),
+        });
+      } catch (mongoError) {
+        // The Excel file was already generated successfully — a MongoDB
+        // hiccup shouldn't block the admin from getting their file, only
+        // the superadmin "Coût de produit" history entry for this run.
+        console.error('Failed to save transaction to MongoDB:', mongoError);
+      }
 
       await sendXlsxFile(res, generatedFilePath, 'Declaration.xlsx');
     } catch (error) {
@@ -276,6 +306,24 @@ app.get('/last-declaration-results', (_req, res) => {
     return;
   }
   res.send(renderResultsFragment(lastDeclaration));
+});
+
+// Server-generated PDF (pdfkit, no headless browser) of the same tables as
+// /last-declaration-results, colored like the Excel export, with a
+// letterhead (logo + company name + generation date) and footer (company
+// name) — replaces the earlier window.print()-based "Exporter PDF", which
+// depended on the visiting browser's own print settings to render colors/
+// backgrounds consistently.
+app.get('/last-declaration-pdf', (_req, res) => {
+  if (!lastDeclaration) {
+    res.status(404).json({ success: false, error: 'Aucune déclaration générée pour le moment.' });
+    return;
+  }
+  const doc = generateDeclarationPdf(lastDeclaration, getAppSettings(db));
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="Declaration.pdf"');
+  doc.pipe(res);
+  doc.end();
 });
 
 // Duty-only cost per unit (sum of this article's tax montants / quantite) —
@@ -318,10 +366,15 @@ app.get('/download', async (_req, res) => {
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
 
-app.get('/superadmin/dashboard', requireSuperAdmin, (_req, res) => {
-  res.send(
-    renderSuperAdminOverview(listUsers(db), listAllDeclarations(db).length, getAppSettings(db))
-  );
+app.get('/superadmin/dashboard', requireSuperAdmin, async (_req, res) => {
+  let transactionCount = 0;
+  try {
+    const mongoDb = await getMongoDb();
+    transactionCount = await countTransactions(mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION));
+  } catch (mongoError) {
+    console.error('Failed to reach MongoDB for the dashboard transaction count:', mongoError);
+  }
+  res.send(renderSuperAdminOverview(listUsers(db), transactionCount, getAppSettings(db)));
 });
 
 // Lets a superadmin generate a declaration without leaving the sidebar
@@ -336,12 +389,28 @@ app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
   res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db)));
 });
 
-app.get('/superadmin/costs', requireSuperAdmin, (req, res) => {
-  // Reads from the database (most recent declaration across all admins),
-  // not the in-memory `lastDeclaration` — that state is per-process and
-  // wiped on every restart/redeploy, which made this page go blank even
-  // though declarations had already been generated before the restart.
-  const [mostRecent] = listAllDeclarations(db);
+app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
+  // Reads from MongoDB (most recent transaction across all admins), not
+  // the in-memory `lastDeclaration` — that state is per-process and wiped
+  // on every restart/redeploy, which made this page go blank even though
+  // declarations had already been generated before the restart.
+  let collection: Collection<TransactionDocument>;
+  try {
+    const mongoDb = await getMongoDb();
+    collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
+  } catch (mongoError) {
+    console.error('Failed to reach MongoDB for Coût de produit:', mongoError);
+    res.status(503).send(
+      renderSuperAdminPlaceholder(
+        'Coût de produit',
+        "Impossible de se connecter à la base de données pour le moment. Réessayez plus tard.",
+        getAppSettings(db)
+      )
+    );
+    return;
+  }
+
+  const mostRecent = await getMostRecentTransaction(collection);
   if (!mostRecent) {
     res.send(
       renderSuperAdminPlaceholder(
@@ -353,11 +422,10 @@ app.get('/superadmin/costs', requireSuperAdmin, (req, res) => {
     return;
   }
   const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const searchResults = searchQuery ? searchDeclarationsByRedevable(db, searchQuery) : undefined;
-  const articles = getArticlesForDeclaration(db, mostRecent.id);
-  res.send(
-    renderSuperAdminCosts(mostRecent, articles, getAppSettings(db), searchQuery, searchResults)
-  );
+  const searchResults = searchQuery
+    ? await searchTransactionsByRedevable(collection, searchQuery)
+    : undefined;
+  res.send(renderSuperAdminCosts(mostRecent, getAppSettings(db), searchQuery, searchResults));
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
