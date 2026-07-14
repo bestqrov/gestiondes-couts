@@ -17,6 +17,7 @@ import {
   renderSuperAdminUsers,
   renderSuperAdminPlaceholder,
   renderSuperAdminCosts,
+  renderSuperAdminSettings,
 } from './renderSuperAdminDashboard.js';
 import { calculateLandedCost } from '../domain/costCalculator.js';
 import {
@@ -41,6 +42,9 @@ import {
   listAllDeclarations,
   getArticlesForDeclaration,
 } from '../db/declarationsRepository.js';
+import { getAppSettings, updateAppSettings } from '../db/appSettingsRepository.js';
+import { isValidHexColor } from '../domain/colorUtils.js';
+import { FONT_OPTIONS, renderBrandOverrideStyle, renderLogoImg } from './brandingStyles.js';
 import type { Declaration } from '../domain/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -89,6 +93,21 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const LOGO_ALLOWED_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/svg+xml',
+]);
+// Kept entirely in memory (never written to disk) — converted straight to
+// a data: URI and stored in the app_settings row, so it persists in the
+// same place as the database with no separate file/volume to configure.
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: LOGO_MAX_BYTES },
+});
+
 // Express's res.download()/res.sendFile() run the path through encodeURI()
 // before using it as a filesystem path (see node_modules/express/lib/
 // response.js) — harmless for a path made only of URL-safe characters, but
@@ -112,8 +131,14 @@ async function sendXlsxFile(res: Response, filePath: string, downloadName: strin
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 
+function renderLoginHtml(errorBlock: string): string {
+  return loginHtml
+    .replace('{{ERROR_BLOCK}}', errorBlock)
+    .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(getAppSettings(db)));
+}
+
 app.get('/login', (_req, res) => {
-  res.send(loginHtml.replace('{{ERROR_BLOCK}}', ''));
+  res.send(renderLoginHtml(''));
 });
 
 app.post('/login', (req, res) => {
@@ -122,7 +147,7 @@ app.post('/login', (req, res) => {
     '<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Identifiant ou mot de passe incorrect.</span></div>';
 
   if (!username || !password) {
-    res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
+    res.status(401).send(renderLoginHtml(errorBlock));
     return;
   }
 
@@ -133,7 +158,7 @@ app.post('/login', (req, res) => {
   // timing reveal which usernames exist.
   const passwordMatches = verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, password);
   if (!user || user.disabledAt || !passwordMatches) {
-    res.status(401).send(loginHtml.replace('{{ERROR_BLOCK}}', errorBlock));
+    res.status(401).send(renderLoginHtml(errorBlock));
     return;
   }
 
@@ -160,11 +185,14 @@ app.get('/', (req, res) => {
   const roleBadge = isSuperAdmin
     ? '<span class="role-pill role-pill-superadmin">Superadmin</span>'
     : '<span class="role-pill role-pill-admin">Admin</span>';
+  const settings = getAppSettings(db);
   res.send(
     uploadHtml
       .replace('{{ERROR_BLOCK}}', '')
       .replace('{{NAV_LINK}}', navLink)
       .replace('{{ROLE_BADGE}}', roleBadge)
+      .replace('{{LOGO_IMG}}', renderLogoImg(settings))
+      .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(settings))
   );
 });
 
@@ -289,21 +317,13 @@ app.get('/download', async (_req, res) => {
 });
 
 app.get('/superadmin/dashboard', requireSuperAdmin, (_req, res) => {
-  res.send(renderSuperAdminOverview(listUsers(db), listAllDeclarations(db).length));
+  res.send(
+    renderSuperAdminOverview(listUsers(db), listAllDeclarations(db).length, getAppSettings(db))
+  );
 });
 
 app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
-  res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId));
-});
-
-app.get('/superadmin/services', requireSuperAdmin, (_req, res) => {
-  res.send(
-    renderSuperAdminPlaceholder(
-      'services',
-      'Services',
-      "Configuration des services externes (OCR, etc.) — à venir."
-    )
-  );
+  res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db)));
 });
 
 app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
@@ -315,22 +335,87 @@ app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
   if (!mostRecent) {
     res.send(
       renderSuperAdminPlaceholder(
-        'costs',
         'Coût de produit',
-        "Aucune déclaration n'a encore été générée sur l'application. Le coût par produit s'affichera ici après une génération."
+        "Aucune déclaration n'a encore été générée sur l'application. Le coût par produit s'affichera ici après une génération.",
+        getAppSettings(db)
       )
     );
     return;
   }
   const articles = getArticlesForDeclaration(db, mostRecent.id);
-  res.send(renderSuperAdminCosts(mostRecent, articles));
+  res.send(renderSuperAdminCosts(mostRecent, articles, getAppSettings(db)));
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
-  res.send(
-    renderSuperAdminPlaceholder('settings', 'Réglages', "Paramètres de l'application — à venir.")
-  );
+  res.send(renderSuperAdminSettings(getAppSettings(db)));
 });
+
+app.post(
+  '/superadmin/settings',
+  requireSuperAdmin,
+  (req, res, next) => {
+    logoUpload.single('logo')(req, res, (err) => {
+      if (err) {
+        // multer throws for oversized files (LIMIT_FILE_SIZE) — surface it
+        // the same way other form errors on this page are shown, instead
+        // of an unhandled 500.
+        res.status(400).send(
+          renderSuperAdminSettings(
+            getAppSettings(db),
+            err.code === 'LIMIT_FILE_SIZE'
+              ? 'Le logo dépasse la taille maximale autorisée (2 Mo).'
+              : "Échec de l'envoi du fichier."
+          )
+        );
+        return;
+      }
+      next();
+    });
+  },
+  (req, res) => {
+    const { companyName, brandColor, fontFamily } = req.body as {
+      companyName?: string;
+      brandColor?: string;
+      fontFamily?: string;
+    };
+
+    if (brandColor && !isValidHexColor(brandColor)) {
+      res
+        .status(400)
+        .send(renderSuperAdminSettings(getAppSettings(db), 'Couleur invalide.'));
+      return;
+    }
+    const allowedFonts = new Set(FONT_OPTIONS.map((opt) => opt.value));
+    if (fontFamily && !allowedFonts.has(fontFamily)) {
+      res.status(400).send(renderSuperAdminSettings(getAppSettings(db), 'Police invalide.'));
+      return;
+    }
+
+    const logoFile = req.file;
+    if (logoFile && !LOGO_ALLOWED_MIME_TYPES.has(logoFile.mimetype)) {
+      res
+        .status(400)
+        .send(
+          renderSuperAdminSettings(
+            getAppSettings(db),
+            'Format de logo non supporté (PNG, JPEG, WEBP ou SVG uniquement).'
+          )
+        );
+      return;
+    }
+
+    const updated = updateAppSettings(db, {
+      companyName: companyName?.trim() ? companyName.trim() : null,
+      brandColor: brandColor || null,
+      fontFamily: fontFamily || null,
+      ...(logoFile
+        ? { logoDataUri: `data:${logoFile.mimetype};base64,${logoFile.buffer.toString('base64')}` }
+        : {}),
+    });
+
+    res.send(renderSuperAdminSettings(updated, undefined, 'Réglages enregistrés.'));
+  }
+);
 
 app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
   const { username, password, role } = req.body as {
@@ -340,7 +425,9 @@ app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
   };
 
   const renderWithError = (message: string) => {
-    res.status(400).send(renderSuperAdminUsers(listUsers(db), req.session!.userId, message));
+    res
+      .status(400)
+      .send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db), message));
   };
 
   if (!username || !password) {
@@ -382,6 +469,7 @@ function setDisabledAndRedirect(disabled: boolean) {
           renderSuperAdminUsers(
             listUsers(db),
             req.session!.userId,
+            getAppSettings(db),
             'Vous ne pouvez pas désactiver votre propre compte.'
           )
         );

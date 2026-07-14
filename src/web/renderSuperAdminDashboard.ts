@@ -1,7 +1,9 @@
 import type { User } from '../db/usersRepository.js';
 import type { SavedDeclarationSummary, SavedArticleCost } from '../db/declarationsRepository.js';
+import type { AppSettings } from '../db/appSettingsRepository.js';
+import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
 
-export type SuperAdminPage = 'dashboard' | 'users' | 'services' | 'costs' | 'settings';
+export type SuperAdminPage = 'dashboard' | 'users' | 'costs' | 'settings';
 
 function escapeHtml(value: string): string {
   return value
@@ -30,12 +32,6 @@ const NAV_ITEMS: Array<{ page: SuperAdminPage; href: string; label: string; icon
     href: '/superadmin/users',
     label: 'Utilisateurs',
     icon: '<circle cx="7.5" cy="7" r="2.75" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 17c0-2.9 2.24-5 5-5s5 2.1 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="14.5" cy="7.5" r="2.1" stroke="currentColor" stroke-width="1.5"/><path d="M13 12.3c1.9.2 3.5 1.9 3.5 4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  },
-  {
-    page: 'services',
-    href: '/superadmin/services',
-    label: 'Services',
-    icon: '<path d="M10 2.5l1.4 2.9 3.2.5-2.3 2.3.5 3.2L10 9.8l-2.8 1.6.5-3.2-2.3-2.3 3.2-.5L10 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M4 14.5h12M4 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
   {
     page: 'costs',
@@ -77,10 +73,11 @@ function renderSidebar(activePage: SuperAdminPage): string {
   </nav>`;
 }
 
-function renderTopbar(title: string): string {
+function renderTopbar(title: string, settings: AppSettings): string {
   return `<div class="topbar">
     <h1>${escapeHtml(title)}</h1>
     <div class="topbar-actions">
+      ${renderLogoImg(settings)}
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="Changer de thème">
         <svg class="icon-sun" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="10" cy="10" r="3.5" stroke="currentColor" stroke-width="1.5"/>
@@ -100,7 +97,12 @@ function renderTopbar(title: string): string {
   </div>`;
 }
 
-function renderShell(activePage: SuperAdminPage, title: string, bodyHtml: string): string {
+function renderShell(
+  activePage: SuperAdminPage,
+  title: string,
+  bodyHtml: string,
+  settings: AppSettings
+): string {
   return `<!doctype html>
 <html lang="fr">
 <head>
@@ -274,12 +276,13 @@ function renderShell(activePage: SuperAdminPage, title: string, bodyHtml: string
   }
   @media (max-width: 640px) { .create-form { grid-template-columns: 1fr; } }
 </style>
+${renderBrandOverrideStyle(settings)}
 </head>
 <body>
   <div class="app-shell">
     ${renderSidebar(activePage)}
     <div class="main">
-      ${renderTopbar(title)}
+      ${renderTopbar(title, settings)}
       <div class="content">${bodyHtml}</div>
     </div>
   </div>
@@ -305,7 +308,11 @@ function statCard(
   </div>`;
 }
 
-export function renderSuperAdminOverview(users: User[], declarationCount: number): string {
+export function renderSuperAdminOverview(
+  users: User[],
+  declarationCount: number,
+  settings: AppSettings
+): string {
   const total = users.length;
   const active = users.filter((u) => u.disabledAt === null).length;
   const disabled = users.filter((u) => u.disabledAt !== null).length;
@@ -327,7 +334,7 @@ export function renderSuperAdminOverview(users: User[], declarationCount: number
       <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>, ou consultez <a href="/superadmin/costs" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Coût de produit</a>.</p>
     </div>
   `;
-  return renderShell('dashboard', 'Tableau de bord', body);
+  return renderShell('dashboard', 'Tableau de bord', body, settings);
 }
 
 function renderUserRow(user: User, currentUserId: number): string {
@@ -362,6 +369,7 @@ function renderUserRow(user: User, currentUserId: number): string {
 export function renderSuperAdminUsers(
   users: User[],
   currentUserId: number,
+  settings: AppSettings,
   errorMessage?: string
 ): string {
   const rows = users.map((user) => renderUserRow(user, currentUserId)).join('');
@@ -401,16 +409,18 @@ export function renderSuperAdminUsers(
       </table>
     </div>
   `;
-  return renderShell('users', 'Utilisateurs', body);
+  return renderShell('users', 'Utilisateurs', body, settings);
 }
 
 const PLACEHOLDER_ICON =
   '<path d="M10 6.5v5M10 14.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.6"/>';
 
+// Only used for the "costs" page's empty state now — Users, Dashboard, and
+// Settings are all fully real pages; Services was removed from the menu.
 export function renderSuperAdminPlaceholder(
-  page: 'services' | 'costs' | 'settings',
   title: string,
-  description: string
+  description: string,
+  settings: AppSettings
 ): string {
   const body = `
     <div class="card placeholder-card">
@@ -419,7 +429,7 @@ export function renderSuperAdminPlaceholder(
       <p>${escapeHtml(description)}</p>
     </div>
   `;
-  return renderShell(page, title, body);
+  return renderShell('costs', title, body, settings);
 }
 
 function formatMoney(value: number): string {
@@ -433,7 +443,8 @@ function formatMoney(value: number): string {
 // redeploy/restart, unlike the earlier in-memory-only version.
 export function renderSuperAdminCosts(
   summary: SavedDeclarationSummary,
-  articles: SavedArticleCost[]
+  articles: SavedArticleCost[],
+  settings: AppSettings
 ): string {
   const rows = articles
     .map(
@@ -473,5 +484,59 @@ export function renderSuperAdminCosts(
     </div>
   `;
 
-  return renderShell('costs', 'Coût de produit', body);
+  return renderShell('costs', 'Coût de produit', body, settings);
+}
+
+export function renderSuperAdminSettings(
+  settings: AppSettings,
+  errorMessage?: string,
+  successMessage?: string
+): string {
+  const errorBlock = errorMessage
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(errorMessage)}</span></div>`
+    : '';
+  const successBlock = successMessage
+    ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(successMessage)}</span></div>`
+    : '';
+
+  const currentLogo = settings.logoDataUri
+    ? `<div style="margin-bottom:10px;"><img src="${settings.logoDataUri}" alt="Logo actuel" style="height:48px;max-width:220px;object-fit:contain;border-radius:8px;border:1px solid var(--line);padding:6px;" /></div>`
+    : '';
+
+  const selectedFont = settings.fontFamily ?? 'system';
+  const fontOptions = FONT_OPTIONS.map(
+    (opt) =>
+      `<option value="${opt.value}"${opt.value === selectedFont ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
+  ).join('');
+
+  const body = `
+    <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale et police.</p>
+    ${errorBlock}
+    ${successBlock}
+    <div class="card">
+      <h2>Identité</h2>
+      <form method="post" action="/superadmin/settings" enctype="multipart/form-data">
+        <div class="field">
+          <label for="companyName">Nom de la société</label>
+          <input type="text" id="companyName" name="companyName" value="${escapeHtml(settings.companyName ?? '')}" placeholder="ex. Global Trade Logistics SARL" />
+        </div>
+        <div class="field">
+          <label for="logo">Logo</label>
+          ${currentLogo}
+          <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+        </div>
+        <div class="field">
+          <label for="brandColor">Couleur principale</label>
+          <input type="color" id="brandColor" name="brandColor" value="${escapeHtml(settings.brandColor ?? '#4f46e5')}" style="height:44px;padding:4px;cursor:pointer;" />
+        </div>
+        <div class="field">
+          <label for="fontFamily">Police</label>
+          <select id="fontFamily" name="fontFamily">${fontOptions}</select>
+        </div>
+        <button type="submit">Enregistrer</button>
+      </form>
+    </div>
+  `;
+
+  return renderShell('settings', 'Réglages', body, settings);
 }

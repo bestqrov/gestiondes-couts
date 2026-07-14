@@ -61,6 +61,20 @@ function runMigrations(db: Database.Database): void {
       cost_per_unit REAL NOT NULL,
       taxes_json TEXT NOT NULL
     );
+
+    -- Single-row table (id is always 1) holding app-wide branding: company
+    -- name, logo (stored as a data: URI directly in the row — small enough
+    -- in practice, and guarantees it persists in the same place/volume as
+    -- everything else, no separate file storage/volume to configure), an
+    -- accent color, and a font choice.
+    CREATE TABLE IF NOT EXISTS app_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      company_name TEXT,
+      logo_data_uri TEXT,
+      brand_color TEXT,
+      font_family TEXT,
+      updated_at TEXT NOT NULL
+    );
   `);
 }
 
