@@ -223,7 +223,7 @@ ${renderFaviconLink(settings)}
   .stat-card { border-radius: 14px; padding: 18px 20px; color: #fff; box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.35); }
   .stat-card .stat-value { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
   .stat-card .stat-label { font-size: 12.5px; font-weight: 600; opacity: 0.92; margin-top: 2px; }
-  .stat-card-brand { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+  .stat-card-brand { background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); }
   .stat-card-success { background: linear-gradient(135deg, #10b981, #047857); }
   .stat-card-warn { background: linear-gradient(135deg, #f59e0b, #b45309); }
   .stat-card-danger { background: linear-gradient(135deg, #f43f5e, #be123c); }
@@ -849,9 +849,9 @@ const SETTINGS_PAGE_STYLE = `
     display: flex; align-items: center; justify-content: center;
   }
   .settings-icon svg { width: 18px; height: 18px; }
-  .settings-icon-violet { background: var(--brand-soft); color: var(--brand-700); }
-  .settings-icon-amber { background: var(--warn-bg); color: var(--warn); }
-  .settings-icon-green { background: var(--success-bg); color: var(--success); }
+  .settings-icon-violet, .settings-icon-amber, .settings-icon-green {
+    background: var(--brand-soft); color: var(--brand-700);
+  }
 
   label svg { width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px; color: var(--ink-400); }
 
