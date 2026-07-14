@@ -583,13 +583,22 @@ const COSTS_SEARCH_STYLE = `
 export function renderSuperAdminSettings(
   settings: AppSettings,
   errorMessage?: string,
-  successMessage?: string
+  successMessage?: string,
+  currentUsername?: string,
+  credentialsError?: string,
+  credentialsSuccess?: string
 ): string {
   const errorBlock = errorMessage
     ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(errorMessage)}</span></div>`
     : '';
   const successBlock = successMessage
     ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(successMessage)}</span></div>`
+    : '';
+  const credentialsErrorBlock = credentialsError
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(credentialsError)}</span></div>`
+    : '';
+  const credentialsSuccessBlock = credentialsSuccess
+    ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(credentialsSuccess)}</span></div>`
     : '';
 
   const currentLogo = settings.logoDataUri
@@ -675,6 +684,32 @@ export function renderSuperAdminSettings(
         Enregistrer
       </button>
     </form>
+
+    <div class="card settings-section">
+      <div class="settings-section-head">
+        <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4.5" y="9" width="11" height="7.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" stroke-width="1.4"/></svg></div>
+        <div>
+          <h2>Identifiants de connexion</h2>
+          <p class="settings-section-hint">Nom d'utilisateur et mot de passe de votre propre compte superadmin.</p>
+        </div>
+      </div>
+      ${credentialsErrorBlock}
+      ${credentialsSuccessBlock}
+      <form method="post" action="/superadmin/settings/credentials">
+        <div class="field">
+          <label for="username"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4"/></svg> Nom d'utilisateur</label>
+          <input type="text" id="username" name="username" value="${escapeHtml(currentUsername ?? '')}" required />
+        </div>
+        <div class="field">
+          <label for="newPassword"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4.5" y="9" width="11" height="7.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" stroke-width="1.4"/></svg> Nouveau mot de passe</label>
+          <input type="password" id="newPassword" name="newPassword" placeholder="Laisser vide pour ne pas changer" autocomplete="new-password" />
+        </div>
+        <button type="submit" class="settings-save">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Mettre à jour les identifiants
+        </button>
+      </form>
+    </div>
     <script>
       var brandColorInput = document.getElementById('brandColor');
       var brandColorHex = document.getElementById('brandColorHex');

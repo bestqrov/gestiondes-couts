@@ -75,6 +75,15 @@ export function countUsers(db: Database.Database): number {
   return row.count;
 }
 
+export function updateUsername(db: Database.Database, userId: number, username: string): void {
+  db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, userId);
+}
+
+export function updatePassword(db: Database.Database, userId: number, password: string): void {
+  const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
+}
+
 export function setUserDisabled(db: Database.Database, userId: number, disabled: boolean): void {
   db.prepare('UPDATE users SET disabled_at = ? WHERE id = ?').run(
     disabled ? new Date().toISOString() : null,

@@ -7,6 +7,8 @@ import {
   listUsers,
   setUserDisabled,
   seedSuperAdminIfEmpty,
+  updateUsername,
+  updatePassword,
 } from '../../src/db/usersRepository.js';
 
 describe('usersRepository', () => {
@@ -53,6 +55,31 @@ describe('usersRepository', () => {
 
     setUserDisabled(db, user.id, false);
     expect(listUsers(db).find((u) => u.id === user.id)!.disabledAt).toBeNull();
+
+    db.close();
+  });
+
+  it('updates a user’s username', () => {
+    const db = createDatabase(':memory:');
+    const user = createUser(db, 'redwan', 'pw', 'superadmin');
+
+    updateUsername(db, user.id, 'redouane');
+
+    expect(findUserByUsername(db, 'redwan')).toBeUndefined();
+    expect(findUserByUsername(db, 'redouane')).toBeDefined();
+
+    db.close();
+  });
+
+  it('updates a user’s password, re-hashing it', () => {
+    const db = createDatabase(':memory:');
+    const user = createUser(db, 'redouane', 'oldpass', 'superadmin');
+
+    updatePassword(db, user.id, 'newpass*2026');
+
+    const found = findUserByUsername(db, 'redouane')!;
+    expect(verifyPassword(found.passwordHash, 'oldpass')).toBe(false);
+    expect(verifyPassword(found.passwordHash, 'newpass*2026')).toBe(true);
 
     db.close();
   });

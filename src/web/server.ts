@@ -37,6 +37,8 @@ import {
   listUsers,
   createUser,
   setUserDisabled,
+  updateUsername,
+  updatePassword,
   type UserRole,
 } from '../db/usersRepository.js';
 import { getAppSettings, updateAppSettings } from '../db/appSettingsRepository.js';
@@ -447,8 +449,8 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
   res.send(renderSuperAdminCosts(mostRecent, getAppSettings(db), searchQuery, searchResults));
 });
 
-app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
-  res.send(renderSuperAdminSettings(getAppSettings(db)));
+app.get('/superadmin/settings', requireSuperAdmin, (req, res) => {
+  res.send(renderSuperAdminSettings(getAppSettings(db), undefined, undefined, req.session!.username));
 });
 
 app.post(
@@ -465,7 +467,9 @@ app.post(
             getAppSettings(db),
             err.code === 'LIMIT_FILE_SIZE'
               ? 'Le logo dépasse la taille maximale autorisée (2 Mo).'
-              : "Échec de l'envoi du fichier."
+              : "Échec de l'envoi du fichier.",
+            undefined,
+            req.session!.username
           )
         );
         return;
@@ -485,12 +489,18 @@ app.post(
     if (brandColor && !isValidHexColor(brandColor)) {
       res
         .status(400)
-        .send(renderSuperAdminSettings(getAppSettings(db), 'Couleur invalide.'));
+        .send(
+          renderSuperAdminSettings(getAppSettings(db), 'Couleur invalide.', undefined, req.session!.username)
+        );
       return;
     }
     const allowedFonts = new Set(FONT_OPTIONS.map((opt) => opt.value));
     if (fontFamily && !allowedFonts.has(fontFamily)) {
-      res.status(400).send(renderSuperAdminSettings(getAppSettings(db), 'Police invalide.'));
+      res
+        .status(400)
+        .send(
+          renderSuperAdminSettings(getAppSettings(db), 'Police invalide.', undefined, req.session!.username)
+        );
       return;
     }
 
@@ -501,7 +511,9 @@ app.post(
         .send(
           renderSuperAdminSettings(
             getAppSettings(db),
-            'Format de logo non supporté (PNG, JPEG, WEBP ou SVG uniquement).'
+            'Format de logo non supporté (PNG, JPEG, WEBP ou SVG uniquement).',
+            undefined,
+            req.session!.username
           )
         );
       return;
@@ -518,9 +530,64 @@ app.post(
         : {}),
     });
 
-    res.send(renderSuperAdminSettings(updated, undefined, 'Réglages enregistrés.'));
+    res.send(
+      renderSuperAdminSettings(updated, undefined, 'Réglages enregistrés.', req.session!.username)
+    );
   }
 );
+
+app.post('/superadmin/settings/credentials', requireSuperAdmin, (req, res) => {
+  const { username, newPassword } = req.body as { username?: string; newPassword?: string };
+  const trimmedUsername = username?.trim();
+
+  const renderWithError = (message: string) => {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminSettings(
+          getAppSettings(db),
+          undefined,
+          undefined,
+          req.session!.username,
+          message
+        )
+      );
+  };
+
+  if (!trimmedUsername) {
+    renderWithError("Le nom d'utilisateur est requis.");
+    return;
+  }
+  if (newPassword && newPassword.length < 6) {
+    renderWithError('Le mot de passe doit contenir au moins 6 caractères.');
+    return;
+  }
+
+  try {
+    if (trimmedUsername !== req.session!.username) {
+      updateUsername(db, req.session!.userId, trimmedUsername);
+      req.session!.username = trimmedUsername;
+    }
+    if (newPassword) {
+      updatePassword(db, req.session!.userId, newPassword);
+    }
+  } catch (error) {
+    console.error('Failed to update superadmin credentials:', error);
+    renderWithError('Ce nom d’utilisateur est déjà utilisé.');
+    return;
+  }
+
+  res.send(
+    renderSuperAdminSettings(
+      getAppSettings(db),
+      undefined,
+      undefined,
+      req.session!.username,
+      undefined,
+      'Identifiants mis à jour.'
+    )
+  );
+});
 
 app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
   const { username, password, role } = req.body as {
