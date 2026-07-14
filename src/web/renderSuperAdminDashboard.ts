@@ -698,8 +698,8 @@ const GENERATE_PAGE_STYLE = `
     border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; line-height: 1.5;
   }
   table.cost-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.cost-table th, table.cost-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line-soft); }
-  table.cost-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.cost-table th, table.cost-table td { text-align: center; padding: 7px 9px; border-bottom: 1px solid var(--line-soft); }
+  table.cost-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
   table.cost-table td.cost { font-weight: 700; color: var(--brand-700); }
 
   .results-section { margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 18px; display: none; }
