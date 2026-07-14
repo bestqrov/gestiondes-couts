@@ -81,6 +81,42 @@ export async function countTransactions(collection: Collection<TransactionDocume
   return collection.countDocuments();
 }
 
+export interface CountryProductCount {
+  pays: string;
+  productCount: number;
+  totalQuantite: number;
+}
+
+// Pure aggregation (no Mongo-specific query) so it's trivially unit-tested
+// against plain objects — counts each article line-item once per country
+// it belongs to (productCount), plus the summed physical unit quantity
+// (totalQuantite), across every saved transaction (all admins). Sorted by
+// productCount descending since that's what the dashboard map/legend ranks
+// by.
+export function aggregateCountryProductCounts(
+  transactions: TransactionDocument[]
+): CountryProductCount[] {
+  const byCountry = new Map<string, { productCount: number; totalQuantite: number }>();
+  for (const transaction of transactions) {
+    for (const article of transaction.articles) {
+      const existing = byCountry.get(article.pays) ?? { productCount: 0, totalQuantite: 0 };
+      existing.productCount += 1;
+      existing.totalQuantite += article.quantite;
+      byCountry.set(article.pays, existing);
+    }
+  }
+  return Array.from(byCountry.entries())
+    .map(([pays, counts]) => ({ pays, ...counts }))
+    .sort((a, b) => b.productCount - a.productCount);
+}
+
+export async function getCountryProductCounts(
+  collection: Collection<TransactionDocument>
+): Promise<CountryProductCount[]> {
+  const transactions = await listAllTransactions(collection);
+  return aggregateCountryProductCounts(transactions);
+}
+
 // Case-insensitive substring match on the company/redevable name, across
 // every saved transaction (all admins) — matches the superadmin's "sees
 // everything" role. $regex with a literal (non-anchored) pattern is fine

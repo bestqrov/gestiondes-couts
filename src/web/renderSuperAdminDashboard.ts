@@ -1,7 +1,8 @@
 import type { User } from '../db/usersRepository.js';
-import type { TransactionDocument } from '../db/transactionsRepository.js';
+import type { TransactionDocument, CountryProductCount } from '../db/transactionsRepository.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
+import { renderWorldMapPanel, WORLD_MAP_STYLE } from './worldMap.js';
 
 export type SuperAdminPage = 'dashboard' | 'generate' | 'users' | 'costs' | 'settings';
 
@@ -69,6 +70,12 @@ function renderSidebar(activePage: SuperAdminPage): string {
       </div>
     </div>
     <div class="nav-items">${items}</div>
+    <form method="post" action="/logout">
+      <button class="sidebar-logout" type="submit">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 17H5a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 5 3h3M13.5 14l3.5-4-3.5-4M17 10H7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Déconnexion
+      </button>
+    </form>
   </nav>`;
 }
 
@@ -90,12 +97,6 @@ function renderTopbar(title: string, settings: AppSettings): string {
           <path d="M17 11.3A7 7 0 1 1 8.7 3a5.5 5.5 0 0 0 8.3 8.3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>
       </button>
-      <form method="post" action="/logout">
-        <button class="logout-btn" type="submit">
-          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 17H5a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 5 3h3M13.5 14l3.5-4-3.5-4M17 10H7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Déconnexion
-        </button>
-      </form>
     </div>
   </div>`;
 }
@@ -179,6 +180,16 @@ function renderShell(
   .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
   .nav-item.active { background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); color: #fff; }
 
+  .sidebar-logout {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    margin-top: 8px; border-radius: 10px; border: 1px solid rgba(248, 113, 113, 0.25);
+    background: rgba(248, 113, 113, 0.1); color: #fca5a5;
+    font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .sidebar-logout svg { width: 19px; height: 19px; flex: none; }
+  .sidebar-logout:hover { background: rgba(248, 113, 113, 0.2); border-color: rgba(248, 113, 113, 0.45); color: #fff; }
+
   .main { flex: 1; min-width: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
   .topbar {
     position: relative; flex: none;
@@ -193,17 +204,13 @@ function renderShell(
     max-width: 40%; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
   }
   .topbar-actions { display: flex; align-items: center; gap: 8px; }
-  .theme-toggle, .logout-btn {
-    height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--line-soft);
+  .theme-toggle {
+    height: 36px; width: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--line-soft);
     display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-700);
     font-family: inherit; font-size: 12.5px; font-weight: 600; transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .theme-toggle { width: 36px; }
-  .logout-btn { padding: 0 13px; gap: 6px; }
   .theme-toggle:hover { border-color: var(--brand-600); }
-  .logout-btn:hover { border-color: var(--danger-line); color: var(--danger); }
   .theme-toggle svg { width: 17px; height: 17px; }
-  .logout-btn svg { width: 15px; height: 15px; }
   .theme-toggle .icon-moon { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
@@ -282,6 +289,7 @@ function renderShell(
     }
     .sidebar-brand { padding: 0 10px 0 0; }
     .nav-items { flex-direction: row; }
+    .sidebar-logout { width: auto; margin-top: 0; white-space: nowrap; }
     .main { height: auto; overflow: visible; }
     .content { overflow-y: visible; }
   }
@@ -322,7 +330,8 @@ function statCard(
 export function renderSuperAdminOverview(
   users: User[],
   declarationCount: number,
-  settings: AppSettings
+  settings: AppSettings,
+  countryCounts: CountryProductCount[]
 ): string {
   const total = users.length;
   const active = users.filter((u) => u.disabledAt === null).length;
@@ -340,12 +349,13 @@ export function renderSuperAdminOverview(
     <div class="stat-grid">
       ${statCard('brand', declarationCount, 'Déclarations générées (total)')}
     </div>
+    ${renderWorldMapPanel(countryCounts)}
     <div class="card">
       <h2>Accès rapide</h2>
       <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>.</p>
     </div>
   `;
-  return renderShell('dashboard', 'Tableau de bord', body, settings);
+  return renderShell('dashboard', 'Tableau de bord', body, settings, WORLD_MAP_STYLE);
 }
 
 function renderUserRow(user: User, currentUserId: number): string {

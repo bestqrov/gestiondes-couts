@@ -45,9 +45,11 @@ import {
   saveTransaction,
   getMostRecentTransaction,
   countTransactions,
+  getCountryProductCounts,
   searchTransactionsByRedevable,
   TRANSACTIONS_COLLECTION,
   type TransactionDocument,
+  type CountryProductCount,
 } from '../db/transactionsRepository.js';
 import { isValidHexColor } from '../domain/colorUtils.js';
 import {
@@ -380,13 +382,18 @@ app.get('/download', async (_req, res) => {
 
 app.get('/superadmin/dashboard', requireSuperAdmin, async (_req, res) => {
   let transactionCount = 0;
+  let countryCounts: CountryProductCount[] = [];
   try {
     const mongoDb = await getMongoDb();
-    transactionCount = await countTransactions(mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION));
+    const collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
+    transactionCount = await countTransactions(collection);
+    countryCounts = await getCountryProductCounts(collection);
   } catch (mongoError) {
-    console.error('Failed to reach MongoDB for the dashboard transaction count:', mongoError);
+    console.error('Failed to reach MongoDB for the dashboard overview:', mongoError);
   }
-  res.send(renderSuperAdminOverview(listUsers(db), transactionCount, getAppSettings(db)));
+  res.send(
+    renderSuperAdminOverview(listUsers(db), transactionCount, getAppSettings(db), countryCounts)
+  );
 });
 
 // Lets a superadmin generate a declaration without leaving the sidebar
