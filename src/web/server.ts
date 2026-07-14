@@ -58,6 +58,7 @@ import {
   FONT_OPTIONS,
   renderBrandOverrideStyle,
   renderLogoImg,
+  renderFaviconLink,
   renderLoginBadge,
   renderLoginTitle,
   renderContactRows,
@@ -153,6 +154,7 @@ function renderLoginHtml(errorBlock: string): string {
   const settings = getAppSettings(db);
   return loginHtml
     .replace('{{ERROR_BLOCK}}', errorBlock)
+    .replace('{{FAVICON_LINK}}', renderFaviconLink(settings))
     .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(settings))
     .replace('{{BRAND_LOGO_LEFT}}', renderLoginBadge(settings))
     .replace('{{BRAND_LOGO_RIGHT}}', renderLoginBadge(settings))
@@ -215,6 +217,7 @@ app.get('/', (req, res) => {
       .replace('{{NAV_LINK}}', navLink)
       .replace('{{ROLE_BADGE}}', roleBadge)
       .replace('{{LOGO_IMG}}', renderLogoImg(settings))
+      .replace('{{FAVICON_LINK}}', renderFaviconLink(settings))
       .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(settings))
   );
 });

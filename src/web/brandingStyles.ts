@@ -63,6 +63,16 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// Reuses the uploaded logo (stored as a data: URI) directly as the browser
+// tab favicon — it only changes when the logo itself is re-uploaded in
+// Réglages, so there's nothing separate to regenerate or keep in sync.
+// Empty string (no <link>, browser falls back to its default) when no logo
+// has been uploaded yet.
+export function renderFaviconLink(settings: AppSettings): string {
+  if (!settings.logoDataUri) return '';
+  return `<link rel="icon" href="${settings.logoDataUri}" />`;
+}
+
 // A small logo shown next to the "Déconnexion" button on pages that have
 // one — empty string (renders nothing) when no logo has been uploaded.
 export function renderLogoImg(settings: AppSettings): string {

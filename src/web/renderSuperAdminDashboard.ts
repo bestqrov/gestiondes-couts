@@ -1,7 +1,7 @@
 import type { User } from '../db/usersRepository.js';
 import type { TransactionDocument, CountryProductCount } from '../db/transactionsRepository.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
-import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
+import { renderBrandOverrideStyle, renderLogoImg, renderFaviconLink, FONT_OPTIONS } from './brandingStyles.js';
 import { renderWorldMapPanel, WORLD_MAP_STYLE } from './worldMap.js';
 
 export type SuperAdminPage = 'dashboard' | 'generate' | 'users' | 'costs' | 'settings';
@@ -114,6 +114,7 @@ function renderShell(
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Superadmin — ${escapeHtml(title)}</title>
+${renderFaviconLink(settings)}
 <script>
   (function () {
     var saved = localStorage.getItem('theme');
@@ -619,7 +620,7 @@ export function renderSuperAdminSettings(
     <div class="settings-tabs" role="tablist">
       <button type="button" class="settings-tab" data-tab="profil">
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 17V5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5V17" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 8h1M11.5 8h1M7.5 11h1M11.5 11h1M8.5 17v-3h3v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        Profil École
+        Profil Société
       </button>
       <button type="button" class="settings-tab" data-tab="apparence">
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -643,7 +644,7 @@ export function renderSuperAdminSettings(
           <div class="settings-section-head">
             <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6Z" stroke="currentColor" stroke-width="1.3"/></svg></div>
             <div>
-              <h2>Logo de l'école</h2>
+              <h2>Logo de la société</h2>
               <p class="settings-section-hint">Téléchargez le logo de votre établissement. Il sera affiché dans la barre latérale et sur tous les documents.</p>
             </div>
           </div>
@@ -674,7 +675,7 @@ export function renderSuperAdminSettings(
           </div>
           <div class="settings-field-grid">
             <div class="field">
-              <label for="companyName">Nom de l'école</label>
+              <label for="companyName">Nom de la société</label>
               <input type="text" id="companyName" name="companyName" value="${escapeHtml(settings.companyName ?? '')}" placeholder="ex. Global Trade Logistics SARL" />
             </div>
           </div>
