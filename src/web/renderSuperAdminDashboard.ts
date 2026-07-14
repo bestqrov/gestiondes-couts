@@ -1,5 +1,9 @@
 import type { User } from '../db/usersRepository.js';
-import type { SavedDeclarationSummary, SavedArticleCost } from '../db/declarationsRepository.js';
+import type {
+  SavedDeclarationSummary,
+  SavedArticleCost,
+  DeclarationSearchResult,
+} from '../db/declarationsRepository.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { renderBrandOverrideStyle, renderLogoImg, FONT_OPTIONS } from './brandingStyles.js';
 
@@ -80,8 +84,12 @@ function renderSidebar(activePage: SuperAdminPage): string {
 }
 
 function renderTopbar(title: string, settings: AppSettings): string {
+  const companyName = settings.companyName
+    ? `<div class="topbar-company">${escapeHtml(settings.companyName)}</div>`
+    : '';
   return `<div class="topbar">
     <h1>${escapeHtml(title)}</h1>
+    ${companyName}
     <div class="topbar-actions">
       ${renderLogoImg(settings)}
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="Changer de thème">
@@ -182,10 +190,16 @@ function renderShell(
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .topbar {
+    position: relative;
     display: flex; align-items: center; justify-content: space-between; padding: 18px 28px;
     border-bottom: 1px solid var(--line); background: var(--card-bg); transition: background 0.2s, border-color 0.2s;
   }
   .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .topbar-company {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 14.5px; font-weight: 700; color: var(--ink-900); white-space: nowrap;
+    max-width: 40%; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  }
   .topbar-actions { display: flex; align-items: center; gap: 8px; }
   .theme-toggle, .logout-btn {
     height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--line-soft);
@@ -444,16 +458,69 @@ function formatMoney(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function renderCostsSearchForm(searchQuery: string): string {
+  const clearLink = searchQuery
+    ? `<a href="/superadmin/costs" class="search-clear">Effacer</a>`
+    : '';
+  return `
+    <form method="get" action="/superadmin/costs" class="search-form">
+      <input type="text" name="q" placeholder="Rechercher par nom / société (redevable)..." value="${escapeHtml(searchQuery)}" />
+      <button type="submit" class="search-submit">Rechercher</button>
+      ${clearLink}
+    </form>
+  `;
+}
+
+function renderSearchResultCard(result: DeclarationSearchResult): string {
+  const valeurDeclaree =
+    result.valeurTotaleDeclaree !== null ? formatMoney(result.valeurTotaleDeclaree) : '—';
+  return `
+    <div class="card search-result-card">
+      <div class="search-result-header">
+        <strong>${escapeHtml(result.redevable)}</strong>
+        <span class="muted">${escapeHtml(result.code)} · ${formatDate(result.createdAt)}</span>
+      </div>
+      <div class="search-result-footer">
+        <div class="search-stat"><span class="label">Coût total</span><span class="value">${formatMoney(result.totalLandedCost)}</span></div>
+        <div class="search-stat"><span class="label">Total des taxes</span><span class="value">${formatMoney(result.totalTaxes)}</span></div>
+        <div class="search-stat"><span class="label">Valeur déclarée</span><span class="value">${valeurDeclaree}</span></div>
+      </div>
+    </div>
+  `;
+}
+
 // Shows the cost breakdown of the most recently *persisted* declaration
 // (across all admins — matches the superadmin's "sees everything" role),
 // read from the database rather than the admin tool's own in-memory
 // last-generated-declaration state. Persisted means this survives a
 // redeploy/restart, unlike the earlier in-memory-only version.
+//
+// A search box (by redevable/company name, across every persisted
+// declaration) sits above this — when a query is active, its results
+// (each a compact header+footer card with the three totals) replace the
+// single most-recent detail view below.
 export function renderSuperAdminCosts(
   summary: SavedDeclarationSummary,
   articles: SavedArticleCost[],
-  settings: AppSettings
+  settings: AppSettings,
+  searchQuery = '',
+  searchResults?: DeclarationSearchResult[]
 ): string {
+  const searchForm = renderCostsSearchForm(searchQuery);
+
+  if (searchQuery && searchResults) {
+    const resultsHtml =
+      searchResults.length > 0
+        ? searchResults.map(renderSearchResultCard).join('')
+        : `<div class="card placeholder-card"><p>Aucune déclaration ne correspond à « ${escapeHtml(searchQuery)} ».</p></div>`;
+    const body = `
+      <p class="lede">Recherche de déclarations par nom / société.</p>
+      ${searchForm}
+      ${resultsHtml}
+    `;
+    return renderShell('costs', 'Coût de produit', body, settings, COSTS_SEARCH_STYLE);
+  }
+
   const rows = articles
     .map(
       (article) => `<tr>
@@ -481,6 +548,7 @@ export function renderSuperAdminCosts(
 
   const body = `
     <p class="lede">Déclaration ${escapeHtml(summary.code)} — ${escapeHtml(summary.redevable)} (la plus récente générée sur l'application, tous admins confondus).</p>
+    ${searchForm}
     ${partialNote}
     <div class="stat-grid">${totalCard}</div>
     <div class="card">
@@ -492,8 +560,43 @@ export function renderSuperAdminCosts(
     </div>
   `;
 
-  return renderShell('costs', 'Coût de produit', body, settings);
+  return renderShell('costs', 'Coût de produit', body, settings, COSTS_SEARCH_STYLE);
 }
+
+const COSTS_SEARCH_STYLE = `
+  .search-form { display: flex; gap: 10px; margin-bottom: 20px; }
+  .search-form input {
+    flex: 1; padding: 10px 12px; font-size: 14px; font-family: inherit; color: var(--ink-900);
+    background: var(--input-bg); border: 1.5px solid var(--line); border-radius: 9px;
+  }
+  .search-form input:focus { outline: none; border-color: var(--brand-600); background: var(--card-bg); }
+  .search-submit {
+    width: auto; margin-top: 0; padding: 0 18px; font-size: 13.5px; color: #fff;
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border: none; border-radius: 9px;
+  }
+  .search-clear {
+    display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: var(--ink-500);
+    text-decoration: none; border: 1.5px solid var(--line); border-radius: 9px;
+  }
+  .search-clear:hover { color: var(--danger); border-color: var(--danger-line); }
+  .search-result-card { padding: 0; overflow: hidden; }
+  .search-result-header {
+    padding: 16px 20px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    font-size: 14.5px; border-bottom: 1px solid var(--line-soft);
+  }
+  .search-result-footer { display: flex; }
+  .search-stat {
+    flex: 1; padding: 14px 20px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .search-stat:not(:last-child) { border-right: 1px solid var(--line-soft); }
+  .search-stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-400); font-weight: 600; }
+  .search-stat .value { font-size: 15px; font-weight: 700; color: var(--brand-700); }
+  @media (max-width: 560px) {
+    .search-form { flex-wrap: wrap; }
+    .search-result-footer { flex-direction: column; }
+    .search-stat:not(:last-child) { border-right: none; border-bottom: 1px solid var(--line-soft); }
+  }
+`;
 
 export function renderSuperAdminSettings(
   settings: AppSettings,

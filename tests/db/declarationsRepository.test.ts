@@ -7,6 +7,7 @@ import {
   listAllDeclarations,
   getDeclarationById,
   getArticlesForDeclaration,
+  searchDeclarationsByRedevable,
 } from '../../src/db/declarationsRepository.js';
 import type { Declaration } from '../../src/domain/types.js';
 
@@ -69,6 +70,7 @@ describe('declarationsRepository', () => {
       ownerUserId: user.id,
       code: '500001',
       redevable: 'GLOBAL TRADE LOGISTICS SARL',
+      valeurTotaleDeclaree: 40039.992,
       totalLandedCost: 15045.0,
       costEstimatePartial: false,
       colisCount: 6,
@@ -205,6 +207,59 @@ describe('declarationsRepository', () => {
   it('returns an empty array from getArticlesForDeclaration for a declaration with no articles saved', () => {
     const db = createDatabase(':memory:');
     expect(getArticlesForDeclaration(db, 999)).toEqual([]);
+    db.close();
+  });
+
+  it('searches declarations by a case-insensitive substring match on redevable, including computed total taxes', () => {
+    const db = createDatabase(':memory:');
+    const alice = createUser(db, 'alice', 'pw', 'admin');
+
+    saveDeclaration(db, {
+      ownerUserId: alice.id,
+      declaration: { ...makeDeclaration(), redevable: 'Global Trade Logistics SARL' },
+      shipmentCostFields: { valeurTotaleDeclaree: 40039.992 },
+      articleCosts: [{ numero: 1, costPerUnit: 42.5 }],
+      totalLandedCost: 15045.0,
+      costEstimatePartial: false,
+      excelFilePath: '/data/a.xlsx',
+    });
+    saveDeclaration(db, {
+      ownerUserId: alice.id,
+      declaration: { ...makeDeclaration(), redevable: 'Another Company SARL' },
+      shipmentCostFields: {},
+      articleCosts: [{ numero: 1, costPerUnit: 10 }],
+      totalLandedCost: 100,
+      costEstimatePartial: true,
+      excelFilePath: '/data/b.xlsx',
+    });
+
+    const results = searchDeclarationsByRedevable(db, 'global trade');
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      redevable: 'Global Trade Logistics SARL',
+      valeurTotaleDeclaree: 40039.992,
+      totalLandedCost: 15045.0,
+      totalTaxes: 5511, // 0 + 68 + 5443, from makeDeclaration()'s article taxes
+    });
+
+    db.close();
+  });
+
+  it('returns an empty array from searchDeclarationsByRedevable when nothing matches', () => {
+    const db = createDatabase(':memory:');
+    const alice = createUser(db, 'alice', 'pw', 'admin');
+    saveDeclaration(db, {
+      ownerUserId: alice.id,
+      declaration: makeDeclaration(),
+      shipmentCostFields: {},
+      articleCosts: [{ numero: 1, costPerUnit: 10 }],
+      totalLandedCost: 100,
+      costEstimatePartial: true,
+      excelFilePath: '/data/a.xlsx',
+    });
+
+    expect(searchDeclarationsByRedevable(db, 'nonexistent company')).toEqual([]);
     db.close();
   });
 });

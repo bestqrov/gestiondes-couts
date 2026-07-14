@@ -32,6 +32,7 @@ export interface SavedDeclarationSummary {
   ownerUserId: number;
   code: string;
   redevable: string;
+  valeurTotaleDeclaree: number | null;
   totalLandedCost: number;
   costEstimatePartial: boolean;
   colisCount: number | null;
@@ -45,6 +46,7 @@ interface DeclarationRow {
   owner_user_id: number;
   code: string;
   redevable: string;
+  valeur_totale_declaree: number | null;
   total_landed_cost: number;
   cost_estimate_partial: number;
   colis_count: number | null;
@@ -59,6 +61,7 @@ function rowToSummary(row: DeclarationRow): SavedDeclarationSummary {
     ownerUserId: row.owner_user_id,
     code: row.code,
     redevable: row.redevable,
+    valeurTotaleDeclaree: row.valeur_totale_declaree,
     totalLandedCost: row.total_landed_cost,
     costEstimatePartial: row.cost_estimate_partial === 1,
     colisCount: row.colis_count,
@@ -203,4 +206,38 @@ export function getArticlesForDeclaration(
     .prepare('SELECT * FROM declaration_articles WHERE declaration_id = ? ORDER BY numero ASC')
     .all(declarationId) as ArticleRow[];
   return rows.map(rowToArticleCost);
+}
+
+function getTotalTaxesForDeclaration(db: Database.Database, declarationId: number): number {
+  const rows = db
+    .prepare('SELECT taxes_json FROM declaration_articles WHERE declaration_id = ?')
+    .all(declarationId) as Array<{ taxes_json: string }>;
+  return rows.reduce((sum, row) => {
+    const taxes = JSON.parse(row.taxes_json) as Array<{ montant: number }>;
+    return sum + taxes.reduce((s, t) => s + t.montant, 0);
+  }, 0);
+}
+
+export interface DeclarationSearchResult extends SavedDeclarationSummary {
+  totalTaxes: number;
+}
+
+// Case-insensitive substring match on the company/redevable name, across
+// every persisted declaration (all admins) — matches the superadmin's
+// "sees everything" role. Each result includes its total taxes (summed
+// from the saved per-article tax breakdown), alongside the totalLandedCost
+// and valeurTotaleDeclaree already on SavedDeclarationSummary, so the
+// caller has all three totals the search view needs without a second
+// round-trip per result.
+export function searchDeclarationsByRedevable(
+  db: Database.Database,
+  query: string
+): DeclarationSearchResult[] {
+  const rows = db
+    .prepare('SELECT * FROM declarations WHERE redevable LIKE ? ORDER BY created_at DESC')
+    .all(`%${query}%`) as DeclarationRow[];
+  return rows.map((row) => {
+    const summary = rowToSummary(row);
+    return { ...summary, totalTaxes: getTotalTaxesForDeclaration(db, summary.id) };
+  });
 }

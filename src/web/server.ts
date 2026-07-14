@@ -42,6 +42,7 @@ import {
   saveDeclaration,
   listAllDeclarations,
   getArticlesForDeclaration,
+  searchDeclarationsByRedevable,
 } from '../db/declarationsRepository.js';
 import { getAppSettings, updateAppSettings } from '../db/appSettingsRepository.js';
 import { isValidHexColor } from '../domain/colorUtils.js';
@@ -335,7 +336,7 @@ app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
   res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db)));
 });
 
-app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
+app.get('/superadmin/costs', requireSuperAdmin, (req, res) => {
   // Reads from the database (most recent declaration across all admins),
   // not the in-memory `lastDeclaration` — that state is per-process and
   // wiped on every restart/redeploy, which made this page go blank even
@@ -351,8 +352,12 @@ app.get('/superadmin/costs', requireSuperAdmin, (_req, res) => {
     );
     return;
   }
+  const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const searchResults = searchQuery ? searchDeclarationsByRedevable(db, searchQuery) : undefined;
   const articles = getArticlesForDeclaration(db, mostRecent.id);
-  res.send(renderSuperAdminCosts(mostRecent, articles, getAppSettings(db)));
+  res.send(
+    renderSuperAdminCosts(mostRecent, articles, getAppSettings(db), searchQuery, searchResults)
+  );
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, (_req, res) => {
