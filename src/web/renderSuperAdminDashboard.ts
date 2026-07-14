@@ -79,7 +79,6 @@ function renderSidebar(activePage: SuperAdminPage): string {
       </div>
     </div>
     <div class="nav-items">${items}</div>
-    <a class="sidebar-exit" href="/">&larr; Retour à l'outil</a>
   </nav>`;
 }
 
@@ -155,14 +154,18 @@ function renderShell(
     --sidebar-bg: #0f0a1a; --sidebar-ink: #e9e4f5; --sidebar-ink-muted: #7c7295; --sidebar-hover: #1e1730;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: var(--ink-900); background: var(--page-bg); transition: background 0.2s, color 0.2s;
   }
-  .app-shell { display: flex; min-height: 100vh; }
+  .app-shell { display: flex; height: 100vh; }
 
+  /* Sticky within the full-height flex row above, so it stays in view
+     while .content (below) scrolls independently — the "fixed sidebar"
+     look without the margin-offset bookkeeping position:fixed would need. */
   .sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
     width: 232px; flex: none; background: var(--sidebar-bg); color: var(--sidebar-ink);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
   }
@@ -185,19 +188,18 @@ function renderShell(
   .nav-item svg { width: 17px; height: 17px; flex: none; }
   .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
   .nav-item.active { background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); color: #fff; }
-  .sidebar-exit { font-size: 12.5px; color: var(--sidebar-ink-muted); text-decoration: none; padding: 10px 12px; }
-  .sidebar-exit:hover { color: #fff; }
 
-  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .main { flex: 1; min-width: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
   .topbar {
-    position: relative;
+    position: relative; flex: none;
     display: flex; align-items: center; justify-content: space-between; padding: 18px 28px;
-    border-bottom: 1px solid var(--line); background: var(--card-bg); transition: background 0.2s, border-color 0.2s;
+    border-bottom: 1px solid var(--line); background: var(--header-bg, var(--card-bg));
+    transition: background 0.2s, border-color 0.2s;
   }
-  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0; color: var(--header-ink, var(--ink-900)); }
   .topbar-company {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    font-size: 14.5px; font-weight: 700; color: var(--ink-900); white-space: nowrap;
+    font-size: 14.5px; font-weight: 700; color: var(--header-ink, var(--ink-900)); white-space: nowrap;
     max-width: 40%; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
   }
   .topbar-actions { display: flex; align-items: center; gap: 8px; }
@@ -216,7 +218,7 @@ function renderShell(
   :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
 
-  .content { padding: 28px; flex: 1; }
+  .content { padding: 28px; flex: 1; overflow-y: auto; }
   .lede { font-size: 13.5px; color: var(--ink-500); margin: 0 0 22px; }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -263,12 +265,6 @@ function renderShell(
     background: var(--input-bg); border: 1.5px solid var(--line); border-radius: 9px;
   }
   input:focus, select:focus { outline: none; background: var(--card-bg); border-color: var(--brand-600); box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.16); }
-  .create-form { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr auto; gap: 12px; align-items: end; }
-  .create-form button {
-    padding: 10px 16px; font-size: 13.5px; color: #fff;
-    background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border: none;
-    box-shadow: 0 6px 16px -4px rgba(124, 58, 237, 0.4);
-  }
   .error {
     display: flex; gap: 8px; align-items: flex-start; background: var(--danger-bg); color: var(--danger);
     border: 1px solid var(--danger-line); border-radius: 10px; padding: 11px 13px; margin-bottom: 18px;
@@ -289,13 +285,16 @@ function renderShell(
   .placeholder-card p { color: var(--ink-500); font-size: 13.5px; margin: 0; max-width: 420px; margin: 0 auto; line-height: 1.55; }
 
   @media (max-width: 900px) {
-    .app-shell { flex-direction: column; }
-    .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; padding: 10px 12px; }
+    .app-shell { flex-direction: column; height: auto; }
+    .sidebar {
+      position: static; width: 100%; height: auto; flex-direction: row; align-items: center;
+      overflow-x: auto; overflow-y: visible; padding: 10px 12px;
+    }
     .sidebar-brand { padding: 0 10px 0 0; }
     .nav-items { flex-direction: row; }
-    .sidebar-exit { display: none; }
+    .main { height: auto; overflow: visible; }
+    .content { overflow-y: visible; }
   }
-  @media (max-width: 640px) { .create-form { grid-template-columns: 1fr; } }
 </style>
 <style>${extraStyle}</style>
 ${renderBrandOverrideStyle(settings)}
@@ -400,28 +399,12 @@ export function renderSuperAdminUsers(
     : '';
 
   const body = `
-    <p class="lede">Créez des comptes admin, et activez/désactivez l'accès. L'historique d'un compte désactivé reste intact.</p>
-    <div class="card">
-      <h2>Nouveau compte</h2>
-      ${errorBlock}
-      <form class="create-form" method="post" action="/superadmin/users">
-        <div class="field">
-          <label for="username">Identifiant</label>
-          <input type="text" id="username" name="username" placeholder="ex. karim" required />
-        </div>
-        <div class="field">
-          <label for="password">Mot de passe</label>
-          <input type="password" id="password" name="password" placeholder="••••••••" required />
-        </div>
-        <div class="field">
-          <label for="role">Rôle</label>
-          <select id="role" name="role">
-            <option value="admin" selected>Admin</option>
-            <option value="superadmin">Superadmin</option>
-          </select>
-        </div>
-        <button type="submit">Créer</button>
-      </form>
+    <p class="lede">Comptes de l'application. L'historique d'un compte désactivé reste intact.</p>
+    ${errorBlock}
+    <div class="card placeholder-card">
+      <div class="placeholder-icon"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">${PLACEHOLDER_ICON}</svg></div>
+      <h2>Bientôt disponible</h2>
+      <p>L'ajout de nouveaux comptes admin sera bientôt disponible ici.</p>
     </div>
     <div class="card">
       <h2>Comptes (${users.length})</h2>

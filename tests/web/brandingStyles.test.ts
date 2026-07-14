@@ -21,6 +21,12 @@ describe('renderBrandOverrideStyle', () => {
     expect(style).toContain('--brand-soft:');
   });
 
+  it('also overrides --header-bg (to the brand color) and --header-ink (to white) for the superadmin topbar', () => {
+    const style = renderBrandOverrideStyle({ ...EMPTY_SETTINGS, brandColor: '#4f46e5' });
+    expect(style).toContain('--header-bg: #4f46e5;');
+    expect(style).toContain('--header-ink: #ffffff;');
+  });
+
   it('ignores an invalid (malformed) brand color rather than emitting broken CSS', () => {
     const style = renderBrandOverrideStyle({ ...EMPTY_SETTINGS, brandColor: 'not-a-color' });
     expect(style).toBe('');

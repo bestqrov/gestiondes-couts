@@ -35,6 +35,13 @@ export function renderBrandOverrideStyle(settings: AppSettings): string {
     const brandSoft = lighten(brand600, 0.88);
     declarations.push(`--brand-600: ${brand600};`, `--brand-700: ${brand700};`, `--brand-soft: ${brandSoft};`);
     declarations.push(`--brand: ${brand600};`);
+    // Consumed by the superadmin sidebar shell's .topbar (background) and
+    // its title/company-name text — a solid brand-colored header instead
+    // of the plain card background, with white text for contrast. Falls
+    // back to the shell's own --card-bg/--ink-900 via var(--header-bg,
+    // var(--card-bg)) when unset, so pages without these rules are
+    // unaffected.
+    declarations.push(`--header-bg: ${brand600};`, `--header-ink: #ffffff;`);
   }
 
   const stack = fontStack(settings.fontFamily);
