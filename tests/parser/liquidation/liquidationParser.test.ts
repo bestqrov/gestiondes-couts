@@ -157,6 +157,39 @@ TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
     ]);
   });
 
+  it('does not swallow a trailing RECAPITULATION table into the last article (real-world bug)', () => {
+    // Regression test for a real user-reported failure: the last article's
+    // block has no following "ARTICLE :" marker to stop at, so it used to
+    // run all the way to the end of the document — including a later page's
+    // "RECAPITULATION" summary table, whose rows ("! 002701 ! ... ! 100,00
+    // !") have a 6-digit code just like a real tax row (silently corrupting
+    // the last article's taxes) and whose own header row ("! RUBRIQUE !
+    // DESIGNATIONS ! MONTANTS !") doesn't match any recognized shape
+    // (throwing "Malformed tax row").
+    const text = `CODE : 309536
+REDEVABLE : MED AFRICA LOGISTICS CODE : 309536
+CATEGORIE D'ORDONNANCEMENT : Crédit d'enlèvement B E N° : 169 DU : 25/06/2026
+
+ARTICLE : 1 NUMERO SH : 6109100010 VALEUR : 27 147,00
+QUANTITE : 354.000 UNITE : NOMBRE
+
+! TAXE ! ASSIETTE ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL ! MONTANT !
+! 000110 ! 27147.00 ! 0.0 ! T ! ! ! 0,00 !
+TOTAL ARTICLE : 5 511,00
+
+! RECAPITULATION ( INITIALE ) !
+REDEVABLE : MED AFRICA LOGISTICS CODE : 309536
+! RUBRIQUE ! DESIGNATIONS ! MONTANTS !
+! 002701 ! REDV.INF.(AVEC D et T) ! 100,00 !
+! 006901 ! RI SEGMA ! 50,00 !
+`;
+    const result = parseLiquidation(text);
+    expect(result.articles).toHaveLength(1);
+    expect(result.articles[0].taxes).toEqual([
+      { code: '000110', assiette: 27147.0, taux: 0.0, montant: 0.0 },
+    ]);
+  });
+
   // Note: the existing "parses header and both articles from the real sample document" test
   // already exercises the (?<!TOTAL ) lookbehind implicitly, since the fixture contains
   // "TOTAL ARTICLE :" lines between article blocks and correctly yields exactly 2 articles

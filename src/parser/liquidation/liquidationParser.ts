@@ -45,6 +45,21 @@ function countChar(text: string, char: string): number {
   return text.split(char).length - 1;
 }
 
+// The last article's block has no following "ARTICLE :" marker to stop at,
+// so ARTICLE_BLOCK_PATTERN's lazy match otherwise runs all the way to the
+// end of the document — swallowing whatever comes after it on later pages
+// (e.g. the "RECAPITULATION" summary table, which has its own "!"-delimited
+// rows and a 6-digit "RUBRIQUE" code that looks just like a tax row, or the
+// "LISTE REDEVABLES SOLIDAIRES" table). Every genuine article block ends
+// with its own "TOTAL ARTICLE :" line, so truncating there bounds the block
+// to just that article regardless of what follows in the source document.
+function truncateAtTotalArticleLine(block: string): string {
+  const totalIndex = block.search(/TOTAL ARTICLE\s*:/);
+  if (totalIndex === -1) return block;
+  const newlineAfter = block.indexOf('\n', totalIndex);
+  return newlineAfter === -1 ? block : block.slice(0, newlineAfter);
+}
+
 function parseTaxRows(block: string): TaxLine[] {
   const taxes: TaxLine[] = [];
   for (const line of block.split('\n')) {
@@ -96,7 +111,7 @@ export function parseLiquidation(text: string): LiquidationResult {
 
   for (const match of text.matchAll(ARTICLE_BLOCK_PATTERN)) {
     const numero = Number.parseInt(match[1], 10);
-    const block = match[2];
+    const block = truncateAtTotalArticleLine(match[2]);
 
     const hsCode = extractFirst(block, /NUMERO SH\s*:\s*(\d+)/);
     const valeurRaw = extractFirst(block, /VALEUR\s*:\s*([\d\s.,]+)/);
