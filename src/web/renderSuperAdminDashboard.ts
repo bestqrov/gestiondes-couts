@@ -21,37 +21,49 @@ function formatDate(iso: string): string {
     : date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-const NAV_ITEMS: Array<{ page: SuperAdminPage; href: string; label: string; icon: string }> = [
+const NAV_ITEMS: Array<{
+  page: SuperAdminPage;
+  href: string;
+  label: string;
+  icon: string;
+  color: 'indigo' | 'green' | 'amber' | 'pink';
+}> = [
   {
     page: 'dashboard',
     href: '/superadmin/dashboard',
     label: 'Tableau de bord',
     icon: '<path d="M3 10.5l7-6 7 6M5 9v7.5A1.5 1.5 0 0 0 6.5 18h7a1.5 1.5 0 0 0 1.5-1.5V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    color: 'indigo',
   },
   {
     page: 'generate',
     href: '/superadmin/generate',
     label: 'Générer une déclaration',
     icon: '<path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    color: 'green',
   },
   {
     page: 'users',
     href: '/superadmin/users',
     label: 'Utilisateurs',
     icon: '<circle cx="7.5" cy="7" r="2.75" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 17c0-2.9 2.24-5 5-5s5 2.1 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="14.5" cy="7.5" r="2.1" stroke="currentColor" stroke-width="1.5"/><path d="M13 12.3c1.9.2 3.5 1.9 3.5 4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+    color: 'amber',
   },
   {
     page: 'settings',
     href: '/superadmin/settings',
     label: 'Réglages',
     icon: '<circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.5"/><path d="M10 3v1.8M10 15.2V17M17 10h-1.8M4.8 10H3M14.9 5.1l-1.3 1.3M6.4 13.6l-1.3 1.3M14.9 14.9l-1.3-1.3M6.4 6.4L5.1 5.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+    color: 'pink',
   },
 ];
 
 function renderSidebar(activePage: SuperAdminPage): string {
   const items = NAV_ITEMS.map(
-    (item) => `<a href="${item.href}" class="nav-item${item.page === activePage ? ' active' : ''}">
-      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">${item.icon}</svg>
+    (item, index) => `${index > 0 ? '<div class="nav-divider"></div>' : ''}<a href="${item.href}" class="nav-item${item.page === activePage ? ' active' : ''}">
+      <span class="nav-icon nav-icon-${item.color}">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">${item.icon}</svg>
+      </span>
       <span>${item.label}</span>
     </a>`
   ).join('');
@@ -171,15 +183,26 @@ ${renderFaviconLink(settings)}
   .header-badge svg { width: 18px; height: 18px; }
   .sidebar-title { font-size: 14px; font-weight: 700; color: #fff; }
   .sidebar-subtitle { font-size: 10.5px; color: var(--sidebar-ink-muted); margin-top: 1px; }
-  .nav-items { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-items { display: flex; flex-direction: column; gap: 8px; flex: 1; padding-top: 4px; }
+  .nav-divider { height: 1px; background: rgba(255, 255, 255, 0.08); margin: 2px 10px; }
   .nav-item {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px;
+    display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 10px;
     color: var(--sidebar-ink-muted); text-decoration: none; font-size: 13.5px; font-weight: 600;
     transition: background 0.12s, color 0.12s;
   }
-  .nav-item svg { width: 17px; height: 17px; flex: none; }
+  .nav-icon {
+    width: 28px; height: 28px; flex: none; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s, color 0.12s;
+  }
+  .nav-icon svg { width: 16px; height: 16px; flex: none; }
+  .nav-icon-indigo { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; }
+  .nav-icon-green { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+  .nav-icon-amber { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+  .nav-icon-pink { background: rgba(236, 72, 153, 0.18); color: #f9a8d4; }
   .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
   .nav-item.active { background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); color: #fff; }
+  .nav-item.active .nav-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
 
   .sidebar-logout {
     width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px;
@@ -429,11 +452,10 @@ export function renderSuperAdminUsers(
         <div class="settings-icon settings-icon-violet"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4"/></svg></div>
         <div>
           <h2>Nouveau compte</h2>
-          <p class="settings-section-hint">Accès limité à « Générer une déclaration » — pas de tableau de bord ni de réglages.</p>
+          <p class="settings-section-hint">Par défaut, accès limité à « Générer une déclaration » — cochez « Superadmin » pour un accès complet.</p>
         </div>
       </div>
       <form method="post" action="/superadmin/users">
-        <input type="hidden" name="role" value="admin" />
         <div class="settings-field-grid">
           <div class="field">
             <label for="newUserUsername">Nom d'utilisateur</label>
@@ -444,6 +466,10 @@ export function renderSuperAdminUsers(
             <input type="password" id="newUserPassword" name="password" required autocomplete="new-password" />
           </div>
         </div>
+        <label class="checkbox-field">
+          <input type="checkbox" name="role" value="superadmin" />
+          <span>Compte Superadmin (accès complet — tableau de bord, réglages, utilisateurs)</span>
+        </label>
         <button type="submit" class="settings-save">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 4.5v11M4.5 10h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
           Créer le compte
@@ -474,6 +500,11 @@ const USERS_PAGE_STYLE = `
   .user-edit-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0 10px; }
   .user-edit-form input { width: auto; flex: 1; min-width: 160px; }
   .user-edit-save { width: auto; padding: 9px 16px; }
+  .checkbox-field {
+    display: flex; align-items: center; gap: 9px; margin: 14px 0 18px;
+    font-size: 13px; font-weight: 600; color: var(--ink-700); cursor: pointer;
+  }
+  .checkbox-field input { width: auto; flex: none; accent-color: var(--brand-600); }
 `;
 
 const PLACEHOLDER_ICON =

@@ -690,13 +690,13 @@ app.post('/superadmin/users', requireSuperAdmin, async (req, res) => {
     await renderWithError('Identifiant et mot de passe sont requis.');
     return;
   }
-  if (role !== 'admin' && role !== 'superadmin') {
-    await renderWithError('Rôle invalide.');
-    return;
-  }
+  // The "Nouveau compte" form's role checkbox only submits a "role" field
+  // at all when checked (unchecked checkboxes aren't sent) — no value means
+  // the default, limited "admin" role.
+  const resolvedRole: UserRole = role === 'superadmin' ? 'superadmin' : 'admin';
 
   try {
-    await createUser(await getUsersCollection(), username, password, role as UserRole);
+    await createUser(await getUsersCollection(), username, password, resolvedRole);
     res.redirect('/superadmin/users');
   } catch (error) {
     // MongoDB's unique index on username throws an E11000 error (code
