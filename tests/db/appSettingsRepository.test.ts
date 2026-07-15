@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { createDatabase } from '../../src/db/database.js';
-import { getAppSettings, updateAppSettings } from '../../src/db/appSettingsRepository.js';
+import { createFakeCollection } from '../helpers/fakeMongoCollection.js';
+import {
+  getAppSettings,
+  updateAppSettings,
+  type AppSettingsDocument,
+} from '../../src/db/appSettingsRepository.js';
+
+function makeCollection() {
+  return createFakeCollection<AppSettingsDocument>();
+}
 
 describe('appSettingsRepository', () => {
-  it('returns all-null defaults when no settings have ever been saved', () => {
-    const db = createDatabase(':memory:');
-    expect(getAppSettings(db)).toEqual({
+  it('returns all-null defaults when no settings have ever been saved', async () => {
+    const collection = makeCollection();
+    expect(await getAppSettings(collection)).toEqual({
       companyName: null,
       logoDataUri: null,
       brandColor: null,
@@ -13,12 +21,11 @@ describe('appSettingsRepository', () => {
       contactEmail: null,
       contactWhatsapp: null,
     });
-    db.close();
   });
 
-  it('saves and reads back settings', () => {
-    const db = createDatabase(':memory:');
-    const result = updateAppSettings(db, {
+  it('saves and reads back settings', async () => {
+    const collection = makeCollection();
+    const result = await updateAppSettings(collection, {
       companyName: 'Acme Corp',
       brandColor: '#4f46e5',
       fontFamily: 'serif',
@@ -35,15 +42,14 @@ describe('appSettingsRepository', () => {
       contactEmail: 'contact@acme.example',
       contactWhatsapp: '+212600000000',
     });
-    expect(getAppSettings(db)).toEqual(result);
-    db.close();
+    expect(await getAppSettings(collection)).toEqual(result);
   });
 
-  it('a partial update only overwrites the fields provided, leaving the rest intact', () => {
-    const db = createDatabase(':memory:');
-    updateAppSettings(db, { companyName: 'Acme Corp', brandColor: '#4f46e5' });
+  it('a partial update only overwrites the fields provided, leaving the rest intact', async () => {
+    const collection = makeCollection();
+    await updateAppSettings(collection, { companyName: 'Acme Corp', brandColor: '#4f46e5' });
 
-    const result = updateAppSettings(db, { fontFamily: 'mono' });
+    const result = await updateAppSettings(collection, { fontFamily: 'mono' });
 
     expect(result).toEqual({
       companyName: 'Acme Corp',
@@ -53,19 +59,14 @@ describe('appSettingsRepository', () => {
       contactEmail: null,
       contactWhatsapp: null,
     });
-    db.close();
   });
 
-  it('calling updateAppSettings twice does not create a second row', () => {
-    const db = createDatabase(':memory:');
-    updateAppSettings(db, { companyName: 'First' });
-    updateAppSettings(db, { companyName: 'Second' });
+  it('calling updateAppSettings twice does not create a second document', async () => {
+    const collection = makeCollection();
+    await updateAppSettings(collection, { companyName: 'First' });
+    await updateAppSettings(collection, { companyName: 'Second' });
 
-    const count = db.prepare('SELECT COUNT(*) as count FROM app_settings').get() as {
-      count: number;
-    };
-    expect(count.count).toBe(1);
-    expect(getAppSettings(db).companyName).toBe('Second');
-    db.close();
+    expect(await collection.countDocuments()).toBe(1);
+    expect((await getAppSettings(collection)).companyName).toBe('Second');
   });
 });

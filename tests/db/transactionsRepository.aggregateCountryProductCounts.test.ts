@@ -6,7 +6,7 @@ import {
 
 function makeTransaction(articles: TransactionDocument['articles']): TransactionDocument {
   return {
-    ownerUserId: 1,
+    ownerUserId: '1',
     code: '500001',
     redevable: 'Test SARL',
     valeurTotaleDeclaree: null,

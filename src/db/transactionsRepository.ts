@@ -15,7 +15,7 @@ export interface TransactionArticle {
 // short-lived, per-process artifact (see server.ts's lastGeneratedFilePath)
 // for the immediate re-download/PDF-export flow only.
 export interface TransactionDocument {
-  ownerUserId: number;
+  ownerUserId: string;
   code: string;
   redevable: string;
   valeurTotaleDeclaree: number | null;
@@ -29,7 +29,7 @@ export interface TransactionDocument {
 }
 
 export interface SaveTransactionInput {
-  ownerUserId: number;
+  ownerUserId: string;
   code: string;
   redevable: string;
   valeurTotaleDeclaree: number | null;

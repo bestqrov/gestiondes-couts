@@ -29,7 +29,6 @@ import {
   setSessionCookie,
   destroySession,
 } from './auth.js';
-import { getDatabase } from '../db/database.js';
 import {
   findUserByUsername,
   verifyPassword,
@@ -39,9 +38,18 @@ import {
   setUserDisabled,
   updateUsername,
   updatePassword,
+  ensureUsersIndexes,
+  USERS_COLLECTION,
+  type UserDocument,
   type UserRole,
 } from '../db/usersRepository.js';
-import { getAppSettings, updateAppSettings } from '../db/appSettingsRepository.js';
+import {
+  getAppSettings,
+  updateAppSettings,
+  APP_SETTINGS_COLLECTION,
+  DEFAULT_APP_SETTINGS,
+  type AppSettingsDocument,
+} from '../db/appSettingsRepository.js';
 import { getMongoDb } from '../db/mongoClient.js';
 import {
   saveTransaction,
@@ -75,15 +83,33 @@ const OUTPUT_DIR = path.join(PROJECT_ROOT, '.tmp-output');
 mkdirSync(UPLOAD_DIR, { recursive: true });
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
-const db = getDatabase();
-const superAdminUsername = process.env.SUPERADMIN_USERNAME ?? 'redwan';
-const superAdminPassword = process.env.SUPERADMIN_PASSWORD ?? 'redwan2026';
-if (!process.env.SUPERADMIN_USERNAME || !process.env.SUPERADMIN_PASSWORD) {
-  console.warn(
-    'SUPERADMIN_USERNAME/SUPERADMIN_PASSWORD not set — falling back to default credentials for initial setup. Set these in production.'
-  );
+// Users and app settings live in MongoDB now (same database as saved
+// declarations) instead of a local SQLite file — a local file requires a
+// Coolify persistent volume to survive redeploys, and that was repeatedly
+// left unconfigured/misconfigured, silently wiping accounts and branding
+// on every deploy. MongoDB Atlas is external to the container, so it
+// doesn't have that failure mode.
+async function getUsersCollection() {
+  const mongoDb = await getMongoDb();
+  return mongoDb.collection<UserDocument>(USERS_COLLECTION);
 }
-seedSuperAdminIfEmpty(db, superAdminUsername, superAdminPassword);
+async function getSettingsCollection() {
+  const mongoDb = await getMongoDb();
+  return mongoDb.collection<AppSettingsDocument>(APP_SETTINGS_COLLECTION);
+}
+
+async function bootstrap(): Promise<void> {
+  const usersCollection = await getUsersCollection();
+  await ensureUsersIndexes(usersCollection);
+  const superAdminUsername = process.env.SUPERADMIN_USERNAME ?? 'redwan';
+  const superAdminPassword = process.env.SUPERADMIN_PASSWORD ?? 'redwan2026';
+  if (!process.env.SUPERADMIN_USERNAME || !process.env.SUPERADMIN_PASSWORD) {
+    console.warn(
+      'SUPERADMIN_USERNAME/SUPERADMIN_PASSWORD not set — falling back to default credentials for initial setup. Set these in production.'
+    );
+  }
+  await seedSuperAdminIfEmpty(usersCollection, superAdminUsername, superAdminPassword);
+}
 
 // Fixed bcrypt hash (cost 10, matching usersRepository's hashing cost) with
 // no corresponding real password — used so a login attempt against a
@@ -150,8 +176,8 @@ async function sendXlsxFile(res: Response, filePath: string, downloadName: strin
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 
-function renderLoginHtml(errorBlock: string): string {
-  const settings = getAppSettings(db);
+async function renderLoginHtml(errorBlock: string): Promise<string> {
+  const settings = await getAppSettings(await getSettingsCollection());
   return loginHtml
     .replace('{{ERROR_BLOCK}}', errorBlock)
     .replace('{{FAVICON_LINK}}', renderFaviconLink(settings))
@@ -162,34 +188,54 @@ function renderLoginHtml(errorBlock: string): string {
     .replace('{{CONTACT_ROWS}}', renderContactRows(settings));
 }
 
-app.get('/login', (_req, res) => {
-  res.send(renderLoginHtml(''));
+// The login page is the very first thing every visitor hits — if MongoDB
+// happens to be unreachable, showing a raw stack trace there would look
+// like the whole app is broken. A bare-bones but on-brand-enough fallback
+// page is friendlier and makes the actual problem (Mongo down) obvious.
+const SERVICE_UNAVAILABLE_HTML = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8" /><title>Service indisponible</title>
+<style>body{font-family:-apple-system,sans-serif;max-width:480px;margin:15vh auto;padding:0 24px;color:#334155;text-align:center;}
+h1{font-size:20px;color:#0f172a;}p{font-size:14px;line-height:1.5;color:#64748b;}</style></head>
+<body><h1>Service temporairement indisponible</h1><p>Impossible de se connecter à la base de données pour le moment. Réessayez dans quelques instants.</p></body></html>`;
+
+app.get('/login', async (_req, res) => {
+  try {
+    res.send(await renderLoginHtml(''));
+  } catch (error) {
+    console.error('Failed to render /login (MongoDB unreachable?):', error);
+    res.status(503).send(SERVICE_UNAVAILABLE_HTML);
+  }
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
   const errorBlock =
     '<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Identifiant ou mot de passe incorrect.</span></div>';
 
-  if (!username || !password) {
-    res.status(401).send(renderLoginHtml(errorBlock));
-    return;
-  }
+  try {
+    if (!username || !password) {
+      res.status(401).send(await renderLoginHtml(errorBlock));
+      return;
+    }
 
-  const user = findUserByUsername(db, username);
-  // Always run a bcrypt compare, even for a nonexistent username, against a
-  // fixed dummy hash — otherwise a missing user short-circuits before the
-  // ~50-100ms bcrypt call a wrong-password attempt incurs, letting response
-  // timing reveal which usernames exist.
-  const passwordMatches = verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, password);
-  if (!user || user.disabledAt || !passwordMatches) {
-    res.status(401).send(renderLoginHtml(errorBlock));
-    return;
-  }
+    const user = await findUserByUsername(await getUsersCollection(), username);
+    // Always run a bcrypt compare, even for a nonexistent username, against a
+    // fixed dummy hash — otherwise a missing user short-circuits before the
+    // ~50-100ms bcrypt call a wrong-password attempt incurs, letting response
+    // timing reveal which usernames exist.
+    const passwordMatches = verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, password);
+    if (!user || user.disabledAt || !passwordMatches) {
+      res.status(401).send(await renderLoginHtml(errorBlock));
+      return;
+    }
 
-  const sessionId = createSession({ userId: user.id, username: user.username, role: user.role });
-  setSessionCookie(res, sessionId);
-  res.redirect(user.role === 'superadmin' ? '/superadmin/dashboard' : '/');
+    const sessionId = createSession({ userId: user.id, username: user.username, role: user.role });
+    setSessionCookie(res, sessionId);
+    res.redirect(user.role === 'superadmin' ? '/superadmin/dashboard' : '/');
+  } catch (error) {
+    console.error('Failed to process /login (MongoDB unreachable?):', error);
+    res.status(503).send(SERVICE_UNAVAILABLE_HTML);
+  }
 });
 
 // Tolerant of a missing/already-expired session cookie — placed before the
@@ -202,7 +248,7 @@ app.post('/logout', (req, res) => {
 
 app.use(requireAuth);
 
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const isSuperAdmin = req.session?.role === 'superadmin';
   const navLink = isSuperAdmin
     ? '<a href="/superadmin/dashboard" style="margin-left:auto;font-size:13px;color:var(--brand-600);text-decoration:none;font-weight:600;">Gestion des comptes &rarr;</a>'
@@ -210,7 +256,7 @@ app.get('/', (req, res) => {
   const roleBadge = isSuperAdmin
     ? '<span class="role-pill role-pill-superadmin">Superadmin</span>'
     : '<span class="role-pill role-pill-admin">Admin</span>';
-  const settings = getAppSettings(db);
+  const settings = await getAppSettings(await getSettingsCollection());
   res.send(
     uploadHtml
       .replace('{{ERROR_BLOCK}}', '')
@@ -333,12 +379,12 @@ app.get('/last-declaration-results', (_req, res) => {
 // name) — replaces the earlier window.print()-based "Exporter PDF", which
 // depended on the visiting browser's own print settings to render colors/
 // backgrounds consistently.
-app.get('/last-declaration-pdf', (_req, res) => {
+app.get('/last-declaration-pdf', async (_req, res) => {
   if (!lastDeclaration) {
     res.status(404).json({ success: false, error: 'Aucune déclaration générée pour le moment.' });
     return;
   }
-  const doc = generateDeclarationPdf(lastDeclaration, getAppSettings(db));
+  const doc = generateDeclarationPdf(lastDeclaration, await getAppSettings(await getSettingsCollection()));
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="Declaration.pdf"');
   doc.pipe(res);
@@ -396,21 +442,27 @@ app.get('/superadmin/dashboard', requireSuperAdmin, async (_req, res) => {
   } catch (mongoError) {
     console.error('Failed to reach MongoDB for the dashboard overview:', mongoError);
   }
-  res.send(
-    renderSuperAdminOverview(listUsers(db), transactionCount, getAppSettings(db), countryCounts)
-  );
+  const [users, settings] = await Promise.all([
+    listUsers(await getUsersCollection()),
+    getAppSettings(await getSettingsCollection()),
+  ]);
+  res.send(renderSuperAdminOverview(users, transactionCount, settings, countryCounts));
 });
 
 // Lets a superadmin generate a declaration without leaving the sidebar
 // dashboard — reuses the exact same /generate, /download,
 // /last-declaration-cost-summary, and /last-declaration-results endpoints
 // as the standalone admin tool at "/", just wrapped in the sidebar shell.
-app.get('/superadmin/generate', requireSuperAdmin, (_req, res) => {
-  res.send(renderSuperAdminGenerate(getAppSettings(db)));
+app.get('/superadmin/generate', requireSuperAdmin, async (_req, res) => {
+  res.send(renderSuperAdminGenerate(await getAppSettings(await getSettingsCollection())));
 });
 
-app.get('/superadmin/users', requireSuperAdmin, (req, res) => {
-  res.send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db)));
+app.get('/superadmin/users', requireSuperAdmin, async (req, res) => {
+  const [users, settings] = await Promise.all([
+    listUsers(await getUsersCollection()),
+    getAppSettings(await getSettingsCollection()),
+  ]);
+  res.send(renderSuperAdminUsers(users, req.session!.userId, settings));
 });
 
 app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
@@ -428,19 +480,20 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
       renderSuperAdminPlaceholder(
         'Coût de produit',
         "Impossible de se connecter à la base de données pour le moment. Réessayez plus tard.",
-        getAppSettings(db)
+        DEFAULT_APP_SETTINGS
       )
     );
     return;
   }
 
   const mostRecent = await getMostRecentTransaction(collection);
+  const settings = await getAppSettings(await getSettingsCollection());
   if (!mostRecent) {
     res.send(
       renderSuperAdminPlaceholder(
         'Coût de produit',
         "Aucune déclaration n'a encore été générée sur l'application. Le coût par produit s'affichera ici après une génération.",
-        getAppSettings(db)
+        settings
       )
     );
     return;
@@ -449,25 +502,27 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
   const searchResults = searchQuery
     ? await searchTransactionsByRedevable(collection, searchQuery)
     : undefined;
-  res.send(renderSuperAdminCosts(mostRecent, getAppSettings(db), searchQuery, searchResults));
+  res.send(renderSuperAdminCosts(mostRecent, settings, searchQuery, searchResults));
 });
 
-app.get('/superadmin/settings', requireSuperAdmin, (req, res) => {
-  res.send(renderSuperAdminSettings(getAppSettings(db), undefined, undefined, req.session!.username));
+app.get('/superadmin/settings', requireSuperAdmin, async (req, res) => {
+  const settings = await getAppSettings(await getSettingsCollection());
+  res.send(renderSuperAdminSettings(settings, undefined, undefined, req.session!.username));
 });
 
 app.post(
   '/superadmin/settings',
   requireSuperAdmin,
   (req, res, next) => {
-    logoUpload.single('logo')(req, res, (err) => {
+    logoUpload.single('logo')(req, res, async (err) => {
       if (err) {
         // multer throws for oversized files (LIMIT_FILE_SIZE) — surface it
         // the same way other form errors on this page are shown, instead
         // of an unhandled 500.
+        const settings = await getAppSettings(await getSettingsCollection());
         res.status(400).send(
           renderSuperAdminSettings(
-            getAppSettings(db),
+            settings,
             err.code === 'LIMIT_FILE_SIZE'
               ? 'Le logo dépasse la taille maximale autorisée (2 Mo).'
               : "Échec de l'envoi du fichier.",
@@ -480,7 +535,7 @@ app.post(
       next();
     });
   },
-  (req, res) => {
+  async (req, res) => {
     const { companyName, brandColor, fontFamily, contactEmail, contactWhatsapp, removeLogo } =
       req.body as {
         companyName?: string;
@@ -491,11 +546,18 @@ app.post(
         removeLogo?: string;
       };
 
+    const settingsCollection = await getSettingsCollection();
+
     if (brandColor && !isValidHexColor(brandColor)) {
       res
         .status(400)
         .send(
-          renderSuperAdminSettings(getAppSettings(db), 'Couleur invalide.', undefined, req.session!.username)
+          renderSuperAdminSettings(
+            await getAppSettings(settingsCollection),
+            'Couleur invalide.',
+            undefined,
+            req.session!.username
+          )
         );
       return;
     }
@@ -504,7 +566,12 @@ app.post(
       res
         .status(400)
         .send(
-          renderSuperAdminSettings(getAppSettings(db), 'Police invalide.', undefined, req.session!.username)
+          renderSuperAdminSettings(
+            await getAppSettings(settingsCollection),
+            'Police invalide.',
+            undefined,
+            req.session!.username
+          )
         );
       return;
     }
@@ -515,7 +582,7 @@ app.post(
         .status(400)
         .send(
           renderSuperAdminSettings(
-            getAppSettings(db),
+            await getAppSettings(settingsCollection),
             'Format de logo non supporté (PNG, JPEG, WEBP ou SVG uniquement).',
             undefined,
             req.session!.username
@@ -524,7 +591,7 @@ app.post(
       return;
     }
 
-    const updated = updateAppSettings(db, {
+    const updated = await updateAppSettings(settingsCollection, {
       companyName: companyName?.trim() ? companyName.trim() : null,
       brandColor: brandColor || null,
       fontFamily: fontFamily || null,
@@ -543,16 +610,17 @@ app.post(
   }
 );
 
-app.post('/superadmin/settings/credentials', requireSuperAdmin, (req, res) => {
+app.post('/superadmin/settings/credentials', requireSuperAdmin, async (req, res) => {
   const { username, newPassword } = req.body as { username?: string; newPassword?: string };
   const trimmedUsername = username?.trim();
+  const settingsCollection = await getSettingsCollection();
 
-  const renderWithError = (message: string) => {
+  const renderWithError = async (message: string) => {
     res
       .status(400)
       .send(
         renderSuperAdminSettings(
-          getAppSettings(db),
+          await getAppSettings(settingsCollection),
           undefined,
           undefined,
           req.session!.username,
@@ -562,31 +630,32 @@ app.post('/superadmin/settings/credentials', requireSuperAdmin, (req, res) => {
   };
 
   if (!trimmedUsername) {
-    renderWithError("Le nom d'utilisateur est requis.");
+    await renderWithError("Le nom d'utilisateur est requis.");
     return;
   }
   if (newPassword && newPassword.length < 6) {
-    renderWithError('Le mot de passe doit contenir au moins 6 caractères.');
+    await renderWithError('Le mot de passe doit contenir au moins 6 caractères.');
     return;
   }
 
   try {
+    const usersCollection = await getUsersCollection();
     if (trimmedUsername !== req.session!.username) {
-      updateUsername(db, req.session!.userId, trimmedUsername);
+      await updateUsername(usersCollection, req.session!.userId, trimmedUsername);
       req.session!.username = trimmedUsername;
     }
     if (newPassword) {
-      updatePassword(db, req.session!.userId, newPassword);
+      await updatePassword(usersCollection, req.session!.userId, newPassword);
     }
   } catch (error) {
     console.error('Failed to update superadmin credentials:', error);
-    renderWithError('Ce nom d’utilisateur est déjà utilisé.');
+    await renderWithError('Ce nom d’utilisateur est déjà utilisé.');
     return;
   }
 
   res.send(
     renderSuperAdminSettings(
-      getAppSettings(db),
+      await getAppSettings(settingsCollection),
       undefined,
       undefined,
       req.session!.username,
@@ -596,37 +665,44 @@ app.post('/superadmin/settings/credentials', requireSuperAdmin, (req, res) => {
   );
 });
 
-app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
+app.post('/superadmin/users', requireSuperAdmin, async (req, res) => {
   const { username, password, role } = req.body as {
     username?: string;
     password?: string;
     role?: string;
   };
 
-  const renderWithError = (message: string) => {
+  const renderWithError = async (message: string) => {
     res
       .status(400)
-      .send(renderSuperAdminUsers(listUsers(db), req.session!.userId, getAppSettings(db), message));
+      .send(
+        renderSuperAdminUsers(
+          await listUsers(await getUsersCollection()),
+          req.session!.userId,
+          await getAppSettings(await getSettingsCollection()),
+          message
+        )
+      );
   };
 
   if (!username || !password) {
-    renderWithError("Identifiant et mot de passe sont requis.");
+    await renderWithError('Identifiant et mot de passe sont requis.');
     return;
   }
   if (role !== 'admin' && role !== 'superadmin') {
-    renderWithError('Rôle invalide.');
+    await renderWithError('Rôle invalide.');
     return;
   }
 
   try {
-    createUser(db, username, password, role as UserRole);
+    await createUser(await getUsersCollection(), username, password, role as UserRole);
     res.redirect('/superadmin/users');
   } catch (error) {
-    // better-sqlite3 throws a raw SqliteError (code SQLITE_CONSTRAINT_UNIQUE)
-    // on a duplicate username — the only realistic failure mode here, since
+    // MongoDB's unique index on username throws an E11000 error (code
+    // 11000) on a duplicate — the only realistic failure mode here, since
     // username/password/role are already validated above.
-    if (error instanceof Error && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      renderWithError(`L'identifiant « ${username} » est déjà utilisé.`);
+    if (error instanceof Error && 'code' in error && error.code === 11000) {
+      await renderWithError(`L'identifiant « ${username} » est déjà utilisé.`);
       return;
     }
     throw error;
@@ -634,8 +710,8 @@ app.post('/superadmin/users', requireSuperAdmin, (req, res) => {
 });
 
 function setDisabledAndRedirect(disabled: boolean) {
-  return (req: express.Request, res: express.Response) => {
-    const targetId = Number(req.params.id);
+  return async (req: express.Request, res: express.Response) => {
+    const targetId = String(req.params.id);
     // Self-lockout only applies to disabling — a superadmin re-enabling
     // their own account can't happen anyway (a disabled account can't log
     // in to reach this route), but guarding disable is essential: the UI
@@ -646,15 +722,15 @@ function setDisabledAndRedirect(disabled: boolean) {
         .status(400)
         .send(
           renderSuperAdminUsers(
-            listUsers(db),
+            await listUsers(await getUsersCollection()),
             req.session!.userId,
-            getAppSettings(db),
+            await getAppSettings(await getSettingsCollection()),
             'Vous ne pouvez pas désactiver votre propre compte.'
           )
         );
       return;
     }
-    setUserDisabled(db, targetId, disabled);
+    await setUserDisabled(await getUsersCollection(), targetId, disabled);
     res.redirect('/superadmin/users');
   };
 }
@@ -666,6 +742,14 @@ app.post('/superadmin/users/:id/enable', requireSuperAdmin, setDisabledAndRedire
 // out of the box even if the PORT environment variable doesn't reach the
 // running container (e.g. a Coolify env var scoped to build-time only).
 const port = Number(process.env.PORT ?? 3000);
+// Attempt the superadmin seed before accepting traffic, but don't block
+// startup on it — a transient Mongo outage at boot shouldn't stop the
+// process from listening (Coolify's health check needs a live port);
+// routes that need Mongo simply fail per-request until it's reachable,
+// same as the rest of the app already handles it.
+bootstrap().catch((error) => {
+  console.error('Failed to seed initial superadmin (is MONGODB_URI reachable?):', error);
+});
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });

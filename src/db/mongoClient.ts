@@ -1,7 +1,6 @@
 import { MongoClient, type Db } from 'mongodb';
 
-// Lazy, memoized connection — the rest of the app (SQLite via better-sqlite3)
-// boots synchronously, so Mongo is connected on first actual use rather
+// Lazy, memoized connection — Mongo is connected on first actual use rather
 // than blocking startup. Memoizing the in-flight *promise* (not just the
 // resolved value) avoids opening a second connection if multiple requests
 // race to connect before the first one finishes.

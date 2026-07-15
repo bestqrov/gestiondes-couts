@@ -359,7 +359,7 @@ export function renderSuperAdminOverview(
   return renderShell('dashboard', 'Tableau de bord', body, settings, WORLD_MAP_STYLE);
 }
 
-function renderUserRow(user: User, currentUserId: number): string {
+function renderUserRow(user: User, currentUserId: string): string {
   const isSelf = user.id === currentUserId;
   const isDisabled = user.disabledAt !== null;
   const statusBadge = isDisabled
@@ -390,7 +390,7 @@ function renderUserRow(user: User, currentUserId: number): string {
 
 export function renderSuperAdminUsers(
   users: User[],
-  currentUserId: number,
+  currentUserId: string,
   settings: AppSettings,
   errorMessage?: string
 ): string {

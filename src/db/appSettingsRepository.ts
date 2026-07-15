@@ -1,4 +1,11 @@
-import type Database from 'better-sqlite3';
+import type { Collection } from 'mongodb';
+
+export const APP_SETTINGS_COLLECTION = 'app_settings';
+
+// A single always-present document (fixed _id), upserted in place —
+// app-wide settings have no natural owner/list semantics, unlike users or
+// declarations, so there's exactly one document to read or write.
+const SINGLETON_ID = 'singleton';
 
 export interface AppSettings {
   companyName: string | null;
@@ -18,16 +25,12 @@ export interface AppSettingsUpdate {
   contactWhatsapp?: string | null;
 }
 
-interface SettingsRow {
-  company_name: string | null;
-  logo_data_uri: string | null;
-  brand_color: string | null;
-  font_family: string | null;
-  contact_email: string | null;
-  contact_whatsapp: string | null;
+export interface AppSettingsDocument extends AppSettings {
+  _id: string;
+  updatedAt: string;
 }
 
-const DEFAULTS: AppSettings = {
+export const DEFAULT_APP_SETTINGS: AppSettings = {
   companyName: null,
   logoDataUri: null,
   brandColor: null,
@@ -36,26 +39,26 @@ const DEFAULTS: AppSettings = {
   contactWhatsapp: null,
 };
 
-export function getAppSettings(db: Database.Database): AppSettings {
-  const row = db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as
-    | SettingsRow
-    | undefined;
-  if (!row) return DEFAULTS;
+export async function getAppSettings(
+  collection: Collection<AppSettingsDocument>
+): Promise<AppSettings> {
+  const doc = await collection.findOne({ _id: SINGLETON_ID });
+  if (!doc) return DEFAULT_APP_SETTINGS;
   return {
-    companyName: row.company_name,
-    logoDataUri: row.logo_data_uri,
-    brandColor: row.brand_color,
-    fontFamily: row.font_family,
-    contactEmail: row.contact_email,
-    contactWhatsapp: row.contact_whatsapp,
+    companyName: doc.companyName,
+    logoDataUri: doc.logoDataUri,
+    brandColor: doc.brandColor,
+    fontFamily: doc.fontFamily,
+    contactEmail: doc.contactEmail,
+    contactWhatsapp: doc.contactWhatsapp,
   };
 }
 
-// A single always-present row (id = 1), upserted in place — app-wide
-// settings have no natural owner/list semantics, unlike users or
-// declarations, so there's exactly one row to read or write.
-export function updateAppSettings(db: Database.Database, update: AppSettingsUpdate): AppSettings {
-  const current = getAppSettings(db);
+export async function updateAppSettings(
+  collection: Collection<AppSettingsDocument>,
+  update: AppSettingsUpdate
+): Promise<AppSettings> {
+  const current = await getAppSettings(collection);
   const merged: AppSettings = {
     companyName: update.companyName !== undefined ? update.companyName : current.companyName,
     logoDataUri: update.logoDataUri !== undefined ? update.logoDataUri : current.logoDataUri,
@@ -66,28 +69,10 @@ export function updateAppSettings(db: Database.Database, update: AppSettingsUpda
       update.contactWhatsapp !== undefined ? update.contactWhatsapp : current.contactWhatsapp,
   };
 
-  db.prepare(
-    `INSERT INTO app_settings (
-       id, company_name, logo_data_uri, brand_color, font_family,
-       contact_email, contact_whatsapp, updated_at
-     )
-     VALUES (1, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET
-       company_name = excluded.company_name,
-       logo_data_uri = excluded.logo_data_uri,
-       brand_color = excluded.brand_color,
-       font_family = excluded.font_family,
-       contact_email = excluded.contact_email,
-       contact_whatsapp = excluded.contact_whatsapp,
-       updated_at = excluded.updated_at`
-  ).run(
-    merged.companyName,
-    merged.logoDataUri,
-    merged.brandColor,
-    merged.fontFamily,
-    merged.contactEmail,
-    merged.contactWhatsapp,
-    new Date().toISOString()
+  await collection.updateOne(
+    { _id: SINGLETON_ID },
+    { $set: { ...merged, updatedAt: new Date().toISOString() } },
+    { upsert: true }
   );
 
   return merged;

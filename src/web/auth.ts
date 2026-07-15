@@ -10,7 +10,7 @@ import type { UserRole } from '../db/usersRepository.js';
 const SESSION_COOKIE_NAME = 'session';
 
 export interface SessionInfo {
-  userId: number;
+  userId: string;
   username: string;
   role: UserRole;
 }

@@ -59,7 +59,7 @@ function makeFakeCollection() {
 
 function makeInput(overrides: Partial<Parameters<typeof saveTransaction>[1]> = {}) {
   return {
-    ownerUserId: 1,
+    ownerUserId: '1',
     code: '500001',
     redevable: 'Global Trade Logistics SARL',
     valeurTotaleDeclaree: 40039.992,

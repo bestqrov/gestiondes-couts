@@ -46,7 +46,7 @@ function makeReqRes(cookieHeader: string | undefined, method = 'GET') {
 
 describe('requireAuth', () => {
   it('calls next() and attaches the session for a valid session cookie', () => {
-    const sessionId = createSession({ userId: 1, username: 'alice', role: 'admin' });
+    const sessionId = createSession({ userId: '1', username: 'alice', role: 'admin' });
     const { req, res, next, wasNextCalled, redirectCalls } = makeReqRes(`session=${sessionId}`);
 
     requireAuth(req, res, next);
@@ -54,7 +54,7 @@ describe('requireAuth', () => {
     expect(wasNextCalled()).toBe(true);
     expect(redirectCalls).toHaveLength(0);
     expect((req as Request & { session?: SessionInfo }).session).toEqual({
-      userId: 1,
+      userId: '1',
       username: 'alice',
       role: 'admin',
     });
@@ -95,7 +95,7 @@ describe('requireAuth', () => {
 
 describe('requireSuperAdmin', () => {
   it('calls next() when the session role is superadmin', () => {
-    const sessionId = createSession({ userId: 2, username: 'root', role: 'superadmin' });
+    const sessionId = createSession({ userId: '2', username: 'root', role: 'superadmin' });
     const { req, res, next, wasNextCalled, sendCalls } = makeReqRes(`session=${sessionId}`);
 
     requireSuperAdmin(req, res, next);
@@ -105,7 +105,7 @@ describe('requireSuperAdmin', () => {
   });
 
   it('responds 403 when the session role is admin (not superadmin)', () => {
-    const sessionId = createSession({ userId: 3, username: 'alice', role: 'admin' });
+    const sessionId = createSession({ userId: '3', username: 'alice', role: 'admin' });
     const { req, res, next, wasNextCalled, getStatusCode, sendCalls } = makeReqRes(`session=${sessionId}`);
 
     requireSuperAdmin(req, res, next);
@@ -127,7 +127,7 @@ describe('requireSuperAdmin', () => {
 
 describe('destroySession', () => {
   it('invalidates the session so a subsequent requireAuth call fails, and clears the cookie', () => {
-    const sessionId = createSession({ userId: 4, username: 'bob', role: 'admin' });
+    const sessionId = createSession({ userId: '4', username: 'bob', role: 'admin' });
     const { req, res, headers } = makeReqRes(`session=${sessionId}`);
 
     destroySession(req, res);

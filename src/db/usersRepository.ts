@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
-import type Database from 'better-sqlite3';
+import { ObjectId, type Collection } from 'mongodb';
 
 export type UserRole = 'admin' | 'superadmin';
 
+export const USERS_COLLECTION = 'users';
+
 export interface User {
-  id: number;
+  id: string;
   username: string;
   role: UserRole;
   createdAt: string;
@@ -15,87 +17,104 @@ export interface UserWithPasswordHash extends User {
   passwordHash: string;
 }
 
-interface UserRow {
-  id: number;
+// The MongoDB document shape — _id is optional here because insertOne is
+// called with a plain object before Mongo assigns one.
+export interface UserDocument {
+  _id?: ObjectId;
   username: string;
-  password_hash: string;
+  passwordHash: string;
   role: UserRole;
-  created_at: string;
-  disabled_at: string | null;
+  createdAt: string;
+  disabledAt: string | null;
 }
 
-function rowToUser(row: UserRow): User {
+function docToUser(doc: UserDocument & { _id: ObjectId }): User {
   return {
-    id: row.id,
-    username: row.username,
-    role: row.role,
-    createdAt: row.created_at,
-    disabledAt: row.disabled_at,
+    id: doc._id.toHexString(),
+    username: doc.username,
+    role: doc.role,
+    createdAt: doc.createdAt,
+    disabledAt: doc.disabledAt,
   };
 }
 
 const SALT_ROUNDS = 10;
 
-export function createUser(
-  db: Database.Database,
+// Called once at boot (see server.ts) — a unique index on username makes
+// MongoDB itself reject duplicates (surfaced as an E11000 error, code
+// 11000), the same role SQLite's UNIQUE constraint used to play.
+export async function ensureUsersIndexes(collection: Collection<UserDocument>): Promise<void> {
+  await collection.createIndex({ username: 1 }, { unique: true });
+}
+
+export async function createUser(
+  collection: Collection<UserDocument>,
   username: string,
   password: string,
   role: UserRole
-): User {
+): Promise<User> {
   const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
   const createdAt = new Date().toISOString();
-  const result = db
-    .prepare('INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
-    .run(username, passwordHash, role, createdAt);
-  return { id: Number(result.lastInsertRowid), username, role, createdAt, disabledAt: null };
+  const doc: UserDocument = { username, passwordHash, role, createdAt, disabledAt: null };
+  const result = await collection.insertOne(doc);
+  return { id: result.insertedId.toHexString(), username, role, createdAt, disabledAt: null };
 }
 
-export function findUserByUsername(
-  db: Database.Database,
+export async function findUserByUsername(
+  collection: Collection<UserDocument>,
   username: string
-): UserWithPasswordHash | undefined {
-  const row = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as
-    | UserRow
-    | undefined;
-  if (!row) return undefined;
-  return { ...rowToUser(row), passwordHash: row.password_hash };
+): Promise<UserWithPasswordHash | undefined> {
+  const doc = await collection.findOne({ username });
+  if (!doc) return undefined;
+  return { ...docToUser(doc as UserDocument & { _id: ObjectId }), passwordHash: doc.passwordHash };
 }
 
 export function verifyPassword(passwordHash: string, password: string): boolean {
   return bcrypt.compareSync(password, passwordHash);
 }
 
-export function listUsers(db: Database.Database): User[] {
-  const rows = db.prepare('SELECT * FROM users ORDER BY created_at ASC').all() as UserRow[];
-  return rows.map(rowToUser);
+export async function listUsers(collection: Collection<UserDocument>): Promise<User[]> {
+  const docs = await collection.find().sort({ createdAt: 1 }).toArray();
+  return docs.map((doc) => docToUser(doc as UserDocument & { _id: ObjectId }));
 }
 
-export function countUsers(db: Database.Database): number {
-  const row = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-  return row.count;
+export async function countUsers(collection: Collection<UserDocument>): Promise<number> {
+  return collection.countDocuments();
 }
 
-export function updateUsername(db: Database.Database, userId: number, username: string): void {
-  db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, userId);
-}
-
-export function updatePassword(db: Database.Database, userId: number, password: string): void {
-  const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
-}
-
-export function setUserDisabled(db: Database.Database, userId: number, disabled: boolean): void {
-  db.prepare('UPDATE users SET disabled_at = ? WHERE id = ?').run(
-    disabled ? new Date().toISOString() : null,
-    userId
+export async function setUserDisabled(
+  collection: Collection<UserDocument>,
+  userId: string,
+  disabled: boolean
+): Promise<void> {
+  await collection.updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { disabledAt: disabled ? new Date().toISOString() : null } }
   );
 }
 
-export function seedSuperAdminIfEmpty(
-  db: Database.Database,
+export async function updateUsername(
+  collection: Collection<UserDocument>,
+  userId: string,
+  username: string
+): Promise<void> {
+  await collection.updateOne({ _id: new ObjectId(userId) }, { $set: { username } });
+}
+
+export async function updatePassword(
+  collection: Collection<UserDocument>,
+  userId: string,
+  password: string
+): Promise<void> {
+  const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
+  await collection.updateOne({ _id: new ObjectId(userId) }, { $set: { passwordHash } });
+}
+
+export async function seedSuperAdminIfEmpty(
+  collection: Collection<UserDocument>,
   username: string,
   password: string
-): void {
-  if (countUsers(db) > 0) return;
-  createUser(db, username, password, 'superadmin');
+): Promise<void> {
+  if ((await countUsers(collection)) > 0) return;
+  await createUser(collection, username, password, 'superadmin');
 }
