@@ -52,9 +52,17 @@ async function extractEmbeddedText(
   for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
     const page = await doc.getPage(pageNumber);
     const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ');
+    // pdfjs flags each text run with hasEOL when it's the last one on its
+    // source line — without honoring that, every line on the page gets
+    // joined into one giant space-separated string, which silently breaks
+    // any downstream parsing that's line-based (e.g. the Liquidation
+    // parser's tax rows, which must each start with "!" on their own line).
+    let pageText = '';
+    for (const item of content.items) {
+      if (!('str' in item)) continue;
+      pageText += item.str;
+      pageText += item.hasEOL ? '\n' : ' ';
+    }
     pageTexts.push(pageText);
   }
   return pageTexts.join('\n');
