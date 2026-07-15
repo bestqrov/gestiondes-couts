@@ -95,6 +95,12 @@ export function createFakeCollection<T extends { _id?: ObjectId | string }>(): C
       docs[idx] = { ...docs[idx], ...setFields };
       return { acknowledged: true, matchedCount: 1, modifiedCount: 1, upsertedId: null };
     },
+    deleteOne: async (filter: Record<string, unknown>) => {
+      const idx = docs.findIndex((d) => matches(d, filter));
+      if (idx === -1) return { acknowledged: true, deletedCount: 0 };
+      docs.splice(idx, 1);
+      return { acknowledged: true, deletedCount: 1 };
+    },
   };
 
   return fake as unknown as Collection<T>;

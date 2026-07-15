@@ -9,6 +9,7 @@ import {
   seedSuperAdminIfEmpty,
   updateUsername,
   updatePassword,
+  deleteUser,
   ensureUsersIndexes,
   type UserDocument,
 } from '../../src/db/usersRepository.js';
@@ -100,5 +101,16 @@ describe('usersRepository', () => {
     await expect(createUser(collection, 'taken', 'pw2', 'admin')).rejects.toMatchObject({
       code: 11000,
     });
+  });
+
+  it('deletes a user, and it no longer appears in the list', async () => {
+    const collection = makeCollection();
+    const user = await createUser(collection, 'temp', 'pw', 'admin');
+    await createUser(collection, 'keeper', 'pw', 'admin');
+
+    await deleteUser(collection, user.id);
+
+    const usernames = (await listUsers(collection)).map((u) => u.username);
+    expect(usernames).toEqual(['keeper']);
   });
 });

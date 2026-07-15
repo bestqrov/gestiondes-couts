@@ -372,12 +372,34 @@ function renderUserRow(user: User, currentUserId: string): string {
 
   let actionCell: string;
   if (isSelf) {
+    // Self-service (own username/password) lives in Réglages > Identifiants
+    // — no need to duplicate it here, and disabling/deleting one's own
+    // account from this list is blocked server-side anyway.
     actionCell = '<span class="muted">—</span>';
-  } else if (isDisabled) {
-    actionCell = `<form method="post" action="/superadmin/users/${user.id}/enable"><button type="submit" class="btn-enable">Réactiver</button></form>`;
   } else {
-    actionCell = `<form method="post" action="/superadmin/users/${user.id}/disable"><button type="submit" class="btn-disable">Désactiver</button></form>`;
+    const toggleForm = isDisabled
+      ? `<form method="post" action="/superadmin/users/${user.id}/enable"><button type="submit" class="btn-enable">Réactiver</button></form>`
+      : `<form method="post" action="/superadmin/users/${user.id}/disable"><button type="submit" class="btn-disable">Désactiver</button></form>`;
+    actionCell = `<div class="user-actions">
+      ${toggleForm}
+      <button type="button" class="btn-edit" onclick="toggleUserEditRow('${user.id}')">Modifier</button>
+      <form method="post" action="/superadmin/users/${user.id}/delete" onsubmit="return confirm('Supprimer définitivement ce compte ?');">
+        <button type="submit" class="btn-disable">Supprimer</button>
+      </form>
+    </div>`;
   }
+
+  const editRow = isSelf
+    ? ''
+    : `<tr id="edit-row-${user.id}" class="user-edit-row" hidden>
+        <td colspan="5">
+          <form method="post" action="/superadmin/users/${user.id}/update" class="user-edit-form">
+            <input type="text" name="username" value="${escapeHtml(user.username)}" required />
+            <input type="password" name="newPassword" placeholder="Nouveau mot de passe (optionnel)" autocomplete="new-password" />
+            <button type="submit" class="settings-save user-edit-save">Enregistrer</button>
+          </form>
+        </td>
+      </tr>`;
 
   return `<tr>
     <td>${escapeHtml(user.username)}</td>
@@ -385,7 +407,7 @@ function renderUserRow(user: User, currentUserId: string): string {
     <td>${formatDate(user.createdAt)}</td>
     <td>${statusBadge}</td>
     <td>${actionCell}</td>
-  </tr>`;
+  </tr>${editRow}`;
 }
 
 export function renderSuperAdminUsers(
@@ -435,9 +457,24 @@ export function renderSuperAdminUsers(
         <tbody>${rows}</tbody>
       </table>
     </div>
+    <script>
+      function toggleUserEditRow(id) {
+        var row = document.getElementById('edit-row-' + id);
+        if (row) row.hidden = !row.hidden;
+      }
+    </script>
   `;
-  return renderShell('users', 'Utilisateurs', body, settings, SETTINGS_PAGE_STYLE);
+  return renderShell('users', 'Utilisateurs', body, settings, SETTINGS_PAGE_STYLE + USERS_PAGE_STYLE);
 }
+
+const USERS_PAGE_STYLE = `
+  .user-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .btn-edit { background: var(--brand-soft); color: var(--brand-700); border-color: transparent; }
+  .user-edit-row td { padding-top: 0; }
+  .user-edit-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0 10px; }
+  .user-edit-form input { width: auto; flex: 1; min-width: 160px; }
+  .user-edit-save { width: auto; padding: 9px 16px; }
+`;
 
 const PLACEHOLDER_ICON =
   '<path d="M10 6.5v5M10 14.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.6"/>';

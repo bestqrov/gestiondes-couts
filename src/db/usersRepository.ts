@@ -110,6 +110,10 @@ export async function updatePassword(
   await collection.updateOne({ _id: new ObjectId(userId) }, { $set: { passwordHash } });
 }
 
+export async function deleteUser(collection: Collection<UserDocument>, userId: string): Promise<void> {
+  await collection.deleteOne({ _id: new ObjectId(userId) });
+}
+
 export async function seedSuperAdminIfEmpty(
   collection: Collection<UserDocument>,
   username: string,

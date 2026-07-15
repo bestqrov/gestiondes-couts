@@ -38,6 +38,7 @@ import {
   setUserDisabled,
   updateUsername,
   updatePassword,
+  deleteUser,
   ensureUsersIndexes,
   USERS_COLLECTION,
   type UserDocument,
@@ -737,6 +738,70 @@ function setDisabledAndRedirect(disabled: boolean) {
 
 app.post('/superadmin/users/:id/disable', requireSuperAdmin, setDisabledAndRedirect(true));
 app.post('/superadmin/users/:id/enable', requireSuperAdmin, setDisabledAndRedirect(false));
+
+app.post('/superadmin/users/:id/update', requireSuperAdmin, async (req, res) => {
+  const targetId = String(req.params.id);
+  const { username, newPassword } = req.body as { username?: string; newPassword?: string };
+  const trimmedUsername = username?.trim();
+
+  const renderWithError = async (message: string) => {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminUsers(
+          await listUsers(await getUsersCollection()),
+          req.session!.userId,
+          await getAppSettings(await getSettingsCollection()),
+          message
+        )
+      );
+  };
+
+  if (!trimmedUsername) {
+    await renderWithError("Le nom d'utilisateur est requis.");
+    return;
+  }
+  if (newPassword && newPassword.length < 6) {
+    await renderWithError('Le mot de passe doit contenir au moins 6 caractères.');
+    return;
+  }
+
+  try {
+    const usersCollection = await getUsersCollection();
+    await updateUsername(usersCollection, targetId, trimmedUsername);
+    if (newPassword) {
+      await updatePassword(usersCollection, targetId, newPassword);
+    }
+    res.redirect('/superadmin/users');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 11000) {
+      await renderWithError(`L'identifiant « ${trimmedUsername} » est déjà utilisé.`);
+      return;
+    }
+    throw error;
+  }
+});
+
+app.post('/superadmin/users/:id/delete', requireSuperAdmin, async (req, res) => {
+  const targetId = String(req.params.id);
+  // Same self-lockout reasoning as disable: the UI already hides the button
+  // for one's own row, but a direct POST must still be rejected server-side.
+  if (targetId === req.session!.userId) {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminUsers(
+          await listUsers(await getUsersCollection()),
+          req.session!.userId,
+          await getAppSettings(await getSettingsCollection()),
+          'Vous ne pouvez pas supprimer votre propre compte.'
+        )
+      );
+    return;
+  }
+  await deleteUser(await getUsersCollection(), targetId);
+  res.redirect('/superadmin/users');
+});
 
 // Default matches Coolify's default "Ports Exposes" (3000) so the app works
 // out of the box even if the PORT environment variable doesn't reach the
