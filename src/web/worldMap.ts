@@ -157,10 +157,10 @@ export const WORLD_MAP_STYLE = `
   .map-grid-line { stroke: var(--line); stroke-width: 1; opacity: 0.5; }
   .map-equator { stroke: var(--line); stroke-width: 1.5; opacity: 0.8; stroke-dasharray: 4 4; }
   .map-pin circle {
-    fill: var(--brand-600); fill-opacity: 0.55; stroke: var(--brand-700); stroke-width: 1.5;
+    fill: var(--brand-600); fill-opacity: 0.85; stroke: var(--card-bg); stroke-width: 2;
     transition: fill-opacity 0.15s;
   }
-  .map-pin:hover circle { fill-opacity: 0.85; }
+  .map-pin:hover circle { fill-opacity: 1; }
   .map-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; }
   .map-legend-row {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
