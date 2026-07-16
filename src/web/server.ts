@@ -75,6 +75,7 @@ import {
 } from './brandingStyles.js';
 import { generateDeclarationPdf } from '../pdf/declarationPdfGenerator.js';
 import type { Declaration } from '../domain/types.js';
+import { getVisitorLocation, getCurrentWeather } from './locationWidget.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
@@ -176,6 +177,10 @@ async function sendXlsxFile(res: Response, filePath: string, downloadName: strin
 }
 
 const app = express();
+// Coolify (like most PaaS setups) puts the app behind a reverse proxy —
+// without this, req.ip is the proxy's own address, not the visitor's real
+// IP, which breaks the topbar's IP-based location/weather widget.
+app.set('trust proxy', true);
 app.use(express.urlencoded({ extended: false }));
 
 async function renderLoginHtml(errorBlock: string): Promise<string> {
@@ -249,6 +254,19 @@ app.post('/logout', (req, res) => {
 });
 
 app.use(requireAuth);
+
+// Backs the topbar's IP-based location/weather chip — fetched client-side
+// (not baked into the server-rendered page) so a slow/failed geolocation
+// lookup never blocks or breaks the page itself.
+app.get('/api/location-weather', async (req, res) => {
+  const location = await getVisitorLocation(req.ip ?? '');
+  if (!location) {
+    res.json({ location: null, weather: null });
+    return;
+  }
+  const weather = await getCurrentWeather(location.lat, location.lon);
+  res.json({ location, weather });
+});
 
 app.get('/', async (req, res) => {
   const isSuperAdmin = req.session?.role === 'superadmin';

@@ -110,6 +110,14 @@ function renderTopbar(title: string, settings: AppSettings): string {
     <h1>${escapeHtml(title)}</h1>
     ${companyName}
     <div class="topbar-actions">
+      <div class="location-weather" id="locationWeather" hidden>
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2.5c-3 3-3 12 0 15M10 2.5c3 3 3 12 0 15M2.5 10h15" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span id="locationWeatherCity"></span>
+        <span class="location-weather-sep">·</span>
+        <span id="locationWeatherClock"></span>
+        <span class="location-weather-sep" id="locationWeatherWeatherSep" hidden>·</span>
+        <span id="locationWeatherWeather"></span>
+      </div>
       ${renderLogoImg(settings)}
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="Changer de thème">
         <svg class="icon-sun" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -240,6 +248,14 @@ ${renderFaviconLink(settings)}
     max-width: 40%; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
   }
   .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .location-weather {
+    display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px;
+    background: var(--line-soft); border: 1px solid var(--line); color: var(--ink-700);
+    font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  }
+  .location-weather svg { width: 14px; height: 14px; flex: none; color: var(--ink-400); }
+  .location-weather-sep { color: var(--ink-400); }
+  @media (max-width: 900px) { .location-weather { display: none; } }
   .theme-toggle {
     height: 36px; width: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--line-soft);
     display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-700);
@@ -347,6 +363,39 @@ ${renderBrandOverrideStyle(settings)}
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('theme', next);
     });
+
+    (function () {
+      var widget = document.getElementById('locationWeather');
+      if (!widget) return;
+      var cityEl = document.getElementById('locationWeatherCity');
+      var clockEl = document.getElementById('locationWeatherClock');
+      var weatherSepEl = document.getElementById('locationWeatherWeatherSep');
+      var weatherEl = document.getElementById('locationWeatherWeather');
+      var timezone = null;
+
+      function tick() {
+        if (!timezone) return;
+        clockEl.textContent = new Date().toLocaleTimeString('fr-FR', {
+          timeZone: timezone, hour: '2-digit', minute: '2-digit',
+        });
+      }
+
+      fetch('/api/location-weather')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.location) return;
+          timezone = data.location.timezone;
+          cityEl.textContent = data.location.city;
+          if (data.weather) {
+            weatherEl.textContent = data.weather.tempC + '°C, ' + data.weather.description;
+            weatherSepEl.hidden = false;
+          }
+          widget.hidden = false;
+          tick();
+          setInterval(tick, 30000);
+        })
+        .catch(function () { /* cosmetic widget — silently stays hidden on failure */ });
+    })();
   </script>
 </body>
 </html>`;
