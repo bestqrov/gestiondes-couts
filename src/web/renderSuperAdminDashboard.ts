@@ -1,5 +1,9 @@
 import type { User } from '../db/usersRepository.js';
-import type { TransactionDocument, CountryProductCount } from '../db/transactionsRepository.js';
+import type {
+  TransactionDocument,
+  CountryProductCount,
+  ListTransactionsResult,
+} from '../db/transactionsRepository.js';
 import type { AppSettings } from '../db/appSettingsRepository.js';
 import { renderBrandOverrideStyle, renderLogoImg, renderFaviconLink, FONT_OPTIONS } from './brandingStyles.js';
 import { renderWorldMapPanel, WORLD_MAP_STYLE } from './worldMap.js';
@@ -26,7 +30,7 @@ const NAV_ITEMS: Array<{
   href: string;
   label: string;
   icon: string;
-  color: 'indigo' | 'green' | 'amber' | 'pink';
+  color: 'indigo' | 'green' | 'amber' | 'pink' | 'teal';
 }> = [
   {
     page: 'dashboard',
@@ -41,6 +45,13 @@ const NAV_ITEMS: Array<{
     label: 'Générer une déclaration',
     icon: '<path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
     color: 'green',
+  },
+  {
+    page: 'costs',
+    href: '/superadmin/costs',
+    label: 'Historique',
+    icon: '<path d="M10 5.5v5l3.5 2M17 10a7 7 0 1 1-2.05-4.95" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    color: 'teal',
   },
   {
     page: 'users',
@@ -200,6 +211,7 @@ ${renderFaviconLink(settings)}
   .nav-icon-green { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
   .nav-icon-amber { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
   .nav-icon-pink { background: rgba(236, 72, 153, 0.18); color: #f9a8d4; }
+  .nav-icon-teal { background: rgba(20, 184, 166, 0.18); color: #5eead4; }
   .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
   .nav-item.active { background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); color: #fff; }
   .nav-item.active .nav-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
@@ -531,14 +543,21 @@ function formatMoney(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function renderCostsSearchForm(searchQuery: string): string {
-  const clearLink = searchQuery
-    ? `<a href="/superadmin/costs" class="search-clear">Effacer</a>`
-    : '';
+interface CostsFilters {
+  q: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+function renderCostsFilterForm(filters: CostsFilters): string {
+  const hasFilters = filters.q || filters.dateFrom || filters.dateTo;
+  const clearLink = hasFilters ? `<a href="/superadmin/costs" class="search-clear">Effacer</a>` : '';
   return `
     <form method="get" action="/superadmin/costs" class="search-form">
-      <input type="text" name="q" placeholder="Rechercher par nom / société (redevable)..." value="${escapeHtml(searchQuery)}" />
-      <button type="submit" class="search-submit">Rechercher</button>
+      <input type="text" name="q" placeholder="Rechercher par nom / société (redevable)..." value="${escapeHtml(filters.q)}" />
+      <input type="date" name="dateFrom" value="${escapeHtml(filters.dateFrom)}" aria-label="Date de début" />
+      <input type="date" name="dateTo" value="${escapeHtml(filters.dateTo)}" aria-label="Date de fin" />
+      <button type="submit" class="search-submit">Filtrer</button>
       ${clearLink}
     </form>
   `;
@@ -562,77 +581,84 @@ function renderSearchResultCard(result: TransactionDocument): string {
   `;
 }
 
-// Shows the cost breakdown of the most recently *persisted* transaction
-// (across all admins — matches the superadmin's "sees everything" role),
-// read from MongoDB rather than the admin tool's own in-memory
-// last-generated-declaration state. Persisted means this survives a
-// redeploy/restart, unlike the earlier in-memory-only version.
-//
-// A search box (by redevable/company name, across every persisted
-// transaction) sits above this — when a query is active, its results
-// (each a compact header+footer card with the three totals) replace the
-// single most-recent detail view below.
+function transactionId(doc: TransactionDocument): string {
+  return String((doc as TransactionDocument & { _id?: { toString(): string } })._id);
+}
+
+function paginationLink(filters: CostsFilters, page: number): string {
+  const params = new URLSearchParams();
+  if (filters.q) params.set('q', filters.q);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  params.set('page', String(page));
+  return `/superadmin/costs?${params.toString()}`;
+}
+
+// The superadmin's full declaration history — every saved transaction
+// across all admins, newest first, filterable by redevable and/or date
+// range, 20 per page. Each row links to /superadmin/costs/:id for the
+// totals-card detail view (see renderSuperAdminCostDetail below).
 export function renderSuperAdminCosts(
-  mostRecent: TransactionDocument,
+  result: ListTransactionsResult,
   settings: AppSettings,
-  searchQuery = '',
-  searchResults?: TransactionDocument[]
+  filters: CostsFilters
 ): string {
-  const searchForm = renderCostsSearchForm(searchQuery);
+  const filterForm = renderCostsFilterForm(filters);
+  const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
 
-  if (searchQuery && searchResults) {
-    const resultsHtml =
-      searchResults.length > 0
-        ? searchResults.map(renderSearchResultCard).join('')
-        : `<div class="card placeholder-card"><p>Aucune déclaration ne correspond à « ${escapeHtml(searchQuery)} ».</p></div>`;
-    const body = `
-      <p class="lede">Recherche de déclarations par nom / société.</p>
-      ${searchForm}
-      ${resultsHtml}
-    `;
-    return renderShell('costs', 'Coût de produit', body, settings, COSTS_SEARCH_STYLE);
-  }
-
-  const rows = mostRecent.articles
+  const rows = result.items
     .map(
-      (article) => `<tr>
-        <td>${escapeHtml(article.nomArticle)}</td>
-        <td>${escapeHtml(article.hsCode)}</td>
-        <td>${escapeHtml(article.pays)}</td>
-        <td class="num">${article.quantite}</td>
-        <td class="num cost">${formatMoney(article.costPerUnit)}</td>
+      (item) => `<tr class="clickable-row" onclick="window.location='/superadmin/costs/${transactionId(item)}'">
+        <td>${formatDate(item.createdAt)}</td>
+        <td>${escapeHtml(item.redevable)}</td>
+        <td>${escapeHtml(item.code)}</td>
       </tr>`
     )
     .join('');
 
-  const partialNote = mostRecent.costEstimatePartial
-    ? `<div class="error" style="background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Coût partiel — données d'expédition (fret, assurance, montant facturé) non détectées ou incomplètes ; seuls les droits et taxes sont inclus ci-dessous.</span>
-      </div>`
-    : '';
-
-  const totalCard = statCard(
-    mostRecent.costEstimatePartial ? 'warn' : 'brand',
-    formatMoney(mostRecent.totalLandedCost),
-    mostRecent.costEstimatePartial ? 'Coût douanier total (partiel)' : 'Coût total estimé'
-  );
+  const table =
+    result.items.length > 0
+      ? `<div class="card">
+          <table>
+            <thead><tr><th>Date</th><th>Redevable</th><th>Code</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="pagination">
+            ${
+              result.page > 1
+                ? `<a href="${paginationLink(filters, result.page - 1)}" class="pagination-link">← Précédent</a>`
+                : '<span class="pagination-link pagination-disabled">← Précédent</span>'
+            }
+            <span class="pagination-status">Page ${result.page} / ${totalPages}</span>
+            ${
+              result.page < totalPages
+                ? `<a href="${paginationLink(filters, result.page + 1)}" class="pagination-link">Suivant →</a>`
+                : '<span class="pagination-link pagination-disabled">Suivant →</span>'
+            }
+          </div>
+        </div>`
+      : `<div class="card placeholder-card"><p>Aucune déclaration ne correspond à ces filtres.</p></div>`;
 
   const body = `
-    <p class="lede">Déclaration ${escapeHtml(mostRecent.code)} — ${escapeHtml(mostRecent.redevable)} (la plus récente générée sur l'application, tous admins confondus).</p>
-    ${searchForm}
-    ${partialNote}
-    <div class="stat-grid">${totalCard}</div>
-    <div class="card">
-      <h2>Coût par produit</h2>
-      <table>
-        <thead><tr><th>Produit</th><th>HSC</th><th>Pays</th><th>Qté</th><th>Coût / unité</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <p class="lede">Historique de toutes les déclarations générées sur l'application (${result.total} au total).</p>
+    ${filterForm}
+    ${table}
   `;
+  return renderShell('costs', 'Historique', body, settings, COSTS_SEARCH_STYLE);
+}
 
-  return renderShell('costs', 'Coût de produit', body, settings, COSTS_SEARCH_STYLE);
+// The detail view for a single declaration, reached by clicking a row in
+// the Historique list — reuses the same totals card the old single-
+// transaction view and search results already used.
+export function renderSuperAdminCostDetail(
+  transaction: TransactionDocument,
+  settings: AppSettings
+): string {
+  const body = `
+    <a href="/superadmin/costs" class="back-link">← Retour à l'historique</a>
+    ${renderSearchResultCard(transaction)}
+  `;
+  return renderShell('costs', 'Historique', body, settings, COSTS_SEARCH_STYLE);
 }
 
 const COSTS_SEARCH_STYLE = `
@@ -668,6 +694,22 @@ const COSTS_SEARCH_STYLE = `
     .search-result-footer { flex-direction: column; }
     .search-stat:not(:last-child) { border-right: none; border-bottom: 1px solid var(--line-soft); }
   }
+  .clickable-row { cursor: pointer; }
+  .clickable-row:hover { background: var(--input-bg); }
+  .search-form input[type="date"] { flex: none; width: auto; }
+  .pagination {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--line-soft);
+  }
+  .pagination-link { color: var(--brand-600); text-decoration: none; font-weight: 600; font-size: 13px; }
+  .pagination-link:hover { text-decoration: underline; }
+  .pagination-disabled { color: var(--ink-400); pointer-events: none; }
+  .pagination-status { font-size: 12.5px; color: var(--ink-500); }
+  .back-link {
+    display: inline-block; margin-bottom: 16px; color: var(--brand-600);
+    text-decoration: none; font-weight: 600; font-size: 13.5px;
+  }
+  .back-link:hover { text-decoration: underline; }
 `;
 
 export function renderSuperAdminSettings(

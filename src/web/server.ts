@@ -18,6 +18,7 @@ import {
   renderSuperAdminUsers,
   renderSuperAdminPlaceholder,
   renderSuperAdminCosts,
+  renderSuperAdminCostDetail,
   renderSuperAdminSettings,
   renderSuperAdminGenerate,
 } from './renderSuperAdminDashboard.js';
@@ -54,10 +55,10 @@ import {
 import { getMongoDb } from '../db/mongoClient.js';
 import {
   saveTransaction,
-  getMostRecentTransaction,
   countTransactions,
   getCountryProductCounts,
-  searchTransactionsByRedevable,
+  listTransactionsPaginated,
+  getTransactionById,
   TRANSACTIONS_COLLECTION,
   type TransactionDocument,
   type CountryProductCount,
@@ -467,19 +468,15 @@ app.get('/superadmin/users', requireSuperAdmin, async (req, res) => {
 });
 
 app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
-  // Reads from MongoDB (most recent transaction across all admins), not
-  // the in-memory `lastDeclaration` — that state is per-process and wiped
-  // on every restart/redeploy, which made this page go blank even though
-  // declarations had already been generated before the restart.
   let collection: Collection<TransactionDocument>;
   try {
     const mongoDb = await getMongoDb();
     collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
   } catch (mongoError) {
-    console.error('Failed to reach MongoDB for Coût de produit:', mongoError);
+    console.error('Failed to reach MongoDB for Historique:', mongoError);
     res.status(503).send(
       renderSuperAdminPlaceholder(
-        'Coût de produit',
+        'Historique',
         "Impossible de se connecter à la base de données pour le moment. Réessayez plus tard.",
         DEFAULT_APP_SETTINGS
       )
@@ -487,23 +484,63 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
     return;
   }
 
-  const mostRecent = await getMostRecentTransaction(collection);
+  const total = await countTransactions(collection);
   const settings = await getAppSettings(await getSettingsCollection());
-  if (!mostRecent) {
+  if (total === 0) {
     res.send(
       renderSuperAdminPlaceholder(
-        'Coût de produit',
-        "Aucune déclaration n'a encore été générée sur l'application. Le coût par produit s'affichera ici après une génération.",
+        'Historique',
+        "Aucune déclaration n'a encore été générée sur l'application. L'historique s'affichera ici après une génération.",
         settings
       )
     );
     return;
   }
-  const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const searchResults = searchQuery
-    ? await searchTransactionsByRedevable(collection, searchQuery)
-    : undefined;
-  res.send(renderSuperAdminCosts(mostRecent, settings, searchQuery, searchResults));
+
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = 20;
+  const redevable = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const dateFrom = typeof req.query.dateFrom === 'string' ? req.query.dateFrom : '';
+  const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : '';
+
+  const result = await listTransactionsPaginated(collection, {
+    page,
+    pageSize,
+    redevable: redevable || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  });
+
+  res.send(renderSuperAdminCosts(result, settings, { q: redevable, dateFrom, dateTo }));
+});
+
+app.get('/superadmin/costs/:id', requireSuperAdmin, async (req, res) => {
+  let collection: Collection<TransactionDocument>;
+  try {
+    const mongoDb = await getMongoDb();
+    collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
+  } catch (mongoError) {
+    console.error('Failed to reach MongoDB for a declaration detail:', mongoError);
+    res.status(503).send(
+      renderSuperAdminPlaceholder(
+        'Historique',
+        "Impossible de se connecter à la base de données pour le moment. Réessayez plus tard.",
+        DEFAULT_APP_SETTINGS
+      )
+    );
+    return;
+  }
+
+  const transaction = await getTransactionById(collection, String(req.params.id));
+  const settings = await getAppSettings(await getSettingsCollection());
+  if (!transaction) {
+    res.status(404).send(
+      renderSuperAdminPlaceholder('Historique', 'Déclaration introuvable.', settings)
+    );
+    return;
+  }
+
+  res.send(renderSuperAdminCostDetail(transaction, settings));
 });
 
 app.get('/superadmin/settings', requireSuperAdmin, async (req, res) => {
