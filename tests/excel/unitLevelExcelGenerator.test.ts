@@ -11,7 +11,7 @@ import { createTempXlsxPath, cleanupTempDir } from './testHelpers.js';
 import type { Declaration } from '../../src/domain/types.js';
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../parser/fixtures');
-const NO_BRANDING = { companyName: null, brandColor: null };
+const NO_BRANDING = { companyName: null, brandColor: null, logoDataUri: null };
 
 function loadRealDeclaration(): Declaration {
   const liquidation = parseLiquidation(

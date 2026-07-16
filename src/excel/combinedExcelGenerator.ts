@@ -13,14 +13,11 @@ export async function generateCombinedExcel(
   outputPath: string,
   branding: BrandingInfo
 ): Promise<void> {
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: outputPath,
-    useStyles: true,
-  });
+  const workbook = new ExcelJS.Workbook();
 
-  addArticleSummarySheet(workbook, declaration, branding);
-  addUnitLevelSheet(workbook, declaration, branding, 'Global');
-  addPerArticleUnitSheets(workbook, declaration, branding);
+  await addArticleSummarySheet(workbook, declaration, branding);
+  await addUnitLevelSheet(workbook, declaration, branding, 'Global');
+  await addPerArticleUnitSheets(workbook, declaration, branding);
 
-  await workbook.commit();
+  await workbook.xlsx.writeFile(outputPath);
 }

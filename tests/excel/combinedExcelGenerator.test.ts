@@ -35,6 +35,7 @@ describe('generateCombinedExcel', () => {
     await generateCombinedExcel(declaration, filePath, {
       companyName: 'ACME LOGISTICS SARL',
       brandColor: '#4f46e5',
+      logoDataUri: null,
     });
 
     const workbook = new ExcelJS.Workbook();

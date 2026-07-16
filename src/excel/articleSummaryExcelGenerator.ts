@@ -22,12 +22,12 @@ const COLUMN_GROUPS: ColumnGroup[] = [
 
 // Shared by the standalone File 1 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
-// to a workbook writer they own, so the sheet-building logic lives here once.
-export function addArticleSummarySheet(
-  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+// to a workbook they own, so the sheet-building logic lives here once.
+export async function addArticleSummarySheet(
+  workbook: ExcelJS.Workbook,
   declaration: Declaration,
   branding: BrandingInfo
-): void {
+): Promise<void> {
   const sheet = workbook.addWorksheet('Articles', { views: [{ state: 'frozen', ySplit: 3 }] });
 
   // Column widths only here (no `header:`) — the header row is added and
@@ -41,18 +41,19 @@ export function addArticleSummarySheet(
     { key: 'quantite', width: 18 },
   ];
 
-  addSheetTitleRows(
+  await addSheetTitleRows(
+    workbook,
     sheet,
     COLUMN_COUNT,
     resolveCompanyName(branding.companyName),
     resolveDocumentTitle(declaration),
     resolveBrandArgb(branding.brandColor),
-    resolveBrandDarkArgb(branding.brandColor)
+    resolveBrandDarkArgb(branding.brandColor),
+    branding.logoDataUri
   );
 
   const headerRow = sheet.addRow(['Nom Article', 'HSC', 'Pays', 'Valeur déclarée', 'Unité (Quantity)']);
   styleHeaderRowGrouped(headerRow, COLUMN_COUNT, COLUMN_GROUPS);
-  headerRow.commit();
 
   declaration.articles.forEach((article, index) => {
     const row = sheet.addRow({
@@ -63,10 +64,7 @@ export function addArticleSummarySheet(
       quantite: article.quantite,
     });
     styleDataRow(row, COLUMN_COUNT, index, new Set([VALEUR_DECLAREE_COLUMN]));
-    row.commit();
   });
-
-  sheet.commit();
 }
 
 export async function generateArticleSummaryExcel(
@@ -74,10 +72,7 @@ export async function generateArticleSummaryExcel(
   outputPath: string,
   branding: BrandingInfo
 ): Promise<void> {
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: outputPath,
-    useStyles: true,
-  });
-  addArticleSummarySheet(workbook, declaration, branding);
-  await workbook.commit();
+  const workbook = new ExcelJS.Workbook();
+  await addArticleSummarySheet(workbook, declaration, branding);
+  await workbook.xlsx.writeFile(outputPath);
 }

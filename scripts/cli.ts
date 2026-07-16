@@ -39,7 +39,11 @@ async function main() {
   const outputPath = `${outDir}/Declaration.xlsx`;
   // No app settings context from a CLI run — falls back to the default
   // branding (generic company name, indigo accent).
-  await generateCombinedExcel(declaration, outputPath, { companyName: null, brandColor: null });
+  await generateCombinedExcel(declaration, outputPath, {
+    companyName: null,
+    brandColor: null,
+    logoDataUri: null,
+  });
 
   console.log(`\nGenerated: ${outputPath} (2 sheets: Articles, Unit Detail)`);
 }

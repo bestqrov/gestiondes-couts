@@ -43,7 +43,7 @@ function makeDeclaration(): Declaration {
 
 async function buildWorkbook(declaration: Declaration, filePath: string) {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: filePath, useStyles: false });
-  addPerArticleUnitSheets(workbook, declaration, { companyName: null, brandColor: null });
+  await addPerArticleUnitSheets(workbook, declaration, { companyName: null, brandColor: null, logoDataUri: null });
   await workbook.commit();
 
   const reader = new ExcelJS.Workbook();

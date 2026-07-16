@@ -38,20 +38,27 @@ describe('generateUnitLevelExcel performance', () => {
     tempDir = undefined;
   });
 
-  it('generates 10,000+ rows via streaming within a reasonable time and with the correct row count', async () => {
+  // Generation itself uses ExcelJS's regular in-memory Workbook (not the
+  // streaming WorkbookWriter) — switched off streaming so a real logo image
+  // could be embedded in the letterhead, which the streaming writer doesn't
+  // support (only a whole-sheet background image). Benchmarked separately
+  // at this same 10,000-row size beforehand: under 1s, ~55MB heap, so this
+  // test exists to guard that budget going forward, not to prove streaming
+  // specifically.
+  it('generates 10,000+ rows within a reasonable time and with the correct row count', async () => {
     const quantite = 10000;
     const declaration = makeLargeDeclaration(quantite);
     const { filePath, dir } = createTempXlsxPath('unit-level-performance');
     tempDir = dir;
 
     const start = Date.now();
-    await generateUnitLevelExcel(declaration, filePath, { companyName: null, brandColor: null });
+    await generateUnitLevelExcel(declaration, filePath, { companyName: null, brandColor: null, logoDataUri: null });
     const durationMs = Date.now() - start;
 
     expect(durationMs).toBeLessThan(15000);
 
-    // Use the streaming reader (not a full in-memory read) to count rows,
-    // consistent with this file existing to prove the streaming path scales.
+    // The streaming reader here is just a low-memory way to count rows
+    // back out for verification — unrelated to how the file was written.
     const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {});
     let rowCount = 0;
     for await (const worksheetReader of reader) {

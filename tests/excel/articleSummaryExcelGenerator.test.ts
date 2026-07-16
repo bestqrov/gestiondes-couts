@@ -35,6 +35,7 @@ describe('generateArticleSummaryExcel', () => {
     await generateArticleSummaryExcel(declaration, filePath, {
       companyName: 'ACME LOGISTICS SARL',
       brandColor: '#4f46e5',
+      logoDataUri: null,
     });
 
     const workbook = new ExcelJS.Workbook();
@@ -73,12 +74,39 @@ describe('generateArticleSummaryExcel', () => {
     expect(row2.getCell(5).value).toBeCloseTo(200.0, 1);
   });
 
+  it('embeds the configured logo image on the left of the title row, right-aligning the company name next to it', async () => {
+    // A minimal valid 10x10 PNG, base64-encoded as a data: URI — the same
+    // shape a real uploaded logo takes (see LOGO_ALLOWED_MIME_TYPES).
+    const logoDataUri =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC';
+    const declaration = loadRealDeclaration();
+    const { filePath, dir } = createTempXlsxPath('article-summary-logo');
+    tempDir = dir;
+
+    await generateArticleSummaryExcel(declaration, filePath, {
+      companyName: 'ACME LOGISTICS SARL',
+      brandColor: '#4f46e5',
+      logoDataUri,
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const sheet = workbook.worksheets[0];
+
+    expect(workbook.model.media).toHaveLength(1);
+    expect(workbook.model.media[0].type).toBe('image');
+
+    const titleRow = sheet.getRow(1);
+    expect(titleRow.getCell(1).value).toBe('ACME LOGISTICS SARL');
+    expect(titleRow.getCell(1).alignment?.horizontal).toBe('right');
+  });
+
   it('falls back to a generic company name when none is configured', async () => {
     const declaration = loadRealDeclaration();
     const { filePath, dir } = createTempXlsxPath('article-summary-no-branding');
     tempDir = dir;
 
-    await generateArticleSummaryExcel(declaration, filePath, { companyName: null, brandColor: null });
+    await generateArticleSummaryExcel(declaration, filePath, { companyName: null, brandColor: null, logoDataUri: null });
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
@@ -100,6 +128,7 @@ describe('generateArticleSummaryExcel', () => {
     await generateArticleSummaryExcel(emptyDeclaration, filePath, {
       companyName: null,
       brandColor: null,
+      logoDataUri: null,
     });
 
     const workbook = new ExcelJS.Workbook();

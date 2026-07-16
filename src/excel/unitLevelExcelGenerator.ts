@@ -24,16 +24,16 @@ function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): Colum
 
 // Shared by the standalone File 2 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
-// to a workbook writer they own, so the sheet-building logic lives here once.
+// to a workbook they own, so the sheet-building logic lives here once.
 // In the combined workbook this sheet is named "Global": every article's
 // unit rows, one after another, so an admin doesn't have to flip between
 // per-article sheets to see everything at once.
-export function addUnitLevelSheet(
-  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+export async function addUnitLevelSheet(
+  workbook: ExcelJS.Workbook,
   declaration: Declaration,
   branding: BrandingInfo,
   sheetName = 'Unit Detail'
-): void {
+): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
   // Valeur Déclarée is the last column, after every tax code column.
   const columnCount = 3 + taxCodes.length + 1;
@@ -53,13 +53,15 @@ export function addUnitLevelSheet(
     { key: 'valeurDeclaree', width: 16 },
   ];
 
-  addSheetTitleRows(
+  await addSheetTitleRows(
+    workbook,
     sheet,
     columnCount,
     resolveCompanyName(branding.companyName),
     resolveDocumentTitle(declaration),
     resolveBrandArgb(branding.brandColor),
-    resolveBrandDarkArgb(branding.brandColor)
+    resolveBrandDarkArgb(branding.brandColor),
+    branding.logoDataUri
   );
 
   const headerRow = sheet.addRow([
@@ -70,7 +72,6 @@ export function addUnitLevelSheet(
     'Valeur Déclarée',
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
-  headerRow.commit();
 
   let dataRowIndex = 0;
   declaration.articles.forEach((article, articleIndex) => {
@@ -115,12 +116,9 @@ export function addUnitLevelSheet(
       if (unit === 0 && articleIndex > 0) {
         addGroupSeparatorBorder(row, columnCount);
       }
-      row.commit();
       dataRowIndex++;
     }
   });
-
-  sheet.commit();
 }
 
 // Excel sheet names: max 31 chars, and cannot contain \ / ? * [ ] :
@@ -139,11 +137,11 @@ function sheetNameForArticle(article: Declaration['articles'][number]): string {
 // Sheet names are prefixed with the article's numero, which domain
 // validation guarantees is unique per declaration, so two articles can
 // never produce the same sheet name even if they share a product name.
-export function addPerArticleUnitSheets(
-  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+export async function addPerArticleUnitSheets(
+  workbook: ExcelJS.Workbook,
   declaration: Declaration,
   branding: BrandingInfo
-): void {
+): Promise<void> {
   for (const article of declaration.articles) {
     const sheetName = sheetNameForArticle(article);
     const taxCodes = article.taxes.map((tax) => tax.code).sort();
@@ -163,13 +161,15 @@ export function addPerArticleUnitSheets(
       { key: 'valeurDeclaree', width: 16 },
     ];
 
-    addSheetTitleRows(
+    await addSheetTitleRows(
+      workbook,
       sheet,
       columnCount,
       resolveCompanyName(branding.companyName),
       resolveDocumentTitle(declaration),
       resolveBrandArgb(branding.brandColor),
-      resolveBrandDarkArgb(branding.brandColor)
+      resolveBrandDarkArgb(branding.brandColor),
+      branding.logoDataUri
     );
 
     const headerRow = sheet.addRow([
@@ -180,7 +180,6 @@ export function addPerArticleUnitSheets(
       'Valeur Déclarée',
     ]);
     styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
-    headerRow.commit();
 
     const quantite = Math.round(article.quantite);
     if (Math.abs(article.quantite - quantite) > 0.01) {
@@ -208,10 +207,7 @@ export function addPerArticleUnitSheets(
       }
       const row = sheet.addRow(rowValues);
       styleDataRow(row, columnCount, unit, moneyColumns);
-      row.commit();
     }
-
-    sheet.commit();
   }
 }
 
@@ -220,10 +216,7 @@ export async function generateUnitLevelExcel(
   outputPath: string,
   branding: BrandingInfo
 ): Promise<void> {
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: outputPath,
-    useStyles: true,
-  });
-  addUnitLevelSheet(workbook, declaration, branding);
-  await workbook.commit();
+  const workbook = new ExcelJS.Workbook();
+  await addUnitLevelSheet(workbook, declaration, branding);
+  await workbook.xlsx.writeFile(outputPath);
 }
