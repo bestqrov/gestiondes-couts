@@ -148,8 +148,10 @@ export interface CountryProductCount {
 // against plain objects — counts each article line-item once per country
 // it belongs to (productCount), plus the summed physical unit quantity
 // (totalQuantite), across every saved transaction (all admins). Sorted by
-// productCount descending since that's what the dashboard map/legend ranks
-// by.
+// totalQuantite descending — the dashboard legend displays actual unit
+// quantity per country (not the article-line count, which under-counts:
+// one declaration line for 354 T-shirts is 1 "product" but 354 units),
+// so ranking matches what's actually shown.
 export function aggregateCountryProductCounts(
   transactions: TransactionDocument[]
 ): CountryProductCount[] {
@@ -164,7 +166,7 @@ export function aggregateCountryProductCounts(
   }
   return Array.from(byCountry.entries())
     .map(([pays, counts]) => ({ pays, ...counts }))
-    .sort((a, b) => b.productCount - a.productCount);
+    .sort((a, b) => b.totalQuantite - a.totalQuantite);
 }
 
 export async function getCountryProductCounts(

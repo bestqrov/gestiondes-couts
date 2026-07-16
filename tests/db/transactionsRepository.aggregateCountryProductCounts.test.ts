@@ -49,7 +49,7 @@ describe('aggregateCountryProductCounts', () => {
     ]);
   });
 
-  it('keeps separate countries separate, sorted by productCount descending', () => {
+  it('keeps separate countries separate, sorted by totalQuantite descending', () => {
     const transactions = [
       makeTransaction([
         { numero: 1, hsCode: 'A', nomArticle: 'A', pays: 'BANGLADESH', quantite: 200, costPerUnit: 1 },
@@ -60,6 +60,25 @@ describe('aggregateCountryProductCounts', () => {
     expect(aggregateCountryProductCounts(transactions)).toEqual([
       { pays: 'ITALIE', productCount: 2, totalQuantite: 364 },
       { pays: 'BANGLADESH', productCount: 1, totalQuantite: 200 },
+    ]);
+  });
+
+  it('sorts by totalQuantite even when it disagrees with productCount ranking', () => {
+    // BANGLADESH has more article lines (3) than ITALIE (1), but far fewer
+    // actual units (30 vs 500) — the real-world case that motivated this:
+    // one declaration line for 500 units must outrank three lines totaling
+    // 30 units, since the legend shows unit quantity, not line count.
+    const transactions = [
+      makeTransaction([
+        { numero: 1, hsCode: 'A', nomArticle: 'A', pays: 'BANGLADESH', quantite: 10, costPerUnit: 1 },
+        { numero: 2, hsCode: 'B', nomArticle: 'B', pays: 'BANGLADESH', quantite: 10, costPerUnit: 1 },
+        { numero: 3, hsCode: 'C', nomArticle: 'C', pays: 'BANGLADESH', quantite: 10, costPerUnit: 1 },
+        { numero: 4, hsCode: 'D', nomArticle: 'D', pays: 'ITALIE', quantite: 500, costPerUnit: 1 },
+      ]),
+    ];
+    expect(aggregateCountryProductCounts(transactions)).toEqual([
+      { pays: 'ITALIE', productCount: 1, totalQuantite: 500 },
+      { pays: 'BANGLADESH', productCount: 3, totalQuantite: 30 },
     ]);
   });
 });

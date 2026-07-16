@@ -9,9 +9,11 @@ function escapeHtml(value: string): string {
 }
 
 // A simple ranked list of countries of origin — no map/pins, just the
-// name and product count for every country seen across saved
-// declarations, sorted by product count descending (already the order
-// countryCounts arrives in).
+// name and total unit quantity for every country seen across saved
+// declarations, sorted by quantity descending. Deliberately the physical
+// unit quantity (totalQuantite), not the article-line count (productCount)
+// — one declaration line for 354 T-shirts is 1 "product line" but 354
+// actual units, and showing "1" there reads as obviously wrong.
 export function renderWorldMapPanel(countryCounts: CountryProductCount[]): string {
   if (countryCounts.length === 0) {
     return `
@@ -24,12 +26,13 @@ export function renderWorldMapPanel(countryCounts: CountryProductCount[]): strin
   }
 
   const rows = countryCounts
-    .map(
-      (c) => `<div class="map-legend-row">
+    .map((c) => {
+      const quantity = Math.round(c.totalQuantite);
+      return `<div class="map-legend-row">
         <span class="map-legend-name">${escapeHtml(c.pays)}</span>
-        <span class="map-legend-count">${c.productCount} produit${c.productCount > 1 ? 's' : ''}</span>
-      </div>`
-    )
+        <span class="map-legend-count">${quantity} unité${quantity > 1 ? 's' : ''}</span>
+      </div>`;
+    })
     .join('');
 
   return `
