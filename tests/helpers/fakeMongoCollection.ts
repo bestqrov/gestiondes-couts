@@ -16,10 +16,25 @@ export function createFakeCollection<T extends { _id?: ObjectId | string }>(): C
     return a === b;
   }
 
+  function valueMatches(actual: unknown, expected: unknown): boolean {
+    if (expected !== null && typeof expected === 'object' && !(expected instanceof ObjectId)) {
+      const ops = expected as Record<string, unknown>;
+      if ('$regex' in ops) {
+        const flags = typeof ops.$options === 'string' ? ops.$options : '';
+        return new RegExp(String(ops.$regex), flags).test(String(actual));
+      }
+      let ok = true;
+      if ('$gte' in ops) ok = ok && (actual as string) >= (ops.$gte as string);
+      if ('$lte' in ops) ok = ok && (actual as string) <= (ops.$lte as string);
+      return ok;
+    }
+    return actual === expected;
+  }
+
   function matches(doc: T, filter: Record<string, unknown>): boolean {
     return Object.entries(filter).every(([key, value]) => {
       if (key === '_id') return idsEqual(doc._id, value);
-      return (doc as Record<string, unknown>)[key] === value;
+      return valueMatches((doc as Record<string, unknown>)[key], value);
     });
   }
 
@@ -57,6 +72,8 @@ export function createFakeCollection<T extends { _id?: ObjectId | string }>(): C
     },
     find: (filter: Record<string, unknown> = {}) => {
       let results = docs.filter((d) => matches(d, filter));
+      let skipCount = 0;
+      let limitCount: number | undefined;
       const cursor = {
         sort(sortSpec: Record<string, number>) {
           const [field, dir] = Object.entries(sortSpec)[0];
@@ -69,7 +86,21 @@ export function createFakeCollection<T extends { _id?: ObjectId | string }>(): C
           });
           return cursor;
         },
-        toArray: async () => results.map((d) => ({ ...d })),
+        skip(n: number) {
+          skipCount = n;
+          return cursor;
+        },
+        limit(n: number) {
+          limitCount = n;
+          return cursor;
+        },
+        toArray: async () => {
+          const sliced = results.slice(
+            skipCount,
+            limitCount !== undefined ? skipCount + limitCount : undefined
+          );
+          return sliced.map((d) => ({ ...d }));
+        },
       };
       return cursor;
     },
