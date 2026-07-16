@@ -1,4 +1,4 @@
-import type { Collection } from 'mongodb';
+import { ObjectId, type Collection } from 'mongodb';
 
 export interface TransactionArticle {
   numero: number;
@@ -15,6 +15,7 @@ export interface TransactionArticle {
 // short-lived, per-process artifact (see server.ts's lastGeneratedFilePath)
 // for the immediate re-download/PDF-export flow only.
 export interface TransactionDocument {
+  _id?: ObjectId;
   ownerUserId: string;
   code: string;
   redevable: string;
@@ -79,6 +80,62 @@ export async function getMostRecentTransaction(
 
 export async function countTransactions(collection: Collection<TransactionDocument>): Promise<number> {
   return collection.countDocuments();
+}
+
+export interface ListTransactionsOptions {
+  page: number; // 1-indexed
+  pageSize: number;
+  redevable?: string;
+  dateFrom?: string; // ISO date (yyyy-mm-dd), inclusive
+  dateTo?: string; // ISO date (yyyy-mm-dd), inclusive
+}
+
+export interface ListTransactionsResult {
+  items: TransactionDocument[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// Powers the superadmin "Historique" page — every saved transaction across
+// all admins, newest first, with an optional redevable substring filter and
+// an optional createdAt date range, paginated. dateTo is widened to the end
+// of that calendar day (23:59:59.999) since createdAt is a precise
+// timestamp but the filter inputs are plain dates.
+export async function listTransactionsPaginated(
+  collection: Collection<TransactionDocument>,
+  options: ListTransactionsOptions
+): Promise<ListTransactionsResult> {
+  const filter: Record<string, unknown> = {};
+  if (options.redevable) {
+    const escaped = options.redevable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.redevable = { $regex: escaped, $options: 'i' };
+  }
+  if (options.dateFrom || options.dateTo) {
+    const range: Record<string, string> = {};
+    if (options.dateFrom) range.$gte = `${options.dateFrom}T00:00:00.000Z`;
+    if (options.dateTo) range.$lte = `${options.dateTo}T23:59:59.999Z`;
+    filter.createdAt = range;
+  }
+
+  const [items, total] = await Promise.all([
+    collection
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip((options.page - 1) * options.pageSize)
+      .limit(options.pageSize)
+      .toArray(),
+    collection.countDocuments(filter),
+  ]);
+
+  return { items, total, page: options.page, pageSize: options.pageSize };
+}
+
+export async function getTransactionById(
+  collection: Collection<TransactionDocument>,
+  id: string
+): Promise<TransactionDocument | null> {
+  return collection.findOne({ _id: new ObjectId(id) });
 }
 
 export interface CountryProductCount {
