@@ -43,7 +43,7 @@ function makeDeclaration(): Declaration {
 
 async function buildWorkbook(declaration: Declaration, filePath: string) {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: filePath, useStyles: false });
-  addPerArticleUnitSheets(workbook, declaration);
+  addPerArticleUnitSheets(workbook, declaration, { companyName: null, brandColor: null });
   await workbook.commit();
 
   const reader = new ExcelJS.Workbook();
@@ -80,7 +80,7 @@ describe('addPerArticleUnitSheets', () => {
     const workbook = await buildWorkbook(declaration, filePath);
 
     const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
-    const header1 = sheet1.getRow(1);
+    const header1 = sheet1.getRow(3);
     expect([1, 2, 3, 4, 5, 6].map((col) => header1.getCell(col).value)).toEqual([
       'Nom Article',
       'HSC',
@@ -91,7 +91,7 @@ describe('addPerArticleUnitSheets', () => {
     ]);
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
-    const header2 = sheet2.getRow(1);
+    const header2 = sheet2.getRow(3);
     expect([1, 2, 3, 4, 5].map((col) => header2.getCell(col).value)).toEqual([
       'Nom Article',
       'HSC',
@@ -110,13 +110,13 @@ describe('addPerArticleUnitSheets', () => {
 
     const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
     // article 1: valeurDeclaree 27147, quantite 3 -> 9049 per unit; Valeur Déclarée is the last column (6)
-    for (let rowNum = 2; rowNum <= 4; rowNum++) {
+    for (let rowNum = 4; rowNum <= 6; rowNum++) {
       expect(Number(sheet1.getRow(rowNum).getCell(6).value)).toBeCloseTo(27147 / 3, 4);
     }
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
     // article 2: valeurDeclaree 9500, quantite 2 -> 4750 per unit; last column here is 5
-    for (let rowNum = 2; rowNum <= 3; rowNum++) {
+    for (let rowNum = 4; rowNum <= 5; rowNum++) {
       expect(Number(sheet2.getRow(rowNum).getCell(5).value)).toBeCloseTo(9500 / 2, 4);
     }
   });
@@ -129,12 +129,12 @@ describe('addPerArticleUnitSheets', () => {
     const workbook = await buildWorkbook(declaration, filePath);
 
     const sheet1 = workbook.getWorksheet('1-T-SHIRT')!;
-    expect(sheet1.rowCount).toBe(4); // header + 3 units
-    expect(sheet1.getRow(2).getCell(3).value).toBe(1);
-    expect(sheet1.getRow(4).getCell(3).value).toBe(3);
+    expect(sheet1.rowCount).toBe(6); // 2 title rows + header + 3 units
+    expect(sheet1.getRow(4).getCell(3).value).toBe(1);
+    expect(sheet1.getRow(6).getCell(3).value).toBe(3);
 
     const sheet2 = workbook.getWorksheet('2-ORDINATEUR')!;
-    expect(sheet2.rowCount).toBe(3); // header + 2 units
+    expect(sheet2.rowCount).toBe(5); // 2 title rows + header + 2 units
   });
 
   it('gives two articles with the same product name distinct sheet names', async () => {

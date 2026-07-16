@@ -1,7 +1,26 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
 import { allocateTaxAcrossUnits, unionTaxCodes } from './unitLevelTaxHelpers.js';
-import { styleHeaderRow, styleDataRow } from './excelStyling.js';
+import {
+  styleDataRow,
+  styleHeaderRowGrouped,
+  addSheetTitleRows,
+  addGroupSeparatorBorder,
+  resolveBrandArgb,
+  resolveBrandDarkArgb,
+  resolveCompanyName,
+  resolveDocumentTitle,
+  type BrandingInfo,
+  type ColumnGroup,
+} from './excelStyling.js';
+
+function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
+  return [
+    { kind: 'identity', from: 1, to: 3 }, // Nom Article, HSC, Serial Number
+    { kind: 'tax', from: 4, to: 3 + taxCodeCount },
+    { kind: 'value', from: columnCount, to: columnCount }, // Valeur Déclarée
+  ];
+}
 
 // Shared by the standalone File 2 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
@@ -12,6 +31,7 @@ import { styleHeaderRow, styleDataRow } from './excelStyling.js';
 export function addUnitLevelSheet(
   workbook: ExcelJS.stream.xlsx.WorkbookWriter,
   declaration: Declaration,
+  branding: BrandingInfo,
   sheetName = 'Unit Detail'
 ): void {
   const taxCodes = unionTaxCodes(declaration.articles);
@@ -23,7 +43,7 @@ export function addUnitLevelSheet(
     ...taxCodes.map((_, i) => 4 + i),
   ]);
 
-  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
+  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
 
   sheet.columns = [
     { key: 'nomArticle', width: 30 },
@@ -33,6 +53,15 @@ export function addUnitLevelSheet(
     { key: 'valeurDeclaree', width: 16 },
   ];
 
+  addSheetTitleRows(
+    sheet,
+    columnCount,
+    resolveCompanyName(branding.companyName),
+    resolveDocumentTitle(declaration),
+    resolveBrandArgb(branding.brandColor),
+    resolveBrandDarkArgb(branding.brandColor)
+  );
+
   const headerRow = sheet.addRow([
     'Nom Article',
     'HSC',
@@ -40,11 +69,11 @@ export function addUnitLevelSheet(
     ...taxCodes,
     'Valeur Déclarée',
   ]);
-  styleHeaderRow(headerRow, columnCount);
+  styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
   headerRow.commit();
 
   let dataRowIndex = 0;
-  for (const article of declaration.articles) {
+  declaration.articles.forEach((article, articleIndex) => {
     const quantite = Math.round(article.quantite);
     if (Math.abs(article.quantite - quantite) > 0.01) {
       throw new Error(
@@ -79,10 +108,17 @@ export function addUnitLevelSheet(
       }
       const row = sheet.addRow(rowValues);
       styleDataRow(row, columnCount, dataRowIndex, moneyColumns);
+      // A thicker top border marks where each new product's block of unit
+      // rows begins, so it's visually obvious where one product ends and
+      // the next starts in this combined sheet — skipped for the very
+      // first product (nothing to separate it from).
+      if (unit === 0 && articleIndex > 0) {
+        addGroupSeparatorBorder(row, columnCount);
+      }
       row.commit();
       dataRowIndex++;
     }
-  }
+  });
 
   sheet.commit();
 }
@@ -105,7 +141,8 @@ function sheetNameForArticle(article: Declaration['articles'][number]): string {
 // never produce the same sheet name even if they share a product name.
 export function addPerArticleUnitSheets(
   workbook: ExcelJS.stream.xlsx.WorkbookWriter,
-  declaration: Declaration
+  declaration: Declaration,
+  branding: BrandingInfo
 ): void {
   for (const article of declaration.articles) {
     const sheetName = sheetNameForArticle(article);
@@ -117,7 +154,7 @@ export function addPerArticleUnitSheets(
       ...taxCodes.map((_, i) => 4 + i),
     ]);
 
-    const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
+    const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
     sheet.columns = [
       { key: 'nomArticle', width: 30 },
       { key: 'hsCode', width: 15 },
@@ -126,6 +163,15 @@ export function addPerArticleUnitSheets(
       { key: 'valeurDeclaree', width: 16 },
     ];
 
+    addSheetTitleRows(
+      sheet,
+      columnCount,
+      resolveCompanyName(branding.companyName),
+      resolveDocumentTitle(declaration),
+      resolveBrandArgb(branding.brandColor),
+      resolveBrandDarkArgb(branding.brandColor)
+    );
+
     const headerRow = sheet.addRow([
       'Nom Article',
       'HSC',
@@ -133,7 +179,7 @@ export function addPerArticleUnitSheets(
       ...taxCodes,
       'Valeur Déclarée',
     ]);
-    styleHeaderRow(headerRow, columnCount);
+    styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
     headerRow.commit();
 
     const quantite = Math.round(article.quantite);
@@ -171,12 +217,13 @@ export function addPerArticleUnitSheets(
 
 export async function generateUnitLevelExcel(
   declaration: Declaration,
-  outputPath: string
+  outputPath: string,
+  branding: BrandingInfo
 ): Promise<void> {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     filename: outputPath,
     useStyles: true,
   });
-  addUnitLevelSheet(workbook, declaration);
+  addUnitLevelSheet(workbook, declaration, branding);
   await workbook.commit();
 }

@@ -11,6 +11,7 @@ import { createTempXlsxPath, cleanupTempDir } from './testHelpers.js';
 import type { Declaration } from '../../src/domain/types.js';
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../parser/fixtures');
+const NO_BRANDING = { companyName: null, brandColor: null };
 
 function loadRealDeclaration(): Declaration {
   const liquidation = parseLiquidation(
@@ -33,13 +34,16 @@ describe('generateUnitLevelExcel', () => {
     const { filePath, dir } = createTempXlsxPath('unit-level');
     tempDir = dir;
 
-    await generateUnitLevelExcel(declaration, filePath);
+    await generateUnitLevelExcel(declaration, filePath, NO_BRANDING);
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    const headerRow = sheet.getRow(1);
+    // Rows 1-2 are the company-name/document-reference title rows (see
+    // articleSummaryExcelGenerator.test.ts for dedicated coverage of those);
+    // row 3 is the actual column header row.
+    const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(1).value).toBe('Nom Article');
     expect(headerRow.getCell(2).value).toBe('HSC');
     expect(headerRow.getCell(3).value).toBe('Serial Number');
@@ -49,32 +53,34 @@ describe('generateUnitLevelExcel', () => {
     expect(headerRow.getCell(6).value).toBe('007217');
     expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
 
-    // article 1: 354 units, article 2: 200 units -> 554 data rows + 1 header = 555
-    expect(sheet.rowCount).toBe(555);
+    // 2 title rows + header + article 1 (354 units) + article 2 (200 units) = 557
+    expect(sheet.rowCount).toBe(557);
 
     // first row of article 1
-    const firstRow = sheet.getRow(2);
+    const firstRow = sheet.getRow(4);
     expect(firstRow.getCell(1).value).toBe('T-SHIRT');
     expect(firstRow.getCell(3).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(7).value)).toBeCloseTo(27147.0 / 354, 4);
 
-    // last row of article 1 (row 355 = header + 354 units), first row of article 2 resets serial number
-    const lastRowArticle1 = sheet.getRow(355);
+    // last row of article 1, first row of article 2 resets serial number
+    const lastRowArticle1 = sheet.getRow(357);
     expect(lastRowArticle1.getCell(3).value).toBe(354);
-    const firstRowArticle2 = sheet.getRow(356);
+    const firstRowArticle2 = sheet.getRow(358);
     expect(firstRowArticle2.getCell(3).value).toBe(1);
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(7).value)).toBeCloseTo(12892.992 / 200, 4);
+    // A thicker top border marks where article 2's block starts.
+    expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 
-    // Reconciliation: sum each tax column across article 1's 354 rows (rows 2-355)
+    // Reconciliation: sum each tax column across article 1's 354 rows
     // against the known source montants from the Liquidation fixture:
     // 000110 = 0.00, 002109 = 5443.00, 007217 = 68.00
     let sum000110 = 0;
     let sum002109 = 0;
     let sum007217 = 0;
-    for (let rowNum = 2; rowNum <= 355; rowNum++) {
+    for (let rowNum = 4; rowNum <= 357; rowNum++) {
       const row = sheet.getRow(rowNum);
       sum000110 += Number(row.getCell(4).value);
       sum002109 += Number(row.getCell(5).value);
@@ -94,7 +100,7 @@ describe('generateUnitLevelExcel', () => {
     const { filePath, dir } = createTempXlsxPath('unit-level-broken');
     tempDir = dir;
 
-    await expect(generateUnitLevelExcel(brokenDeclaration, filePath)).rejects.toThrow();
+    await expect(generateUnitLevelExcel(brokenDeclaration, filePath, NO_BRANDING)).rejects.toThrow();
   });
 
   it('zero-fills tax columns for articles that lack a given code, across the actual generator (not just the union helper)', async () => {
@@ -135,40 +141,40 @@ describe('generateUnitLevelExcel', () => {
     const { filePath, dir } = createTempXlsxPath('unit-level-divergent-codes');
     tempDir = dir;
 
-    await generateUnitLevelExcel(declaration, filePath);
+    await generateUnitLevelExcel(declaration, filePath, NO_BRANDING);
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
     // header: Nom Article | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
-    const headerRow = sheet.getRow(1);
+    const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(4).value).toBe('000110');
     expect(headerRow.getCell(5).value).toBe('002109');
     expect(headerRow.getCell(6).value).toBe('007217');
     expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
 
-    // article A: 3 rows (rows 2-4), has 000110 and 007217 but NOT 002109 -> 002109 column must be 0
-    for (let rowNum = 2; rowNum <= 4; rowNum++) {
+    // article A: 3 rows (rows 4-6), has 000110 and 007217 but NOT 002109 -> 002109 column must be 0
+    for (let rowNum = 4; rowNum <= 6; rowNum++) {
       const row = sheet.getRow(rowNum);
       expect(Number(row.getCell(5).value)).toBe(0); // 002109 column, article A doesn't have this code
     }
     // article A's 007217 column (montant=3 across 3 units) should reconcile to 3
     let sumA007217 = 0;
-    for (let rowNum = 2; rowNum <= 4; rowNum++) {
+    for (let rowNum = 4; rowNum <= 6; rowNum++) {
       sumA007217 += Number(sheet.getRow(rowNum).getCell(6).value);
     }
     expect(sumA007217).toBeCloseTo(3, 2);
 
-    // article B: 2 rows (rows 5-6), has ONLY 002109 -> 000110 and 007217 columns must be 0
-    for (let rowNum = 5; rowNum <= 6; rowNum++) {
+    // article B: 2 rows (rows 7-8), has ONLY 002109 -> 000110 and 007217 columns must be 0
+    for (let rowNum = 7; rowNum <= 8; rowNum++) {
       const row = sheet.getRow(rowNum);
       expect(Number(row.getCell(4).value)).toBe(0); // 000110 column, article B doesn't have this code
       expect(Number(row.getCell(6).value)).toBe(0); // 007217 column, article B doesn't have this code
     }
     // article B's 002109 column (montant=10 across 2 units) should reconcile to 10
     let sumB002109 = 0;
-    for (let rowNum = 5; rowNum <= 6; rowNum++) {
+    for (let rowNum = 7; rowNum <= 8; rowNum++) {
       sumB002109 += Number(sheet.getRow(rowNum).getCell(5).value);
     }
     expect(sumB002109).toBeCloseTo(10, 2);

@@ -37,7 +37,9 @@ async function main() {
   console.log(`Merged declaration: code=${declaration.code}, ${declaration.articles.length} article(s)`);
 
   const outputPath = `${outDir}/Declaration.xlsx`;
-  await generateCombinedExcel(declaration, outputPath);
+  // No app settings context from a CLI run — falls back to the default
+  // branding (generic company name, indigo accent).
+  await generateCombinedExcel(declaration, outputPath, { companyName: null, brandColor: null });
 
   console.log(`\nGenerated: ${outputPath} (2 sheets: Articles, Unit Detail)`);
 }

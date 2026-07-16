@@ -45,7 +45,7 @@ describe('generateUnitLevelExcel performance', () => {
     tempDir = dir;
 
     const start = Date.now();
-    await generateUnitLevelExcel(declaration, filePath);
+    await generateUnitLevelExcel(declaration, filePath, { companyName: null, brandColor: null });
     const durationMs = Date.now() - start;
 
     expect(durationMs).toBeLessThan(15000);
@@ -60,7 +60,7 @@ describe('generateUnitLevelExcel performance', () => {
       }
     }
 
-    // quantite data rows + 1 header row
-    expect(rowCount).toBe(quantite + 1);
+    // quantite data rows + 2 title rows + 1 header row
+    expect(rowCount).toBe(quantite + 3);
   }, 30000);
 });

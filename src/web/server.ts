@@ -302,7 +302,8 @@ app.post(
       // file that a concurrent request had just truncated/replaced,
       // producing a spurious "Not Found" (confirmed in production logs).
       const generatedFilePath = path.join(OUTPUT_DIR, `declaration-${randomUUID()}.xlsx`);
-      await generateCombinedExcel(declaration, generatedFilePath);
+      const branding = await getAppSettings(await getSettingsCollection());
+      await generateCombinedExcel(declaration, generatedFilePath, branding);
 
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;

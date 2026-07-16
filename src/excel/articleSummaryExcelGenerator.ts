@@ -1,18 +1,34 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
-import { styleHeaderRow, styleDataRow } from './excelStyling.js';
+import {
+  styleDataRow,
+  styleHeaderRowGrouped,
+  addSheetTitleRows,
+  resolveBrandArgb,
+  resolveBrandDarkArgb,
+  resolveCompanyName,
+  resolveDocumentTitle,
+  type BrandingInfo,
+  type ColumnGroup,
+} from './excelStyling.js';
 
 const COLUMN_COUNT = 5;
 const VALEUR_DECLAREE_COLUMN = 4;
+const COLUMN_GROUPS: ColumnGroup[] = [
+  { kind: 'identity', from: 1, to: 3 }, // Nom Article, HSC, Pays
+  { kind: 'value', from: 4, to: 4 }, // Valeur déclarée
+  { kind: 'quantity', from: 5, to: 5 }, // Unité (Quantity)
+];
 
 // Shared by the standalone File 1 generator below and by the combined
 // (single-file, multi-sheet) generator — both need to add this exact sheet
 // to a workbook writer they own, so the sheet-building logic lives here once.
 export function addArticleSummarySheet(
   workbook: ExcelJS.stream.xlsx.WorkbookWriter,
-  declaration: Declaration
+  declaration: Declaration,
+  branding: BrandingInfo
 ): void {
-  const sheet = workbook.addWorksheet('Articles', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const sheet = workbook.addWorksheet('Articles', { views: [{ state: 'frozen', ySplit: 3 }] });
 
   // Column widths only here (no `header:`) — the header row is added and
   // styled explicitly below instead of relying on ExcelJS's implicit
@@ -25,8 +41,17 @@ export function addArticleSummarySheet(
     { key: 'quantite', width: 18 },
   ];
 
+  addSheetTitleRows(
+    sheet,
+    COLUMN_COUNT,
+    resolveCompanyName(branding.companyName),
+    resolveDocumentTitle(declaration),
+    resolveBrandArgb(branding.brandColor),
+    resolveBrandDarkArgb(branding.brandColor)
+  );
+
   const headerRow = sheet.addRow(['Nom Article', 'HSC', 'Pays', 'Valeur déclarée', 'Unité (Quantity)']);
-  styleHeaderRow(headerRow, COLUMN_COUNT);
+  styleHeaderRowGrouped(headerRow, COLUMN_COUNT, COLUMN_GROUPS);
   headerRow.commit();
 
   declaration.articles.forEach((article, index) => {
@@ -46,12 +71,13 @@ export function addArticleSummarySheet(
 
 export async function generateArticleSummaryExcel(
   declaration: Declaration,
-  outputPath: string
+  outputPath: string,
+  branding: BrandingInfo
 ): Promise<void> {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     filename: outputPath,
     useStyles: true,
   });
-  addArticleSummarySheet(workbook, declaration);
+  addArticleSummarySheet(workbook, declaration, branding);
   await workbook.commit();
 }
