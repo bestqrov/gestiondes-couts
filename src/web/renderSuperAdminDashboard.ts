@@ -647,12 +647,30 @@ function paginationLink(filters: CostsFilters, page: number): string {
 // across all admins, newest first, filterable by redevable and/or date
 // range, 20 per page. Each row links to /superadmin/costs/:id for the
 // totals-card detail view (see renderSuperAdminCostDetail below).
+// result is null when the page was loaded with no filters yet (a fresh
+// visit to /superadmin/costs) — the list only loads once a redevable
+// search or a date range has actually been submitted, rather than dumping
+// every declaration ever generated on first load.
 export function renderSuperAdminCosts(
-  result: ListTransactionsResult,
+  result: ListTransactionsResult | null,
   settings: AppSettings,
   filters: CostsFilters
 ): string {
   const filterForm = renderCostsFilterForm(filters);
+
+  if (!result) {
+    const body = `
+      <p class="lede">Recherchez par nom / société, ou choisissez une période, pour afficher l'historique des déclarations.</p>
+      ${filterForm}
+      <div class="card placeholder-card">
+        <div class="placeholder-icon"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">${PLACEHOLDER_ICON}</svg></div>
+        <h2>Aucun filtre appliqué</h2>
+        <p>Utilisez la recherche ou les dates ci-dessus, puis cliquez sur « Filtrer » pour afficher les déclarations.</p>
+      </div>
+    `;
+    return renderShell('costs', 'Historique', body, settings, COSTS_SEARCH_STYLE);
+  }
+
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
 
   const rows = result.items

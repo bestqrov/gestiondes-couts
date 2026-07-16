@@ -521,6 +521,15 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
   const redevable = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   const dateFrom = typeof req.query.dateFrom === 'string' ? req.query.dateFrom : '';
   const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : '';
+  const filters = { q: redevable, dateFrom, dateTo };
+
+  // No filter applied yet (a fresh visit, not a submitted search/date
+  // range) — don't dump every declaration ever generated; show the filter
+  // form and wait for one to be submitted.
+  if (!redevable && !dateFrom && !dateTo) {
+    res.send(renderSuperAdminCosts(null, settings, filters));
+    return;
+  }
 
   const result = await listTransactionsPaginated(collection, {
     page,
@@ -530,7 +539,7 @@ app.get('/superadmin/costs', requireSuperAdmin, async (req, res) => {
     dateTo: dateTo || undefined,
   });
 
-  res.send(renderSuperAdminCosts(result, settings, { q: redevable, dateFrom, dateTo }));
+  res.send(renderSuperAdminCosts(result, settings, filters));
 });
 
 app.get('/superadmin/costs/:id', requireSuperAdmin, async (req, res) => {
