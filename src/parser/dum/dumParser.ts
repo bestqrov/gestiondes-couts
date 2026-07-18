@@ -56,8 +56,13 @@ export interface DumResult {
 // (a genuine field-boundary marker in this jumbled text) so that preceding
 // boilerplate words (e.g. "COLIS", "MARCHANDISES NON EMBALLEE") — which are
 // also capitalized and adjacent — aren't swept into the product name.
+//
+// Some articles (observed on footwear/"PAIRE" goods) carry an extra stray
+// number between the complementary-unit quantity and its "U"/"KG" marker
+// (e.g. "4.0 2 U" instead of "4.0 U") — matched as an optional extra
+// numeric token, still non-capturing since this whole field is unused.
 const ARTICLE_PATTERN =
-  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+[\d.]+\s+(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
+  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+[\d.]+\s+(?:\d+\s+)?(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
 
 // See design spec §4 — this cluster of shipment-level values (currency,
 // invoiced amount, exchange rate, freight, [a form field-number label,

@@ -125,9 +125,14 @@ describe('parseDum', () => {
     expect(result.articles[0].quantite).toBe(480.0);
   });
 
-  it('recognizes "PAIRE" as a valid désignation-line unit (e.g. footwear), not just "NB"/"U"', () => {
+  it('recognizes "PAIRE" as a valid désignation-line unit (e.g. footwear), not just "NB"/"U", and tolerates the extra stray number footwear articles carry before their complementary-unit marker', () => {
+    // Real-world regression: footwear articles' "unités complémentaires"
+    // field reads "4.0 2 U" (an extra "2" between the quantity and its
+    // unit marker) instead of the usual "4.0 U" — this used to break the
+    // match the same way the "(PTI:OUI)" suffix and KG-based units did,
+    // reported as "Article 31 present in Liquidation but not found in DUM".
     const text = `Crédit d'enlèvement 700002123
-6402999093(PTI:OUI)   346.186 1.10   AP 4.0 U CHINE   CN  MARCHANDISES NON EMBALLEE  AUTRE CHAUSSURES 4.00 PAIRE 31`;
+6402999093(PTI:OUI)   346.186 1.10   AP 4.0 2 U CHINE   CN  MARCHANDISES NON EMBALLEE  AUTRE CHAUSSURES 4.00 PAIRE 31`;
     const result = parseDum(text);
 
     expect(result.articles).toEqual([
