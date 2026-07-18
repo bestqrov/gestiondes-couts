@@ -32,18 +32,32 @@ export interface DumResult {
 // against a real sample DUM PDF), so label-anchored regexes like
 // "Code marchandises\s*:\s*(\d+)" don't work here. What IS reliable is that
 // each article's DATA VALUES appear together, in a fixed relative order:
-// HS code, valeur déclarée, poids net, AP/SP, quantité, unité, pays (nom +
-// code), then — after a short run of variable boilerplate (déclaration
-// sommaire / colis-type text, which differs per article) — the product
-// designation and its ordre number. This pattern is matched positionally
-// instead of via labels.
+// HS code, valeur déclarée, poids net, AP/SP, unités complémentaires, pays
+// (nom + code), then — after a short run of variable boilerplate
+// (déclaration sommaire / colis-type text, which differs per article) — the
+// product designation and its true piece quantity/unit/ordre number. This
+// pattern is matched positionally instead of via labels.
+//
+// Some HS codes carry a "(PTI:OUI)" suffix directly after the code, with no
+// whitespace before it — matched as an optional, non-capturing group so it
+// doesn't break the match for those articles.
+//
+// The "unités complémentaires" field (right after poids net / AP-SP) is
+// read but NOT used as the article's quantity — for most goods it happens
+// to equal the piece count (unit "U"), but for some HS codes (e.g. perfume,
+// classified by net weight) it's a genuinely different measure in "KG",
+// which would both mismatch the Liquidation's piece quantity and fail to
+// match the literal "U" this pattern used to require. The real piece
+// quantity/unit is instead captured from the désignation line ("EAU DE
+// TOILETTE 480.00 NB"), which reliably matches the Liquidation regardless
+// of what the complementary-unit field measures.
 //
 // The désignation capture requires a run of 2+ spaces immediately before it
 // (a genuine field-boundary marker in this jumbled text) so that preceding
 // boilerplate words (e.g. "COLIS", "MARCHANDISES NON EMBALLEE") — which are
 // also capitalized and adjacent — aren't swept into the product name.
 const ARTICLE_PATTERN =
-  /(\d{10})\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+([\d.]+)\s+(U)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+[\d.,]+\s+(?:NB|U)\s+(\d+)\b/g;
+  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+[\d.]+\s+(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
 
 // See design spec §4 — this cluster of shipment-level values (currency,
 // invoiced amount, exchange rate, freight, [a form field-number label,
@@ -99,7 +113,7 @@ export function parseDum(text: string): DumResult {
   const articles: DumArticleResult[] = [];
 
   for (const match of text.matchAll(ARTICLE_PATTERN)) {
-    const [, hsCode, valeurRaw, quantiteRaw, unite, paysNom, paysCode, nomArticleRaw, ordreRaw] =
+    const [, hsCode, valeurRaw, paysNom, paysCode, nomArticleRaw, quantiteRaw, unite, ordreRaw] =
       match;
 
     articles.push({

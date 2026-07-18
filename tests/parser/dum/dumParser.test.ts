@@ -32,7 +32,7 @@ describe('parseDum', () => {
       paysCode: 'IT',
       valeurDeclaree: 27147.0,
       quantite: 354.0,
-      unite: 'U',
+      unite: 'NB',
     });
 
     expect(article2).toEqual({
@@ -43,7 +43,7 @@ describe('parseDum', () => {
       paysCode: 'BD',
       valeurDeclaree: 12892.992,
       quantite: 200.0,
-      unite: 'U',
+      unite: 'NB',
     });
   });
 
@@ -72,7 +72,7 @@ describe('parseDum', () => {
         paysCode: 'ES',
         valeurDeclaree: 9500.0,
         quantite: 40.0,
-        unite: 'U',
+        unite: 'NB',
       },
     ]);
   });
@@ -86,6 +86,62 @@ describe('parseDum', () => {
     const result = parseDum(text);
 
     expect(result.articles[0].nomArticle).toBe('CHEMISE');
+  });
+
+  it('handles a "(PTI:OUI)" suffix directly after the HS code, with no whitespace before it', () => {
+    // Real-world regression: a code like "3303000020(PTI:OUI)" used to break
+    // the match entirely (the pattern required whitespace right after the
+    // 10-digit code), which was reported as "Article 1 present in
+    // Liquidation but not found in DUM" — the DUM parser had silently
+    // dropped the article rather than mismatching a field.
+    const text = `Crédit d'enlèvement 700002123
+3303000020(PTI:OUI)   39 518.611 195.633   AP 195.633 KG ITALIE   IT  COLIS  EAU DE TOILETTE 480.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.articles).toEqual([
+      {
+        ordre: 1,
+        hsCode: '3303000020',
+        nomArticle: 'EAU DE TOILETTE',
+        paysNom: 'ITALIE',
+        paysCode: 'IT',
+        valeurDeclaree: 39518.611,
+        quantite: 480.0,
+        unite: 'NB',
+      },
+    ]);
+  });
+
+  it('captures the true piece quantity from the désignation line, not the "unités complémentaires" field, when they differ (e.g. a KG-based complementary unit for a good classified by weight)', () => {
+    // Same real-world case as above, phrased as its own assertion: 480 (the
+    // Liquidation's actual quantity) must win over 195.633 (the unrelated
+    // complementary-unit weight in KG) — using the latter would silently
+    // corrupt the merged declaration instead of failing loudly, since it's
+    // a plausible-looking number, not an obviously wrong one.
+    const text = `Crédit d'enlèvement 700002123
+3303000020(PTI:OUI)   39 518.611 195.633   AP 195.633 KG ITALIE   IT  COLIS  EAU DE TOILETTE 480.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.articles[0].quantite).toBe(480.0);
+  });
+
+  it('recognizes "PAIRE" as a valid désignation-line unit (e.g. footwear), not just "NB"/"U"', () => {
+    const text = `Crédit d'enlèvement 700002123
+6402999093(PTI:OUI)   346.186 1.10   AP 4.0 U CHINE   CN  MARCHANDISES NON EMBALLEE  AUTRE CHAUSSURES 4.00 PAIRE 31`;
+    const result = parseDum(text);
+
+    expect(result.articles).toEqual([
+      {
+        ordre: 31,
+        hsCode: '6402999093',
+        nomArticle: 'AUTRE CHAUSSURES',
+        paysNom: 'CHINE',
+        paysCode: 'CN',
+        valeurDeclaree: 346.186,
+        quantite: 4.0,
+        unite: 'PAIRE',
+      },
+    ]);
   });
 
   it('extracts shipment-level cost fields (devise, montant facturé, taux de change, fret, assurance, valeur totale déclarée) from the real sample', () => {
