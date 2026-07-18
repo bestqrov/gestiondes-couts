@@ -465,7 +465,7 @@ app.get('/superadmin/dashboard', requireSuperAdmin, async (req, res) => {
     transactionCount = await countTransactions(collection);
     const transactions = await listAllTransactions(collection);
     availablePeriods = getAvailablePeriods(transactions);
-    countryCounts = aggregateCountryProductCounts(transactions, selectedPeriod || undefined);
+    countryCounts = selectedPeriod ? aggregateCountryProductCounts(transactions, selectedPeriod) : [];
   } catch (mongoError) {
     console.error('Failed to reach MongoDB for the dashboard overview:', mongoError);
   }

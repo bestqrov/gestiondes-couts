@@ -2,10 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { renderWorldMapPanel } from '../../src/web/worldMap.js';
 
 describe('renderWorldMapPanel', () => {
-  it('shows the empty-state message with no period filter when there are no countries and no periods', () => {
+  it('shows the "no declarations yet" empty state with no period filter when there are no countries and no periods', () => {
     const html = renderWorldMapPanel([]);
-    expect(html).toContain('Pas encore de données');
+    expect(html).toContain("s'affichera ici après la génération de déclarations");
     expect(html).not.toContain('<select');
+  });
+
+  it('shows a "choose a period" prompt (not an aggregate of everything) when periods exist but none is selected', () => {
+    const html = renderWorldMapPanel([], ['2026-06', '2026-07'], '');
+    expect(html).toContain('Choisissez une période');
+    expect(html).toContain('Sélectionnez une période ci-dessus');
   });
 
   it('shows a period-specific empty-state message when a period is selected but has no data', () => {

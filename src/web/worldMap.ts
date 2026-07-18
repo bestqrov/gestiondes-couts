@@ -47,9 +47,12 @@ function renderPeriodFilter(availablePeriods: string[], selectedPeriod: string):
 // — one declaration line for 354 T-shirts is 1 "product line" but 354
 // actual units, and showing "1" there reads as obviously wrong.
 //
-// `availablePeriods`/`selectedPeriod` back an optional month filter — only
+// `availablePeriods`/`selectedPeriod` back a required month filter — only
 // months that actually have at least one saved declaration are offered, so
-// the dropdown never leads to a guaranteed-empty selection.
+// the dropdown never leads to a guaranteed-empty selection. Deliberately
+// shows nothing until a period is chosen (same "empty by default" pattern
+// as the Historique page), rather than aggregating every declaration ever
+// saved as the default view.
 export function renderWorldMapPanel(
   countryCounts: CountryProductCount[],
   availablePeriods: string[] = [],
@@ -58,14 +61,17 @@ export function renderWorldMapPanel(
   const periodFilter = renderPeriodFilter(availablePeriods, selectedPeriod);
 
   if (countryCounts.length === 0) {
+    const title = selectedPeriod ? 'Pas encore de données' : 'Choisissez une période';
     const message = selectedPeriod
       ? `Aucune déclaration générée pour ${formatPeriodLabel(selectedPeriod)}.`
-      : "La répartition géographique des produits s'affichera ici après la génération de déclarations.";
+      : availablePeriods.length === 0
+        ? "La répartition géographique des produits s'affichera ici après la génération de déclarations."
+        : 'Sélectionnez une période ci-dessus pour afficher la répartition géographique des produits.';
     return `
       ${periodFilter}
       <div class="card placeholder-card">
         <div class="placeholder-icon"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2.5c-3 3-3 12 0 15M10 2.5c3 3 3 12 0 15M2.5 10h15" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.4"/></svg></div>
-        <h2>Pas encore de données</h2>
+        <h2>${title}</h2>
         <p>${escapeHtml(message)}</p>
       </div>
     `;
