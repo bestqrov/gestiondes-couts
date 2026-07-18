@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregateCountryProductCounts,
+  getAvailablePeriods,
   type TransactionDocument,
 } from '../../src/db/transactionsRepository.js';
 
-function makeTransaction(articles: TransactionDocument['articles']): TransactionDocument {
+function makeTransaction(
+  articles: TransactionDocument['articles'],
+  createdAt = new Date().toISOString()
+): TransactionDocument {
   return {
     ownerUserId: '1',
     code: '500001',
@@ -16,7 +20,7 @@ function makeTransaction(articles: TransactionDocument['articles']): Transaction
     colisCount: null,
     referenceInterne: null,
     articles,
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
 }
 
@@ -80,5 +84,53 @@ describe('aggregateCountryProductCounts', () => {
       { pays: 'ITALIE', productCount: 1, totalQuantite: 500 },
       { pays: 'BANGLADESH', productCount: 3, totalQuantite: 30 },
     ]);
+  });
+
+  it('restricts aggregation to transactions created within the given "YYYY-MM" period', () => {
+    const transactions = [
+      makeTransaction(
+        [{ numero: 1, hsCode: 'A', nomArticle: 'A', pays: 'ITALIE', quantite: 100, costPerUnit: 1 }],
+        '2026-06-15T10:00:00.000Z'
+      ),
+      makeTransaction(
+        [{ numero: 1, hsCode: 'B', nomArticle: 'B', pays: 'ITALIE', quantite: 50, costPerUnit: 1 }],
+        '2026-07-01T10:00:00.000Z'
+      ),
+    ];
+    expect(aggregateCountryProductCounts(transactions, '2026-07')).toEqual([
+      { pays: 'ITALIE', productCount: 1, totalQuantite: 50 },
+    ]);
+  });
+
+  it('aggregates every transaction when no period is given', () => {
+    const transactions = [
+      makeTransaction(
+        [{ numero: 1, hsCode: 'A', nomArticle: 'A', pays: 'ITALIE', quantite: 100, costPerUnit: 1 }],
+        '2026-06-15T10:00:00.000Z'
+      ),
+      makeTransaction(
+        [{ numero: 1, hsCode: 'B', nomArticle: 'B', pays: 'ITALIE', quantite: 50, costPerUnit: 1 }],
+        '2026-07-01T10:00:00.000Z'
+      ),
+    ];
+    expect(aggregateCountryProductCounts(transactions)).toEqual([
+      { pays: 'ITALIE', productCount: 2, totalQuantite: 150 },
+    ]);
+  });
+});
+
+describe('getAvailablePeriods', () => {
+  it('returns an empty array when there are no transactions', () => {
+    expect(getAvailablePeriods([])).toEqual([]);
+  });
+
+  it('returns distinct "YYYY-MM" periods, newest first', () => {
+    const transactions = [
+      makeTransaction([], '2026-05-10T10:00:00.000Z'),
+      makeTransaction([], '2026-07-01T10:00:00.000Z'),
+      makeTransaction([], '2026-07-20T10:00:00.000Z'),
+      makeTransaction([], '2026-06-01T10:00:00.000Z'),
+    ];
+    expect(getAvailablePeriods(transactions)).toEqual(['2026-07', '2026-06', '2026-05']);
   });
 });

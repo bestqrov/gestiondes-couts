@@ -416,7 +416,9 @@ export function renderSuperAdminOverview(
   users: User[],
   declarationCount: number,
   settings: AppSettings,
-  countryCounts: CountryProductCount[]
+  countryCounts: CountryProductCount[],
+  availablePeriods: string[] = [],
+  selectedPeriod = ''
 ): string {
   const total = users.length;
   const active = users.filter((u) => u.disabledAt === null).length;
@@ -434,7 +436,7 @@ export function renderSuperAdminOverview(
     <div class="stat-grid">
       ${statCard('brand', declarationCount, 'Déclarations générées (total)')}
     </div>
-    ${renderWorldMapPanel(countryCounts)}
+    ${renderWorldMapPanel(countryCounts, availablePeriods, selectedPeriod)}
     <div class="card">
       <h2>Accès rapide</h2>
       <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>.</p>

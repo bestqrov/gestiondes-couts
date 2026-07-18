@@ -56,7 +56,9 @@ import { getMongoDb } from '../db/mongoClient.js';
 import {
   saveTransaction,
   countTransactions,
-  getCountryProductCounts,
+  listAllTransactions,
+  aggregateCountryProductCounts,
+  getAvailablePeriods,
   listTransactionsPaginated,
   getTransactionById,
   TRANSACTIONS_COLLECTION,
@@ -452,14 +454,18 @@ app.get('/download', async (_req, res) => {
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
 
-app.get('/superadmin/dashboard', requireSuperAdmin, async (_req, res) => {
+app.get('/superadmin/dashboard', requireSuperAdmin, async (req, res) => {
   let transactionCount = 0;
   let countryCounts: CountryProductCount[] = [];
+  let availablePeriods: string[] = [];
+  const selectedPeriod = typeof req.query.period === 'string' ? req.query.period : '';
   try {
     const mongoDb = await getMongoDb();
     const collection = mongoDb.collection<TransactionDocument>(TRANSACTIONS_COLLECTION);
     transactionCount = await countTransactions(collection);
-    countryCounts = await getCountryProductCounts(collection);
+    const transactions = await listAllTransactions(collection);
+    availablePeriods = getAvailablePeriods(transactions);
+    countryCounts = aggregateCountryProductCounts(transactions, selectedPeriod || undefined);
   } catch (mongoError) {
     console.error('Failed to reach MongoDB for the dashboard overview:', mongoError);
   }
@@ -467,7 +473,16 @@ app.get('/superadmin/dashboard', requireSuperAdmin, async (_req, res) => {
     listUsers(await getUsersCollection()),
     getAppSettings(await getSettingsCollection()),
   ]);
-  res.send(renderSuperAdminOverview(users, transactionCount, settings, countryCounts));
+  res.send(
+    renderSuperAdminOverview(
+      users,
+      transactionCount,
+      settings,
+      countryCounts,
+      availablePeriods,
+      selectedPeriod
+    )
+  );
 });
 
 // Lets a superadmin generate a declaration without leaving the sidebar

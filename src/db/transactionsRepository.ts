@@ -152,11 +152,17 @@ export interface CountryProductCount {
 // quantity per country (not the article-line count, which under-counts:
 // one declaration line for 354 T-shirts is 1 "product" but 354 units),
 // so ranking matches what's actually shown.
+//
+// `period` (a "YYYY-MM" string) restricts aggregation to transactions
+// created in that month — omitted (or falsy) aggregates every transaction,
+// same as before this filter existed.
 export function aggregateCountryProductCounts(
-  transactions: TransactionDocument[]
+  transactions: TransactionDocument[],
+  period?: string
 ): CountryProductCount[] {
+  const scoped = period ? transactions.filter((t) => t.createdAt.startsWith(period)) : transactions;
   const byCountry = new Map<string, { productCount: number; totalQuantite: number }>();
-  for (const transaction of transactions) {
+  for (const transaction of scoped) {
     for (const article of transaction.articles) {
       const existing = byCountry.get(article.pays) ?? { productCount: 0, totalQuantite: 0 };
       existing.productCount += 1;
@@ -169,11 +175,20 @@ export function aggregateCountryProductCounts(
     .sort((a, b) => b.totalQuantite - a.totalQuantite);
 }
 
+// The distinct "YYYY-MM" months that actually have at least one saved
+// transaction, newest first — powers the dashboard's period filter dropdown
+// so it only ever offers choices with real data behind them.
+export function getAvailablePeriods(transactions: TransactionDocument[]): string[] {
+  const periods = new Set(transactions.map((t) => t.createdAt.slice(0, 7)));
+  return Array.from(periods).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+}
+
 export async function getCountryProductCounts(
-  collection: Collection<TransactionDocument>
+  collection: Collection<TransactionDocument>,
+  period?: string
 ): Promise<CountryProductCount[]> {
   const transactions = await listAllTransactions(collection);
-  return aggregateCountryProductCounts(transactions);
+  return aggregateCountryProductCounts(transactions, period);
 }
 
 // Case-insensitive substring match on the company/redevable name, across
