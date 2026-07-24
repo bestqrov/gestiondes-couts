@@ -45,6 +45,10 @@ export async function addUnitLevelSheet(
     ...taxCodes.map((_, i) => 4 + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
+  const declarationValeurDeclareeTotal = declaration.articles.reduce(
+    (sum, article) => sum + article.valeurDeclaree,
+    0
+  );
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
 
@@ -92,10 +96,10 @@ export async function addUnitLevelSheet(
     // total the way tax montants do (allocateTaxAcrossUnits handles that
     // reconciliation case; this is a plain division).
     const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
-    // Prorata — this unit's share of its own product's total declared
-    // value (montant in Valeur Déclarée / that product's total Valeur
-    // Déclarée), not a share of the whole declaration.
-    const prorata = valeurDeclareePerUnit / article.valeurDeclaree;
+    // Prorata — this unit's share of the whole declaration's total declared
+    // value (montant in Valeur Déclarée / the sum of every article's Valeur
+    // Déclarée across the declaration), not just its own product's total.
+    const prorata = valeurDeclareePerUnit / declarationValeurDeclareeTotal;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {

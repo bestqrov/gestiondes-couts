@@ -63,8 +63,9 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(3).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(7).value)).toBeCloseTo(27147.0 / 354, 4);
-    // Prorata — this unit's Valeur Déclarée over article 1's total (1/354).
-    expect(Number(firstRow.getCell(8).value)).toBeCloseTo(1 / 354, 6);
+    // Prorata — this unit's Valeur Déclarée over the whole declaration's total
+    // Valeur Déclarée (article 1's 27147.0 + article 2's 12892.992 = 40039.992).
+    expect(Number(firstRow.getCell(8).value)).toBeCloseTo(27147.0 / 354 / 40039.992, 6);
 
     // last row of article 1, first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(357);
@@ -74,8 +75,8 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(7).value)).toBeCloseTo(12892.992 / 200, 4);
-    // Prorata — article 2's own total (1/200), independent of article 1's.
-    expect(Number(firstRowArticle2.getCell(8).value)).toBeCloseTo(1 / 200, 6);
+    // Prorata — still divided by the whole declaration's total, not article 2's own total.
+    expect(Number(firstRowArticle2.getCell(8).value)).toBeCloseTo(12892.992 / 200 / 40039.992, 6);
     // A thicker top border marks where article 2's block starts.
     expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 
@@ -94,6 +95,15 @@ describe('generateUnitLevelExcel', () => {
     expect(sum000110).toBeCloseTo(0.0, 2);
     expect(sum002109).toBeCloseTo(5443.0, 2);
     expect(sum007217).toBeCloseTo(68.0, 2);
+
+    // Every unit row's Prorata, summed across both articles, must reconcile
+    // to 100% of the declaration — confirms Prorata is divided by the whole
+    // declaration's total Valeur Déclarée, not each article's own total.
+    let prorataSum = 0;
+    for (let rowNum = 4; rowNum <= 557; rowNum++) {
+      prorataSum += Number(sheet.getRow(rowNum).getCell(8).value);
+    }
+    expect(prorataSum).toBeCloseTo(1, 6);
   });
 
   it('throws when an article quantite is not a whole number', async () => {
