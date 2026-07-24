@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
-import { allocateTaxAcrossUnits, unionTaxCodes } from './unitLevelTaxHelpers.js';
+import { allocateTaxAcrossUnits, taxCodeDesignation, unionTaxCodes } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
   styleHeaderRowGrouped,
@@ -76,7 +76,7 @@ export async function addUnitLevelSheet(
     'Nom Article',
     'HSC',
     'Serial Number',
-    ...taxCodes,
+    ...taxCodes.map(taxCodeDesignation),
     'Valeur Déclarée',
     'Prorata',
   ]);

@@ -33,3 +33,21 @@ export function unionTaxCodes(articles: Article[]): string[] {
   }
   return Array.from(codes).sort();
 }
+
+// Rubrique code -> designation, from the customs office's own reference
+// table. Codes not in this table are left with a blank header (rather than
+// falling back to the raw code) until a designation is provided for them.
+const TAX_CODE_DESIGNATIONS: Record<string, string> = {
+  '002701': 'REDV.INF.(AVEC D et T)',
+  '006901': 'RI SEGMA',
+  '000110': 'DTS IMPORT NORMAL',
+  '001102': 'TIC SUR LES ALCOOLS',
+  '007217': 'TAXE F.P.E.I. EXP.',
+  '002109': 'TVA IMPORT AUTRE PDS',
+  '004801': 'FDS PROT.ENVI.DEV.DUR',
+  '006000': 'REMISES CREDIT',
+};
+
+export function taxCodeDesignation(code: string): string {
+  return TAX_CODE_DESIGNATIONS[code] ?? '';
+}

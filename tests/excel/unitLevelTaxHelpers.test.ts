@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allocateTaxAcrossUnits, unionTaxCodes } from '../../src/excel/unitLevelTaxHelpers.js';
+import { allocateTaxAcrossUnits, taxCodeDesignation, unionTaxCodes } from '../../src/excel/unitLevelTaxHelpers.js';
 import type { Article } from '../../src/domain/types.js';
 
 describe('allocateTaxAcrossUnits', () => {
@@ -78,5 +78,22 @@ describe('unionTaxCodes', () => {
 
   it('returns an empty array for articles with no taxes', () => {
     expect(unionTaxCodes([makeArticle([])])).toEqual([]);
+  });
+});
+
+describe('taxCodeDesignation', () => {
+  it('returns the known designation for each rubrique code in the reference table', () => {
+    expect(taxCodeDesignation('002701')).toBe('REDV.INF.(AVEC D et T)');
+    expect(taxCodeDesignation('006901')).toBe('RI SEGMA');
+    expect(taxCodeDesignation('000110')).toBe('DTS IMPORT NORMAL');
+    expect(taxCodeDesignation('001102')).toBe('TIC SUR LES ALCOOLS');
+    expect(taxCodeDesignation('007217')).toBe('TAXE F.P.E.I. EXP.');
+    expect(taxCodeDesignation('002109')).toBe('TVA IMPORT AUTRE PDS');
+    expect(taxCodeDesignation('004801')).toBe('FDS PROT.ENVI.DEV.DUR');
+    expect(taxCodeDesignation('006000')).toBe('REMISES CREDIT');
+  });
+
+  it('returns an empty string for a code not in the reference table', () => {
+    expect(taxCodeDesignation('999999')).toBe('');
   });
 });

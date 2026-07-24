@@ -48,9 +48,10 @@ describe('generateUnitLevelExcel', () => {
     expect(headerRow.getCell(2).value).toBe('HSC');
     expect(headerRow.getCell(3).value).toBe('Serial Number');
     // union of tax codes across both articles, sorted: 000110, 002109, 007217
-    expect(headerRow.getCell(4).value).toBe('000110');
-    expect(headerRow.getCell(5).value).toBe('002109');
-    expect(headerRow.getCell(6).value).toBe('007217');
+    // — headers show each code's designation, not the raw rubrique number.
+    expect(headerRow.getCell(4).value).toBe('DTS IMPORT NORMAL');
+    expect(headerRow.getCell(5).value).toBe('TVA IMPORT AUTRE PDS');
+    expect(headerRow.getCell(6).value).toBe('TAXE F.P.E.I. EXP.');
     expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
     expect(headerRow.getCell(8).value).toBe('Prorata');
 
@@ -164,9 +165,9 @@ describe('generateUnitLevelExcel', () => {
 
     // header: Nom Article | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
     const headerRow = sheet.getRow(3);
-    expect(headerRow.getCell(4).value).toBe('000110');
-    expect(headerRow.getCell(5).value).toBe('002109');
-    expect(headerRow.getCell(6).value).toBe('007217');
+    expect(headerRow.getCell(4).value).toBe('DTS IMPORT NORMAL');
+    expect(headerRow.getCell(5).value).toBe('TVA IMPORT AUTRE PDS');
+    expect(headerRow.getCell(6).value).toBe('TAXE F.P.E.I. EXP.');
     expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
 
     // article A: 3 rows (rows 4-6), has 000110 and 007217 but NOT 002109 -> 002109 column must be 0
