@@ -24,6 +24,19 @@ function isMatchingCreditEnlevementCode(liquidationCode: string, dumCode: string
   return dumCode.length === liquidationCode.length + 3 && dumCode.startsWith(liquidationCode);
 }
 
+// Only the first 6 digits (the HS "position" shared by every national
+// tariff) need to agree between the two documents — the trailing digits are
+// a national subdivision that can legitimately be entered slightly
+// differently across the Liquidation and DUM without being a real mismatch.
+const HS_CODE_COMPARISON_LENGTH = 6;
+
+function hsCodesMatch(liquidationHsCode: string, dumHsCode: string): boolean {
+  return (
+    liquidationHsCode.slice(0, HS_CODE_COMPARISON_LENGTH) ===
+    dumHsCode.slice(0, HS_CODE_COMPARISON_LENGTH)
+  );
+}
+
 export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult): Declaration {
   if (!isMatchingCreditEnlevementCode(liquidation.header.code, dum.creditEnlevementCode)) {
     throw new MergeError(
@@ -39,7 +52,7 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
       throw new MergeError(`Article ${liqArticle.numero} present in Liquidation but not found in DUM`);
     }
 
-    if (dumArticle.hsCode !== liqArticle.hsCode) {
+    if (!hsCodesMatch(liqArticle.hsCode, dumArticle.hsCode)) {
       throw new MergeError(
         `Article ${liqArticle.numero}: HS code mismatch (Liquidation "${liqArticle.hsCode}" vs DUM "${dumArticle.hsCode}")`
       );

@@ -64,7 +64,7 @@ describe('mergeDeclaration', () => {
     expect(() => mergeDeclaration(liquidation, skewedDum)).toThrow(MergeError);
   });
 
-  it('throws when the HS code differs between Liquidation and DUM for the same article', () => {
+  it('throws when the HS code differs between Liquidation and DUM for the same article, even within the first 6 digits', () => {
     const { liquidation, dum } = loadRealDeclaration();
     const mismatchedHsCodeDum = {
       ...dum,
@@ -72,6 +72,18 @@ describe('mergeDeclaration', () => {
     };
 
     expect(() => mergeDeclaration(liquidation, mismatchedHsCodeDum)).toThrow(MergeError);
+  });
+
+  it('does not throw when the HS code only differs after the first 6 digits (national tariff subdivision)', () => {
+    // Real article 1's hsCode is "6109100010" — only the trailing 4 digits
+    // are changed here, so the 6-digit HS position ("610910") still agrees.
+    const { liquidation, dum } = loadRealDeclaration();
+    const suffixOnlyMismatchDum = {
+      ...dum,
+      articles: dum.articles.map((a) => (a.ordre === 1 ? { ...a, hsCode: '6109109999' } : a)),
+    };
+
+    expect(() => mergeDeclaration(liquidation, suffixOnlyMismatchDum)).not.toThrow();
   });
 
   it('throws when quantité differs beyond tolerance between the two documents', () => {
