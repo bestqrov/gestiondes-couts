@@ -40,28 +40,41 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
 const MONEY_FORMAT = '#,##0.00';
 const PERCENT_FORMAT = '0.00%';
 
+const CENTERED: Partial<ExcelJS.Alignment> = { vertical: 'middle', horizontal: 'center' };
+
 export const HEADER_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 },
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } },
-  alignment: { vertical: 'middle', horizontal: 'left' },
+  alignment: CENTERED,
   border: THIN_BORDER,
 };
 
-const ROW_STYLE_PLAIN: Partial<ExcelJS.Style> = { border: THIN_BORDER };
+const ROW_STYLE_PLAIN: Partial<ExcelJS.Style> = { border: THIN_BORDER, alignment: CENTERED };
 const ROW_STYLE_PLAIN_BANDED: Partial<ExcelJS.Style> = {
   border: THIN_BORDER,
+  alignment: CENTERED,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
-const ROW_STYLE_MONEY: Partial<ExcelJS.Style> = { border: THIN_BORDER, numFmt: MONEY_FORMAT };
+const ROW_STYLE_MONEY: Partial<ExcelJS.Style> = {
+  border: THIN_BORDER,
+  numFmt: MONEY_FORMAT,
+  alignment: CENTERED,
+};
 const ROW_STYLE_MONEY_BANDED: Partial<ExcelJS.Style> = {
   border: THIN_BORDER,
   numFmt: MONEY_FORMAT,
+  alignment: CENTERED,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
-const ROW_STYLE_PERCENT: Partial<ExcelJS.Style> = { border: THIN_BORDER, numFmt: PERCENT_FORMAT };
+const ROW_STYLE_PERCENT: Partial<ExcelJS.Style> = {
+  border: THIN_BORDER,
+  numFmt: PERCENT_FORMAT,
+  alignment: CENTERED,
+};
 const ROW_STYLE_PERCENT_BANDED: Partial<ExcelJS.Style> = {
   border: THIN_BORDER,
   numFmt: PERCENT_FORMAT,
+  alignment: CENTERED,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
 
@@ -110,7 +123,7 @@ export function styleHeaderRowGrouped(
       ? {
           font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 },
           fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: COLUMN_GROUP_ARGB[group.kind] } },
-          alignment: { vertical: 'middle', horizontal: 'left' },
+          alignment: CENTERED,
           border: THIN_BORDER,
         }
       : HEADER_STYLE;

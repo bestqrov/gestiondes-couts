@@ -63,13 +63,13 @@ export async function addUnitLevelSheet(
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
 
   sheet.columns = [
-    { key: 'nomArticle', width: 30 },
-    { key: 'hsCode', width: 15 },
-    { key: 'serialNumber', width: 15 },
-    ...taxCodes.map((code) => ({ key: code, width: 14 })),
-    ...extraCodes.map((code) => ({ key: code, width: 14 })),
-    { key: 'valeurDeclaree', width: 16 },
-    { key: 'prorata', width: 14 },
+    { key: 'nomArticle', width: 36 },
+    { key: 'hsCode', width: 20 },
+    { key: 'serialNumber', width: 18 },
+    ...taxCodes.map((code) => ({ key: code, width: 24 })),
+    ...extraCodes.map((code) => ({ key: code, width: 24 })),
+    { key: 'valeurDeclaree', width: 22 },
+    { key: 'prorata', width: 18 },
   ];
 
   await addSheetTitleRows(

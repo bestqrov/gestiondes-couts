@@ -34,11 +34,11 @@ export async function addArticleSummarySheet(
   // styled explicitly below instead of relying on ExcelJS's implicit
   // header-from-columns behavior, so it can be colored/bolded.
   sheet.columns = [
-    { key: 'nomArticle', width: 30 },
-    { key: 'hsCode', width: 15 },
-    { key: 'pays', width: 20 },
-    { key: 'valeurDeclaree', width: 18 },
-    { key: 'quantite', width: 18 },
+    { key: 'nomArticle', width: 36 },
+    { key: 'hsCode', width: 20 },
+    { key: 'pays', width: 24 },
+    { key: 'valeurDeclaree', width: 22 },
+    { key: 'quantite', width: 22 },
   ];
 
   await addSheetTitleRows(
