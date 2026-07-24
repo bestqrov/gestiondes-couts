@@ -27,7 +27,7 @@ describe('generateCombinedExcel', () => {
     tempDir = undefined;
   });
 
-  it('writes a single .xlsx file containing the Articles summary, a combined Global sheet, plus one sheet per product', async () => {
+  it('writes a single .xlsx file containing only the Articles summary and a combined Global sheet', async () => {
     const declaration = loadRealDeclaration();
     const { filePath, dir } = createTempXlsxPath('combined');
     tempDir = dir;
@@ -41,14 +41,9 @@ describe('generateCombinedExcel', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    // 1 summary sheet + 1 combined "Global" sheet + 1 sheet per article (2 articles in this fixture)
-    expect(workbook.worksheets).toHaveLength(4);
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
-      'Articles',
-      'Global',
-      '1-T-SHIRT',
-      '2-T-SHIRT',
-    ]);
+    // 1 summary sheet + 1 combined "Global" sheet — no per-article sheets.
+    expect(workbook.worksheets).toHaveLength(2);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Articles', 'Global']);
 
     // Every sheet gets the same 2-row letterhead: company name, then the
     // document reference — checked once here (the per-sheet content itself
@@ -77,12 +72,5 @@ describe('generateCombinedExcel', () => {
     expect(separatorBorder?.top?.style).toBe('medium');
     // No separator on the very first product's block (row 4) — nothing to separate it from.
     expect(globalSheet.getRow(4).getCell(1).border?.top?.style).not.toBe('medium');
-
-    const article1Sheet = workbook.getWorksheet('1-T-SHIRT')!;
-    expect(article1Sheet.getRow(3).getCell(1).value).toBe('Nom Article');
-    expect(article1Sheet.rowCount).toBe(357); // 2 title rows + header + 354 unit rows
-
-    const article2Sheet = workbook.getWorksheet('2-T-SHIRT')!;
-    expect(article2Sheet.rowCount).toBe(203); // 2 title rows + header + 200 unit rows
   });
 });
