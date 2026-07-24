@@ -190,6 +190,79 @@ REDEVABLE : MED AFRICA LOGISTICS CODE : 309536
     ]);
   });
 
+  it('parses the RECAPITULATION table into ordonnancementTaxes, excluding the blank-code SOUS-TOTAL line', () => {
+    const text = `CODE : 309536
+REDEVABLE : MED AFRICA LOGISTICS CODE : 309536
+CATEGORIE D'ORDONNANCEMENT : Crédit d'enlèvement B E N° : 136 DU : 14/07/2026
+
+ARTICLE : 1 NUMERO SH : 6109100010 VALEUR : 27 147,00
+QUANTITE : 354.000 UNITE : NOMBRE
+
+! TAXE ! ASSIETTE ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL ! MONTANT !
+! 000110 ! 27147.00 ! 0.0 ! T ! ! ! 0,00 !
+TOTAL ARTICLE : 5 511,00
+
+! RUBRIQUE ! DESIGNATIONS ! MONTANTS !
+! 002701 ! REDV.INF.(AVEC D et T) ! 100,00 !
+! 006901 ! RI SEGMA ! 50,00 !
+! 000110 ! DTS IMPORT NORMAL ! 26 936,00 !
+! 001102 ! TIC SUR LES ALCOOLS ! 75,00 !
+! 007217 ! TAXE F.P.E.I. EXP. ! 346,00 !
+! 002109 ! TVA IMPORT AUTRE PDS ! 31 893,00 !
+! 004801 ! FDS PROT.ENVI.DEV.DUR ! 6,00 !
+! ! SOUS-TOTAL ! 59 406,00 !
+! 006000 ! REMISES CREDIT ! 244,00 !
+ T O T A L : 59 650,00
+`;
+    const result = parseLiquidation(text);
+    expect(result.ordonnancementTaxes).toEqual([
+      { code: '002701', designation: 'REDV.INF.(AVEC D et T)', montant: 100.0 },
+      { code: '006901', designation: 'RI SEGMA', montant: 50.0 },
+      { code: '000110', designation: 'DTS IMPORT NORMAL', montant: 26936.0 },
+      { code: '001102', designation: 'TIC SUR LES ALCOOLS', montant: 75.0 },
+      { code: '007217', designation: 'TAXE F.P.E.I. EXP.', montant: 346.0 },
+      { code: '002109', designation: 'TVA IMPORT AUTRE PDS', montant: 31893.0 },
+      { code: '004801', designation: 'FDS PROT.ENVI.DEV.DUR', montant: 6.0 },
+      { code: '006000', designation: 'REMISES CREDIT', montant: 244.0 },
+    ]);
+  });
+
+  it('does not mistake the "LISTE REDEVABLES SOLIDAIRES" table (or any table without a RECAPITULATION header) for rubrique rows', () => {
+    const text = `CODE : 309536
+REDEVABLE : MED AFRICA LOGISTICS CODE : 309536
+CATEGORIE D'ORDONNANCEMENT : Crédit d'enlèvement B E N° : 136 DU : 14/07/2026
+
+ARTICLE : 1 NUMERO SH : 6109100010 VALEUR : 27 147,00
+QUANTITE : 354.000 UNITE : NOMBRE
+
+! TAXE ! ASSIETTE ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL ! MONTANT !
+! 000110 ! 27147.00 ! 0.0 ! T ! ! ! 0,00 !
+TOTAL ARTICLE : 5 511,00
+
+! LISTE REDEVABLES SOLIDAIRES !
+! REDEVABLE SOLIDAIRE ! IDENTIFIANT !
+! CHICCORNER ! CASABLANCA(81)/627669 !
+`;
+    const result = parseLiquidation(text);
+    expect(result.ordonnancementTaxes).toEqual([]);
+  });
+
+  it('returns an empty ordonnancementTaxes array when the document has no RECAPITULATION table at all', () => {
+    const text = `CODE : 123
+REDEVABLE : X
+B E N° : 1
+
+ARTICLE  : 1              NUMERO SH : 6109100010     VALEUR :   27 147,00
+QUANTITE : 354.000                UNITE : NOMBRE
+
+TAXE   ! ASSIETTE  ! TAUX ! S.TVA ! S.FR ! TAUX VIRTUEL !  MONTANT
+! 000110 !  27147.00 !  0.0 !   T   !      !              !     0,00 !
+TOTAL ARTICLE :          5 511,00
+`;
+    const result = parseLiquidation(text);
+    expect(result.ordonnancementTaxes).toEqual([]);
+  });
+
   // Note: the existing "parses header and both articles from the real sample document" test
   // already exercises the (?<!TOTAL ) lookbehind implicitly, since the fixture contains
   // "TOTAL ARTICLE :" lines between article blocks and correctly yields exactly 2 articles

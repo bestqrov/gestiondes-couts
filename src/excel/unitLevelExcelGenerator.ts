@@ -35,14 +35,24 @@ export async function addUnitLevelSheet(
   sheetName = 'Unit Detail'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
+  // Rubriques from the Liquidation's RECAPITULATION table that never appear
+  // in any article's own tax rows (e.g. REDV.INF., RI SEGMA, REMISES CREDIT)
+  // — only known as one declaration-wide montant, so each unit row gets its
+  // share via montant × Prorata rather than allocateTaxAcrossUnits.
+  const extraOrdonnancementTaxes = declaration.ordonnancementTaxes.filter(
+    (tax) => !taxCodes.includes(tax.code)
+  );
+  const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
+  const allTaxCodeCount = taxCodes.length + extraCodes.length;
   // Valeur Déclarée and Prorata are the last two columns, after every tax
-  // code column.
-  const columnCount = 3 + taxCodes.length + 2;
+  // code column (per-article union, then extra ordonnancement-only codes).
+  const columnCount = 3 + allTaxCodeCount + 2;
   const valeurDeclareeColumn = columnCount - 1;
   const prorataColumn = columnCount;
   const moneyColumns = new Set<number>([
     valeurDeclareeColumn,
     ...taxCodes.map((_, i) => 4 + i),
+    ...extraCodes.map((_, i) => 4 + taxCodes.length + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
@@ -57,6 +67,7 @@ export async function addUnitLevelSheet(
     { key: 'hsCode', width: 15 },
     { key: 'serialNumber', width: 15 },
     ...taxCodes.map((code) => ({ key: code, width: 14 })),
+    ...extraCodes.map((code) => ({ key: code, width: 14 })),
     { key: 'valeurDeclaree', width: 16 },
     { key: 'prorata', width: 14 },
   ];
@@ -77,10 +88,11 @@ export async function addUnitLevelSheet(
     'HSC',
     'Serial Number',
     ...taxCodes.map(taxCodeDesignation),
+    ...extraOrdonnancementTaxes.map((tax) => tax.designation),
     'Valeur Déclarée',
     'Prorata',
   ]);
-  styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
+  styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, allTaxCodeCount));
 
   let dataRowIndex = 0;
   declaration.articles.forEach((article, articleIndex) => {
@@ -120,6 +132,9 @@ export async function addUnitLevelSheet(
       };
       for (const code of taxCodes) {
         rowValues[code] = perCodeAllocations.get(code)![unit];
+      }
+      for (const tax of extraOrdonnancementTaxes) {
+        rowValues[tax.code] = tax.montant * prorata;
       }
       const row = sheet.addRow(rowValues);
       styleDataRow(row, columnCount, dataRowIndex, moneyColumns, percentColumns);

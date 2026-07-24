@@ -153,6 +153,7 @@ describe('generateUnitLevelExcel', () => {
           totalArticle: 10,
         },
       ],
+      ordonnancementTaxes: [],
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-divergent-codes');
     tempDir = dir;
@@ -194,5 +195,73 @@ describe('generateUnitLevelExcel', () => {
       sumB002109 += Number(sheet.getRow(rowNum).getCell(5).value);
     }
     expect(sumB002109).toBeCloseTo(10, 2);
+  });
+
+  it('adds a column for a RECAPITULATION rubrique that never appears in any article\'s own tax rows, filled as montant × Prorata', async () => {
+    // 002701 (REDV.INF.) is a whole-declaration rubrique from the Liquidation's
+    // RECAPITULATION table — it never shows up in article A's or B's own tax
+    // rows, only in ordonnancementTaxes, so it must still get its own column
+    // (built from montant × Prorata) rather than being silently dropped.
+    const declaration: Declaration = {
+      code: '111111',
+      redevable: 'DIVERGENT CODES CO',
+      benNumero: '1',
+      articles: [
+        {
+          numero: 1,
+          hsCode: '1111111111',
+          nomArticle: 'ARTICLE A',
+          pays: 'ITALIE',
+          paysCode: 'IT',
+          valeurDeclaree: 100,
+          quantite: 3,
+          unite: 'U',
+          taxes: [{ code: '000110', assiette: 100, taux: 0, montant: 0 }],
+          totalArticle: 0,
+        },
+        {
+          numero: 2,
+          hsCode: '2222222222',
+          nomArticle: 'ARTICLE B',
+          pays: 'BANGLADESH',
+          paysCode: 'BD',
+          valeurDeclaree: 50,
+          quantite: 2,
+          unite: 'U',
+          taxes: [{ code: '000110', assiette: 50, taux: 0, montant: 0 }],
+          totalArticle: 0,
+        },
+      ],
+      ordonnancementTaxes: [{ code: '002701', designation: 'REDV.INF.(AVEC D et T)', montant: 100 }],
+    };
+    const { filePath, dir } = createTempXlsxPath('unit-level-ordonnancement');
+    tempDir = dir;
+
+    await generateUnitLevelExcel(declaration, filePath, NO_BRANDING);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const sheet = workbook.worksheets[0];
+
+    // header: Nom Article | HSC | Serial Number | 000110 | REDV.INF.(AVEC D et T) | Valeur Déclarée | Prorata
+    const headerRow = sheet.getRow(3);
+    expect(headerRow.getCell(5).value).toBe('REDV.INF.(AVEC D et T)');
+    expect(headerRow.getCell(6).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(7).value).toBe('Prorata');
+
+    // 5 rows total (article A: 3 units, article B: 2 units); declaration total
+    // Valeur Déclarée = 150, so each unit's Prorata = (its own per-unit value) / 150.
+    let sumOrdonnancement = 0;
+    for (let rowNum = 4; rowNum <= 8; rowNum++) {
+      sumOrdonnancement += Number(sheet.getRow(rowNum).getCell(5).value);
+    }
+    // Reconciles back to the rubrique's full montant, since Prorata sums to 1
+    // across every row of the declaration.
+    expect(sumOrdonnancement).toBeCloseTo(100, 6);
+
+    // Article A's per-unit value is 100/3; its share of the 002701 montant
+    // is (100/3 / 150) × 100.
+    const firstRow = sheet.getRow(4);
+    expect(Number(firstRow.getCell(5).value)).toBeCloseTo(((100 / 3) / 150) * 100, 6);
   });
 });

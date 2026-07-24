@@ -27,6 +27,7 @@ function makeLargeDeclaration(quantite: number): Declaration {
         totalArticle: 20250,
       },
     ],
+    ordonnancementTaxes: [],
   };
 }
 

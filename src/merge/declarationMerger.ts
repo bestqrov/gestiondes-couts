@@ -99,5 +99,6 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
     redevable: liquidation.header.redevable,
     benNumero: liquidation.header.benNumero,
     articles,
+    ordonnancementTaxes: liquidation.ordonnancementTaxes,
   };
 }

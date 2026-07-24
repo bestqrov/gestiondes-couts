@@ -17,9 +17,21 @@ export interface LiquidationArticleResult {
   totalArticle: number;
 }
 
+// A rubrique from the RECAPITULATION table (in the "CELLULE D'ORDONNANCEMENT"
+// section, near the end of the Liquidation document) — a declaration-wide
+// montant, not broken down per article the way TaxLine's are. Some rubriques
+// here (e.g. REDV.INF., RI SEGMA, REMISES CREDIT) never appear in any
+// article's own tax rows; they only exist at this whole-declaration level.
+export interface OrdonnancementTaxLine {
+  code: string;
+  designation: string;
+  montant: number;
+}
+
 export interface LiquidationResult {
   header: LiquidationHeader;
   articles: LiquidationArticleResult[];
+  ordonnancementTaxes: OrdonnancementTaxLine[];
 }
 
 // The negative lookbehind (?<!TOTAL ) excludes "TOTAL ARTICLE :" lines, which also match the
@@ -94,6 +106,36 @@ function parseTaxRows(block: string): TaxLine[] {
   return taxes;
 }
 
+// Bounds the search to the RECAPITULATION table itself — "! RUBRIQUE !
+// DESIGNATIONS ! MONTANTS !" through the "T O T A L :" line right after it —
+// so unrelated "!"-delimited tables elsewhere in the document (e.g. "LISTE
+// REDEVABLES SOLIDAIRES") can never be mistaken for rubrique rows.
+const RECAPITULATION_SECTION_PATTERN =
+  /RUBRIQUE\s*!\s*DESIGNATIONS[\s\S]*?T\s*O\s*T\s*A\s*L\s*:/;
+
+// A rubrique row has a (possibly blank, for "SOUS-TOTAL") 6-digit code, a
+// designation, and a montant, each "!"-delimited — e.g.
+// "! 002701 ! REDV.INF.(AVEC D et T) ! 100,00 !" or
+// "! ! SOUS-TOTAL ! 59 406,00 !". The blank-code "SOUS-TOTAL" line is a
+// subtotal marker, not a real rubrique, and is naturally excluded by callers
+// filtering on a present code.
+const ORDONNANCEMENT_ROW_PATTERN = /^!\s*(\d{6})?\s*!\s*([^!]+?)\s*!\s*([\d\s]+,\d{2})\s*!$/;
+
+function parseOrdonnancementTaxes(text: string): OrdonnancementTaxLine[] {
+  const sectionMatch = text.match(RECAPITULATION_SECTION_PATTERN);
+  if (!sectionMatch) return [];
+
+  const taxes: OrdonnancementTaxLine[] = [];
+  for (const line of sectionMatch[0].split('\n')) {
+    const rowMatch = ORDONNANCEMENT_ROW_PATTERN.exec(line.trim());
+    if (!rowMatch) continue;
+    const [, code, designation, montantRaw] = rowMatch;
+    if (!code) continue; // "SOUS-TOTAL" — a subtotal marker, not a rubrique.
+    taxes.push({ code, designation: designation.trim(), montant: parseFrenchNumber(montantRaw) });
+  }
+  return taxes;
+}
+
 export function parseLiquidation(text: string): LiquidationResult {
   const code = extractFirst(text, /CODE\s*:\s*(\d+)/);
   // Stop the capture at the next label on the same line (e.g. OCR often merges
@@ -145,5 +187,7 @@ export function parseLiquidation(text: string): LiquidationResult {
     throw new Error('No articles found in Liquidation document');
   }
 
-  return { header: { code, redevable, benNumero }, articles };
+  const ordonnancementTaxes = parseOrdonnancementTaxes(text);
+
+  return { header: { code, redevable, benNumero }, articles, ordonnancementTaxes };
 }

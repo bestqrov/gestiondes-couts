@@ -121,6 +121,7 @@ describe('generateArticleSummaryExcel', () => {
       redevable: 'EMPTY CO',
       benNumero: '1',
       articles: [],
+      ordonnancementTaxes: [],
     };
     const { filePath, dir } = createTempXlsxPath('article-summary-empty');
     tempDir = dir;
