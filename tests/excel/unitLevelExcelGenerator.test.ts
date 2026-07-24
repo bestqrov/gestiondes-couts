@@ -52,6 +52,7 @@ describe('generateUnitLevelExcel', () => {
     expect(headerRow.getCell(5).value).toBe('002109');
     expect(headerRow.getCell(6).value).toBe('007217');
     expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(8).value).toBe('Prorata');
 
     // 2 title rows + header + article 1 (354 units) + article 2 (200 units) = 557
     expect(sheet.rowCount).toBe(557);
@@ -62,6 +63,8 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(3).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(7).value)).toBeCloseTo(27147.0 / 354, 4);
+    // Prorata — this unit's Valeur Déclarée over article 1's total (1/354).
+    expect(Number(firstRow.getCell(8).value)).toBeCloseTo(1 / 354, 6);
 
     // last row of article 1, first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(357);
@@ -71,6 +74,8 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(7).value)).toBeCloseTo(12892.992 / 200, 4);
+    // Prorata — article 2's own total (1/200), independent of article 1's.
+    expect(Number(firstRowArticle2.getCell(8).value)).toBeCloseTo(1 / 200, 6);
     // A thicker top border marks where article 2's block starts.
     expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 

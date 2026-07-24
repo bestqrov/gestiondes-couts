@@ -18,7 +18,7 @@ function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): Colum
   return [
     { kind: 'identity', from: 1, to: 3 }, // Nom Article, HSC, Serial Number
     { kind: 'tax', from: 4, to: 3 + taxCodeCount },
-    { kind: 'value', from: columnCount, to: columnCount }, // Valeur Déclarée
+    { kind: 'value', from: columnCount - 1, to: columnCount }, // Valeur Déclarée, Prorata
   ];
 }
 
@@ -35,13 +35,16 @@ export async function addUnitLevelSheet(
   sheetName = 'Unit Detail'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
-  // Valeur Déclarée is the last column, after every tax code column.
-  const columnCount = 3 + taxCodes.length + 1;
-  const valeurDeclareeColumn = columnCount;
+  // Valeur Déclarée and Prorata are the last two columns, after every tax
+  // code column.
+  const columnCount = 3 + taxCodes.length + 2;
+  const valeurDeclareeColumn = columnCount - 1;
+  const prorataColumn = columnCount;
   const moneyColumns = new Set<number>([
     valeurDeclareeColumn,
     ...taxCodes.map((_, i) => 4 + i),
   ]);
+  const percentColumns = new Set<number>([prorataColumn]);
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
 
@@ -51,6 +54,7 @@ export async function addUnitLevelSheet(
     { key: 'serialNumber', width: 15 },
     ...taxCodes.map((code) => ({ key: code, width: 14 })),
     { key: 'valeurDeclaree', width: 16 },
+    { key: 'prorata', width: 14 },
   ];
 
   await addSheetTitleRows(
@@ -70,6 +74,7 @@ export async function addUnitLevelSheet(
     'Serial Number',
     ...taxCodes,
     'Valeur Déclarée',
+    'Prorata',
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, taxCodes.length));
 
@@ -87,6 +92,10 @@ export async function addUnitLevelSheet(
     // total the way tax montants do (allocateTaxAcrossUnits handles that
     // reconciliation case; this is a plain division).
     const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
+    // Prorata — this unit's share of its own product's total declared
+    // value (montant in Valeur Déclarée / that product's total Valeur
+    // Déclarée), not a share of the whole declaration.
+    const prorata = valeurDeclareePerUnit / article.valeurDeclaree;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {
@@ -103,12 +112,13 @@ export async function addUnitLevelSheet(
         hsCode: article.hsCode,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,
+        prorata,
       };
       for (const code of taxCodes) {
         rowValues[code] = perCodeAllocations.get(code)![unit];
       }
       const row = sheet.addRow(rowValues);
-      styleDataRow(row, columnCount, dataRowIndex, moneyColumns);
+      styleDataRow(row, columnCount, dataRowIndex, moneyColumns, percentColumns);
       // A thicker top border marks where each new product's block of unit
       // rows begins, so it's visually obvious where one product ends and
       // the next starts in this combined sheet — skipped for the very

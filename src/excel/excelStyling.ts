@@ -38,6 +38,7 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
 };
 
 const MONEY_FORMAT = '#,##0.00';
+const PERCENT_FORMAT = '0.00%';
 
 export const HEADER_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 },
@@ -55,6 +56,12 @@ const ROW_STYLE_MONEY: Partial<ExcelJS.Style> = { border: THIN_BORDER, numFmt: M
 const ROW_STYLE_MONEY_BANDED: Partial<ExcelJS.Style> = {
   border: THIN_BORDER,
   numFmt: MONEY_FORMAT,
+  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
+};
+const ROW_STYLE_PERCENT: Partial<ExcelJS.Style> = { border: THIN_BORDER, numFmt: PERCENT_FORMAT };
+const ROW_STYLE_PERCENT_BANDED: Partial<ExcelJS.Style> = {
+  border: THIN_BORDER,
+  numFmt: PERCENT_FORMAT,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
 
@@ -255,21 +262,27 @@ export function addGroupSeparatorBorder(row: ExcelJS.Row, columnCount: number): 
 
 /**
  * Applies thin borders + alternating banding to a data row. `moneyColumns`
- * (1-indexed) get the shared 2-decimal number format on top of that.
+ * (1-indexed) get the shared 2-decimal number format, `percentColumns`
+ * (1-indexed) get a percentage format, both on top of the banding.
  * `rowIndex` is the zero-based index of this row within the sheet's data
  * (not its absolute row number), so banding stays consistent regardless of
  * how many header rows precede it.
  */
-export function styleDataRow(row: ExcelJS.Row, columnCount: number, rowIndex: number, moneyColumns: Set<number> = new Set()): void {
+export function styleDataRow(
+  row: ExcelJS.Row,
+  columnCount: number,
+  rowIndex: number,
+  moneyColumns: Set<number> = new Set(),
+  percentColumns: Set<number> = new Set()
+): void {
   const banded = rowIndex % 2 === 1;
   for (let col = 1; col <= columnCount; col++) {
-    const isMoney = moneyColumns.has(col);
-    row.getCell(col).style = isMoney
-      ? banded
-        ? ROW_STYLE_MONEY_BANDED
-        : ROW_STYLE_MONEY
-      : banded
-        ? ROW_STYLE_PLAIN_BANDED
-        : ROW_STYLE_PLAIN;
+    if (moneyColumns.has(col)) {
+      row.getCell(col).style = banded ? ROW_STYLE_MONEY_BANDED : ROW_STYLE_MONEY;
+    } else if (percentColumns.has(col)) {
+      row.getCell(col).style = banded ? ROW_STYLE_PERCENT_BANDED : ROW_STYLE_PERCENT;
+    } else {
+      row.getCell(col).style = banded ? ROW_STYLE_PLAIN_BANDED : ROW_STYLE_PLAIN;
+    }
   }
 }
