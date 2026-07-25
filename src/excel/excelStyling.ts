@@ -177,11 +177,25 @@ async function decodeLogoForExcel(logoDataUri: string | null): Promise<Buffer | 
   }
 }
 
+// "Date de génération : DD/MM/YYYY HH:mm" — manually formatted (no
+// Intl/locale dependency, matching the rest of this codebase's date
+// handling) with a 24h clock and zero-padded fields.
+function formatGeneratedAtLabel(generatedAt: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = pad(generatedAt.getDate());
+  const month = pad(generatedAt.getMonth() + 1);
+  const year = generatedAt.getFullYear();
+  const hours = pad(generatedAt.getHours());
+  const minutes = pad(generatedAt.getMinutes());
+  return `Date de génération : ${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
 /**
- * Adds two merged, bold, brand-colored, framed rows at the top of a sheet:
- * the company name (large, with the logo anchored to its left when one is
- * configured) and the document reference (e.g. "Déclaration 309536 — MED
- * AFRICA LOGISTICS", smaller, on a darker shade of the same brand color) —
+ * Adds three merged, framed rows at the top of a sheet: the company name
+ * (large, bold, with the logo anchored to its left when one is configured),
+ * the document reference (e.g. "Déclaration 309536 — MED AFRICA LOGISTICS",
+ * smaller, bold, on a darker shade of the same brand color), and a
+ * "Date de génération" row (smaller still, not bold, same darker shade) —
  * the letterhead look for an administrative spreadsheet. Must be called
  * before any other row is added to the sheet.
  *
@@ -203,7 +217,8 @@ export async function addSheetTitleRows(
   documentTitle: string,
   brandArgb: string,
   brandDarkArgb: string,
-  logoDataUri: string | null
+  logoDataUri: string | null,
+  generatedAt: Date
 ): Promise<void> {
   const logoBuffer = await decodeLogoForExcel(logoDataUri);
   const hasLogo = logoBuffer !== null;
@@ -251,6 +266,19 @@ export async function addSheetTitleRows(
   subtitleRow.height = 22;
   sheet.mergeCells(subtitleRow.number, 1, subtitleRow.number, columnCount);
   subtitleRow.commit();
+
+  const dateRow = sheet.addRow([formatGeneratedAtLabel(generatedAt)]);
+  for (let col = 1; col <= columnCount; col++) {
+    dateRow.getCell(col).style = {
+      font: { bold: false, size: 10, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: brandDarkArgb } },
+      alignment: { vertical: 'middle', horizontal: 'center' },
+      border: TITLE_BORDER,
+    };
+  }
+  dateRow.height = 16;
+  sheet.mergeCells(dateRow.number, 1, dateRow.number, columnCount);
+  dateRow.commit();
 }
 
 const GROUP_SEPARATOR_BORDER_COLOR = 'FF1E293B';
