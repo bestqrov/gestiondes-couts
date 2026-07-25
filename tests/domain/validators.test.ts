@@ -18,6 +18,7 @@ function makeArticle(overrides: Partial<Article> = {}): Article {
       { code: '002109', assiette: 27215, taux: 20, montant: 5443 },
     ],
     totalArticle: 5511,
+    poidsNet: 43.69,
     ...overrides,
   };
 }

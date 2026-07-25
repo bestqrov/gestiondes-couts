@@ -25,11 +25,13 @@ function makeLargeDeclaration(quantite: number): Declaration {
           { code: '002109', assiette: 100000, taux: 20, montant: 20000 },
         ],
         totalArticle: 20250,
+        poidsNet: 43.69,
       },
     ],
     ordonnancementTaxes: [],
     numeroEnregistrement: null,
-      dateArrivee: null,
+    dateArrivee: null,
+    donneesComptables: null,
   };
 }
 

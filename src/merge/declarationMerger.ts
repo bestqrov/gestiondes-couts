@@ -83,6 +83,7 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
       unite: dumArticle.unite,
       taxes,
       totalArticle: liqArticle.totalArticle,
+      poidsNet: dumArticle.poidsNet,
     };
   });
 
@@ -102,5 +103,6 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
     ordonnancementTaxes: liquidation.ordonnancementTaxes,
     numeroEnregistrement: dum.numeroEnregistrement ?? null,
     dateArrivee: dum.dateArrivee ?? null,
+    donneesComptables: dum.donneesComptables ?? null,
   };
 }

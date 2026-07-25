@@ -25,6 +25,8 @@ export interface Article {
   unite: string;
   taxes: TaxLine[];
   totalArticle: number;
+  // The DUM's field 33 "Poids net (kg)" for this article.
+  poidsNet: number;
 }
 
 // Declaration dates (échéance paiement, date déclaration, etc., visible in the
@@ -43,4 +45,7 @@ export interface Declaration {
   // The DUM's field 24 "Date d'arrivée" (e.g. "04/07/2026") — null when not
   // found, same as numeroEnregistrement.
   dateArrivee: string | null;
+  // The DUM's "E DONNEES COMPTABLES" box "MLV:" line (e.g. "MLV:14/07/2026
+  // 15:17") — null when not found, same as numeroEnregistrement.
+  donneesComptables: string | null;
 }

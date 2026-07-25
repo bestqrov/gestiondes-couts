@@ -33,6 +33,7 @@ describe('parseDum', () => {
       valeurDeclaree: 27147.0,
       quantite: 354.0,
       unite: 'NB',
+      poidsNet: 43.69,
     });
 
     expect(article2).toEqual({
@@ -44,6 +45,7 @@ describe('parseDum', () => {
       valeurDeclaree: 12892.992,
       quantite: 200.0,
       unite: 'NB',
+      poidsNet: 16.65,
     });
   });
 
@@ -73,6 +75,7 @@ describe('parseDum', () => {
         valeurDeclaree: 9500.0,
         quantite: 40.0,
         unite: 'NB',
+        poidsNet: 12.0,
       },
     ]);
   });
@@ -108,6 +111,7 @@ describe('parseDum', () => {
         valeurDeclaree: 39518.611,
         quantite: 480.0,
         unite: 'NB',
+        poidsNet: 195.633,
       },
     ]);
   });
@@ -145,6 +149,7 @@ describe('parseDum', () => {
         valeurDeclaree: 346.186,
         quantite: 4.0,
         unite: 'PAIRE',
+        poidsNet: 1.1,
       },
     ]);
   });
@@ -238,5 +243,28 @@ USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
     const result = parseDum(text);
 
     expect(result.dateArrivee).toBeUndefined();
+  });
+
+  it('captures each article\'s own Poids net (kg) — field 33 — from the real fixture, distinct per article', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.articles[0].poidsNet).toBeCloseTo(43.69, 2);
+    expect(result.articles[1].poidsNet).toBeCloseTo(16.65, 2);
+  });
+
+  it('extracts the "E DONNEES COMPTABLES" box\'s "MLV:" line from the real fixture', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.donneesComptables).toBe('MLV:29/06/2026 16:37');
+  });
+
+  it('leaves donneesComptables undefined (not a hard failure) when the pattern is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.donneesComptables).toBeUndefined();
   });
 });

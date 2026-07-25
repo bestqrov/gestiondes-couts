@@ -9,6 +9,7 @@ export interface DumArticleResult {
   valeurDeclaree: number;
   quantite: number;
   unite: string;
+  poidsNet: number;
 }
 
 export interface DumShipmentCost {
@@ -26,6 +27,7 @@ export interface DumResult {
   shipmentCost?: DumShipmentCost;
   numeroEnregistrement?: string;
   dateArrivee?: string;
+  donneesComptables?: string;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -63,8 +65,14 @@ export interface DumResult {
 // number between the complementary-unit quantity and its "U"/"KG" marker
 // (e.g. "4.0 2 U" instead of "4.0 U") — matched as an optional extra
 // numeric token, still non-capturing since this whole field is unused.
+//
+// Poids net (kg) — field 33, the number right after valeur déclarée and
+// before the AP/SP marker — is captured (it used to be a non-capturing
+// [\d.]+); verified against the real fixture: article 1's captured value
+// (43.69) and article 2's (16.65) are each distinct from that article's
+// unités complémentaires value, ruling out an accidental group swap.
 const ARTICLE_PATTERN =
-  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+[\d.]+\s+(?:AP|SP)\s+[\d.]+\s+(?:\d+\s+)?(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
+  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(?:AP|SP)\s+[\d.]+\s+(?:\d+\s+)?(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
 
 // See design spec §4 — this cluster of shipment-level values (currency,
 // invoiced amount, exchange rate, freight, [a form field-number label,
@@ -112,6 +120,19 @@ function extractDateArrivee(text: string): string | undefined {
   return `${day}/${month}/${year}`;
 }
 
+// The "E DONNEES COMPTABLES" box's "MLV:" line (e.g. "MLV:14/07/2026
+// 15:17") — a document-wide value, visually printed right under "Nombre de
+// factures" on the form, though (as with every other field here) the raw
+// extraction order doesn't reflect that visual adjacency, so the "MLV:"
+// literal prefix is used as the anchor instead. Optional, like the other
+// DUM display fields.
+const DONNEES_COMPTABLES_PATTERN = /MLV:\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}/;
+
+function extractDonneesComptables(text: string): string | undefined {
+  const match = text.match(DONNEES_COMPTABLES_PATTERN);
+  return match ? match[0] : undefined;
+}
+
 function extractShipmentCost(text: string): DumShipmentCost | undefined {
   const match = text.match(SHIPMENT_COST_PATTERN);
   if (!match) return undefined;
@@ -149,8 +170,18 @@ export function parseDum(text: string): DumResult {
   const articles: DumArticleResult[] = [];
 
   for (const match of text.matchAll(ARTICLE_PATTERN)) {
-    const [, hsCode, valeurRaw, paysNom, paysCode, nomArticleRaw, quantiteRaw, unite, ordreRaw] =
-      match;
+    const [
+      ,
+      hsCode,
+      valeurRaw,
+      poidsNetRaw,
+      paysNom,
+      paysCode,
+      nomArticleRaw,
+      quantiteRaw,
+      unite,
+      ordreRaw,
+    ] = match;
 
     articles.push({
       ordre: Number.parseInt(ordreRaw, 10),
@@ -161,6 +192,7 @@ export function parseDum(text: string): DumResult {
       valeurDeclaree: parseFrenchNumber(valeurRaw),
       quantite: parseFrenchNumber(quantiteRaw),
       unite,
+      poidsNet: parseFrenchNumber(poidsNetRaw),
     });
   }
 
@@ -174,5 +206,6 @@ export function parseDum(text: string): DumResult {
     shipmentCost: extractShipmentCost(text),
     numeroEnregistrement: extractRegistrationNumber(text),
     dateArrivee: extractDateArrivee(text),
+    donneesComptables: extractDonneesComptables(text),
   };
 }

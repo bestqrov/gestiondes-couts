@@ -16,8 +16,9 @@ import {
 
 function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
   return [
-    { kind: 'identity', from: 1, to: 5 }, // Nom Article, Date d'arrivée, N° Enregistrement, HSC, Serial Number
-    { kind: 'tax', from: 6, to: 5 + taxCodeCount },
+    // Nom Article, DONNEES COMPTABLES, Poids net (kg), Date d'arrivée, N° Enregistrement, HSC, Serial Number
+    { kind: 'identity', from: 1, to: 7 },
+    { kind: 'tax', from: 8, to: 7 + taxCodeCount },
     { kind: 'value', from: columnCount - 1, to: columnCount }, // Valeur Déclarée, Prorata
   ];
 }
@@ -44,17 +45,20 @@ export async function addUnitLevelSheet(
   );
   const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
   const allTaxCodeCount = taxCodes.length + extraCodes.length;
-  // "Date d'arrivée" and "N° Enregistrement" (both from the DUM, same value
-  // on every row) sit right before HSC, ahead of the tax columns. Valeur
-  // Déclarée and Prorata are the last two columns, after every tax code
-  // column (per-article union, then extra ordonnancement-only codes).
-  const columnCount = 5 + allTaxCodeCount + 2;
+  // DONNEES COMPTABLES, Poids net (kg), Date d'arrivée, and N° Enregistrement
+  // (from the DUM) sit right before HSC, ahead of the tax columns — Poids
+  // net is per-article, the other three are the same value on every row.
+  // Valeur Déclarée and Prorata are the last two columns, after every tax
+  // code column (per-article union, then extra ordonnancement-only codes).
+  const columnCount = 7 + allTaxCodeCount + 2;
   const valeurDeclareeColumn = columnCount - 1;
   const prorataColumn = columnCount;
+  const poidsNetColumn = 3;
   const moneyColumns = new Set<number>([
+    poidsNetColumn,
     valeurDeclareeColumn,
-    ...taxCodes.map((_, i) => 6 + i),
-    ...extraCodes.map((_, i) => 6 + taxCodes.length + i),
+    ...taxCodes.map((_, i) => 8 + i),
+    ...extraCodes.map((_, i) => 8 + taxCodes.length + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
@@ -66,6 +70,8 @@ export async function addUnitLevelSheet(
 
   sheet.columns = [
     { key: 'nomArticle', width: 36 },
+    { key: 'donneesComptables', width: 22 },
+    { key: 'poidsNet', width: 18 },
     { key: 'dateArrivee', width: 18 },
     { key: 'numeroEnregistrement', width: 26 },
     { key: 'hsCode', width: 20 },
@@ -89,6 +95,8 @@ export async function addUnitLevelSheet(
 
   const headerRow = sheet.addRow([
     'Nom Article',
+    'DONNEES COMPTABLES',
+    'Poids net (kg)',
     "Date d'arrivée",
     'N° Enregistrement',
     'HSC',
@@ -131,6 +139,8 @@ export async function addUnitLevelSheet(
     for (let unit = 0; unit < quantite; unit++) {
       const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
+        donneesComptables: declaration.donneesComptables ?? '',
+        poidsNet: article.poidsNet,
         dateArrivee: declaration.dateArrivee ?? '',
         numeroEnregistrement: declaration.numeroEnregistrement ?? '',
         hsCode: article.hsCode,
