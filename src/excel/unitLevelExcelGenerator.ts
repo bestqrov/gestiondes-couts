@@ -16,8 +16,8 @@ import {
 
 function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
   return [
-    // Nom Article, Nom Article (duplicate), DONNEES COMPTABLES, Poids net
-    // (kg), Date d'arrivée, N° Enregistrement, HSC, Serial Number
+    // Nom Article, DONNEES COMPTABLES, Poids net (kg), Date d'arrivée,
+    // Nature et numéro du titre de transport, N° Enregistrement, HSC, Serial Number
     { kind: 'identity', from: 1, to: 8 },
     { kind: 'tax', from: 9, to: 8 + taxCodeCount },
     { kind: 'value', from: columnCount - 1, to: columnCount }, // Valeur Déclarée, Prorata
@@ -46,8 +46,8 @@ export async function addUnitLevelSheet(
   );
   const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
   const allTaxCodeCount = taxCodes.length + extraCodes.length;
-  // A duplicate "Nom Article" column, then DONNEES COMPTABLES, Poids net
-  // (kg), Date d'arrivée, and N° Enregistrement (from the DUM) sit right
+  // DONNEES COMPTABLES, Poids net (kg), Date d'arrivée, Nature et numéro du
+  // titre de transport, and N° Enregistrement (from the DUM) sit right
   // before HSC, ahead of the tax columns — Poids net is per-article, the
   // rest are the same value on every row. Valeur Déclarée and Prorata are
   // the last two columns, after every tax code column (per-article union,
@@ -55,7 +55,7 @@ export async function addUnitLevelSheet(
   const columnCount = 8 + allTaxCodeCount + 2;
   const valeurDeclareeColumn = columnCount - 1;
   const prorataColumn = columnCount;
-  const poidsNetColumn = 4;
+  const poidsNetColumn = 3;
   const moneyColumns = new Set<number>([
     poidsNetColumn,
     valeurDeclareeColumn,
@@ -72,10 +72,10 @@ export async function addUnitLevelSheet(
 
   sheet.columns = [
     { key: 'nomArticle', width: 36 },
-    { key: 'nomArticleDuplicate', width: 36 },
     { key: 'donneesComptables', width: 22 },
     { key: 'poidsNet', width: 18 },
     { key: 'dateArrivee', width: 18 },
+    { key: 'titreTransport', width: 30 },
     { key: 'numeroEnregistrement', width: 26 },
     { key: 'hsCode', width: 20 },
     { key: 'serialNumber', width: 18 },
@@ -98,10 +98,10 @@ export async function addUnitLevelSheet(
 
   const headerRow = sheet.addRow([
     'Nom Article',
-    'Nom Article',
     'DONNEES COMPTABLES',
     'Poids net (kg)',
     "Date d'arrivée",
+    'Nature et numéro du titre de transport',
     'N° Enregistrement',
     'HSC',
     'Serial Number',
@@ -143,10 +143,10 @@ export async function addUnitLevelSheet(
     for (let unit = 0; unit < quantite; unit++) {
       const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
-        nomArticleDuplicate: article.nomArticle,
         donneesComptables: declaration.donneesComptables ?? '',
         poidsNet: article.poidsNet,
         dateArrivee: declaration.dateArrivee ?? '',
+        titreTransport: declaration.titreTransport ?? '',
         numeroEnregistrement: declaration.numeroEnregistrement ?? '',
         hsCode: article.hsCode,
         serialNumber: unit + 1,

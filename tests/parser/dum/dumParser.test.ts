@@ -267,4 +267,19 @@ USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
 
     expect(result.donneesComptables).toBeUndefined();
   });
+
+  it('extracts field 17 "Nature et numéro du titre de transport" from the real fixture', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.titreTransport).toBe('01|30100020260009045|147-93618044|MXP|2030300463279');
+  });
+
+  it('leaves titreTransport undefined (not a hard failure) when the pattern is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.titreTransport).toBeUndefined();
+  });
 });

@@ -45,13 +45,10 @@ describe('generateUnitLevelExcel', () => {
     // row 3 is the actual column header row.
     const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(1).value).toBe('Nom Article');
-    // Column 2 duplicates "Nom Article" (same header text, same per-row
-    // value) — a deliberate duplicate positioned next to the original, not
-    // next to HSC.
-    expect(headerRow.getCell(2).value).toBe('Nom Article');
-    expect(headerRow.getCell(3).value).toBe('DONNEES COMPTABLES');
-    expect(headerRow.getCell(4).value).toBe('Poids net (kg)');
-    expect(headerRow.getCell(5).value).toBe("Date d'arrivée");
+    expect(headerRow.getCell(2).value).toBe('DONNEES COMPTABLES');
+    expect(headerRow.getCell(3).value).toBe('Poids net (kg)');
+    expect(headerRow.getCell(4).value).toBe("Date d'arrivée");
+    expect(headerRow.getCell(5).value).toBe('Nature et numéro du titre de transport');
     expect(headerRow.getCell(6).value).toBe('N° Enregistrement');
     expect(headerRow.getCell(7).value).toBe('HSC');
     expect(headerRow.getCell(8).value).toBe('Serial Number');
@@ -69,14 +66,16 @@ describe('generateUnitLevelExcel', () => {
     // first row of article 1
     const firstRow = sheet.getRow(4);
     expect(firstRow.getCell(1).value).toBe('T-SHIRT');
-    expect(firstRow.getCell(2).value).toBe('T-SHIRT');
     // DONNEES COMPTABLES — the DUM fixture's "MLV:" line, same on every row.
-    expect(firstRow.getCell(3).value).toBe('MLV:29/06/2026 16:37');
+    expect(firstRow.getCell(2).value).toBe('MLV:29/06/2026 16:37');
     // Poids net (kg) — article 1's own DUM field 33 value (43.69), distinct
     // from article 2's (16.65), confirming this is per-article not constant.
-    expect(Number(firstRow.getCell(4).value)).toBeCloseTo(43.69, 2);
+    expect(Number(firstRow.getCell(3).value)).toBeCloseTo(43.69, 2);
     // Date d'arrivée — the DUM fixture's field 24 value ("24/06/2026"), same on every row.
-    expect(firstRow.getCell(5).value).toBe('24/06/2026');
+    expect(firstRow.getCell(4).value).toBe('24/06/2026');
+    // Nature et numéro du titre de transport — the DUM fixture's field 17
+    // value, same on every row.
+    expect(firstRow.getCell(5).value).toBe('01|30100020260009045|147-93618044|MXP|2030300463279');
     // N° Enregistrement — the DUM fixture's "A ENREGISTREMENT" registration
     // number ("0076481 X 25/06/2026"), same on every row.
     expect(firstRow.getCell(6).value).toBe('0076481 X 25/06/2026');
@@ -93,9 +92,8 @@ describe('generateUnitLevelExcel', () => {
     const firstRowArticle2 = sheet.getRow(358);
     expect(firstRowArticle2.getCell(8).value).toBe(1);
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
-    expect(firstRowArticle2.getCell(2).value).toBe('T-SHIRT');
     // Article 2's own Poids net (kg) value (16.65), not article 1's.
-    expect(Number(firstRowArticle2.getCell(4).value)).toBeCloseTo(16.65, 2);
+    expect(Number(firstRowArticle2.getCell(3).value)).toBeCloseTo(16.65, 2);
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(12).value)).toBeCloseTo(12892.992 / 200, 4);
     // Prorata — still divided by the whole declaration's total, not article 2's own total.
@@ -129,13 +127,14 @@ describe('generateUnitLevelExcel', () => {
     expect(prorataSum).toBeCloseTo(1, 6);
   });
 
-  it('fills every row\'s N° Enregistrement, Date d\'arrivée, and DONNEES COMPTABLES with the DUM\'s declaration-wide values when present', async () => {
+  it('fills every row\'s N° Enregistrement, Date d\'arrivée, DONNEES COMPTABLES, and Nature et numéro du titre de transport with the DUM\'s declaration-wide values when present', async () => {
     const declaration = loadRealDeclaration();
     const withOverrides: Declaration = {
       ...declaration,
       numeroEnregistrement: '0066046 E 08/07/2026',
       dateArrivee: '04/07/2026',
       donneesComptables: 'MLV:14/07/2026 15:17',
+      titreTransport: '08|30000020260005678|P3957263/3|ITGOA|2026500066156',
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-registration');
     tempDir = dir;
@@ -146,12 +145,14 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    expect(sheet.getRow(4).getCell(3).value).toBe('MLV:14/07/2026 15:17');
-    expect(sheet.getRow(4).getCell(5).value).toBe('04/07/2026');
+    expect(sheet.getRow(4).getCell(2).value).toBe('MLV:14/07/2026 15:17');
+    expect(sheet.getRow(4).getCell(4).value).toBe('04/07/2026');
+    expect(sheet.getRow(4).getCell(5).value).toBe('08|30000020260005678|P3957263/3|ITGOA|2026500066156');
     expect(sheet.getRow(4).getCell(6).value).toBe('0066046 E 08/07/2026');
     // Every row (including article 2's) carries the same declaration-wide values.
-    expect(sheet.getRow(358).getCell(3).value).toBe('MLV:14/07/2026 15:17');
-    expect(sheet.getRow(358).getCell(5).value).toBe('04/07/2026');
+    expect(sheet.getRow(358).getCell(2).value).toBe('MLV:14/07/2026 15:17');
+    expect(sheet.getRow(358).getCell(4).value).toBe('04/07/2026');
+    expect(sheet.getRow(358).getCell(5).value).toBe('08|30000020260005678|P3957263/3|ITGOA|2026500066156');
     expect(sheet.getRow(358).getCell(6).value).toBe('0066046 E 08/07/2026');
   });
 
@@ -207,6 +208,7 @@ describe('generateUnitLevelExcel', () => {
       numeroEnregistrement: null,
       dateArrivee: null,
       donneesComptables: null,
+      titreTransport: null,
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-divergent-codes');
     tempDir = dir;
@@ -217,7 +219,7 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    // header: Nom Article | Nom Article | DONNEES COMPTABLES | Poids net (kg) | Date d'arrivée | N° Enregistrement | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
+    // header: Nom Article | DONNEES COMPTABLES | Poids net (kg) | Date d'arrivée | Nature et numéro du titre de transport | N° Enregistrement | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
     const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL');
     expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS');
@@ -291,6 +293,7 @@ describe('generateUnitLevelExcel', () => {
       numeroEnregistrement: null,
       dateArrivee: null,
       donneesComptables: null,
+      titreTransport: null,
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-ordonnancement');
     tempDir = dir;
@@ -301,7 +304,7 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    // header: Nom Article | Nom Article | DONNEES COMPTABLES | Poids net (kg) | Date d'arrivée | N° Enregistrement | HSC | Serial Number | 000110 | REDV.INF.(AVEC D et T) | Valeur Déclarée | Prorata
+    // header: Nom Article | DONNEES COMPTABLES | Poids net (kg) | Date d'arrivée | Nature et numéro du titre de transport | N° Enregistrement | HSC | Serial Number | 000110 | REDV.INF.(AVEC D et T) | Valeur Déclarée | Prorata
     const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(10).value).toBe('REDV.INF.(AVEC D et T)');
     expect(headerRow.getCell(11).value).toBe('Valeur Déclarée');

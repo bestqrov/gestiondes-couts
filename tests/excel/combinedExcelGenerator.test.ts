@@ -58,23 +58,25 @@ describe('generateCombinedExcel', () => {
 
     const globalSheet = workbook.getWorksheet('Global')!;
     expect(globalSheet.getRow(3).getCell(1).value).toBe('Nom Article');
-    expect(globalSheet.getRow(3).getCell(2).value).toBe('Nom Article');
-    expect(globalSheet.getRow(3).getCell(3).value).toBe('DONNEES COMPTABLES');
-    expect(globalSheet.getRow(3).getCell(4).value).toBe('Poids net (kg)');
-    expect(globalSheet.getRow(3).getCell(5).value).toBe("Date d'arrivée");
+    expect(globalSheet.getRow(3).getCell(2).value).toBe('DONNEES COMPTABLES');
+    expect(globalSheet.getRow(3).getCell(3).value).toBe('Poids net (kg)');
+    expect(globalSheet.getRow(3).getCell(4).value).toBe("Date d'arrivée");
+    expect(globalSheet.getRow(3).getCell(5).value).toBe('Nature et numéro du titre de transport');
     expect(globalSheet.getRow(3).getCell(6).value).toBe('N° Enregistrement');
     expect(globalSheet.getRow(3).getCell(7).value).toBe('HSC');
     // Same DUM-sourced values on every row of the sheet.
-    expect(globalSheet.getRow(4).getCell(3).value).toBe('MLV:29/06/2026 16:37');
-    expect(globalSheet.getRow(4).getCell(5).value).toBe('24/06/2026');
+    expect(globalSheet.getRow(4).getCell(2).value).toBe('MLV:29/06/2026 16:37');
+    expect(globalSheet.getRow(4).getCell(4).value).toBe('24/06/2026');
+    expect(globalSheet.getRow(4).getCell(5).value).toBe(
+      '01|30100020260009045|147-93618044|MXP|2030300463279'
+    );
     expect(globalSheet.getRow(4).getCell(6).value).toBe('0076481 X 25/06/2026');
-    expect(globalSheet.getRow(557).getCell(3).value).toBe('MLV:29/06/2026 16:37');
-    expect(globalSheet.getRow(557).getCell(5).value).toBe('24/06/2026');
+    expect(globalSheet.getRow(557).getCell(2).value).toBe('MLV:29/06/2026 16:37');
+    expect(globalSheet.getRow(557).getCell(4).value).toBe('24/06/2026');
     expect(globalSheet.getRow(557).getCell(6).value).toBe('0076481 X 25/06/2026');
     expect(globalSheet.rowCount).toBe(557); // 2 title rows + header + 354 + 200 unit rows, both articles combined
     // First article's rows come before the second's, each stacked one under the other.
     expect(globalSheet.getRow(4).getCell(1).value).toBe('T-SHIRT');
-    expect(globalSheet.getRow(4).getCell(2).value).toBe('T-SHIRT');
     expect(globalSheet.getRow(4).getCell(8).value).toBe(1); // article 1, serial 1
     expect(globalSheet.getRow(357).getCell(8).value).toBe(354); // article 1, serial 354 (last row)
     expect(globalSheet.getRow(358).getCell(8).value).toBe(1); // article 2, serial 1 (first row after article 1)

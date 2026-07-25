@@ -48,4 +48,8 @@ export interface Declaration {
   // The DUM's "E DONNEES COMPTABLES" box "MLV:" line (e.g. "MLV:14/07/2026
   // 15:17") — null when not found, same as numeroEnregistrement.
   donneesComptables: string | null;
+  // The DUM's field 17 "Nature et numéro du titre de transport" (e.g.
+  // "08|30000020260005678|P3957263/3|ITGOA|2026500066156") — null when not
+  // found, same as numeroEnregistrement.
+  titreTransport: string | null;
 }

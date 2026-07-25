@@ -28,6 +28,7 @@ export interface DumResult {
   numeroEnregistrement?: string;
   dateArrivee?: string;
   donneesComptables?: string;
+  titreTransport?: string;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -133,6 +134,18 @@ function extractDonneesComptables(text: string): string | undefined {
   return match ? match[0] : undefined;
 }
 
+// Field 17 "Nature et numéro du titre de transport" — a distinctive
+// "|"-delimited cluster (2-digit nature code, transport document number,
+// carrier reference, 4-letter port/office code, another reference number),
+// e.g. "08|30000020260005678|P3957263/3|ITGOA|2026500066156". Optional,
+// like the other DUM display fields.
+const TITRE_TRANSPORT_PATTERN = /\b\d{2}\|\d+\|[A-Za-z0-9./-]+\|[A-Z]+\|\d+\b/;
+
+function extractTitreTransport(text: string): string | undefined {
+  const match = text.match(TITRE_TRANSPORT_PATTERN);
+  return match ? match[0] : undefined;
+}
+
 function extractShipmentCost(text: string): DumShipmentCost | undefined {
   const match = text.match(SHIPMENT_COST_PATTERN);
   if (!match) return undefined;
@@ -207,5 +220,6 @@ export function parseDum(text: string): DumResult {
     numeroEnregistrement: extractRegistrationNumber(text),
     dateArrivee: extractDateArrivee(text),
     donneesComptables: extractDonneesComptables(text),
+    titreTransport: extractTitreTransport(text),
   };
 }
