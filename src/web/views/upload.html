@@ -327,11 +327,6 @@
     .success-actions button { flex: 1; min-width: 130px; }
     .success-actions button { margin-top: 0; }
 
-    /* Hidden by default — only unhidden by JS after feature-detecting
-       navigator.canShare({ files: [...] }) support, so it never appears on
-       a browser where clicking it could only fail. */
-    #whatsappShareBtn { display: none; }
-    #whatsappShareBtn.visible { display: flex; }
 
     .cost-panel { margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 18px; display: none; }
     .cost-panel.visible { display: block; }
@@ -745,18 +740,28 @@
       }
     }
 
-    if (canShareXlsxFile()) {
-      whatsappShareBtn.classList.add('visible');
-    }
-
     whatsappShareBtn.addEventListener('click', async () => {
       whatsappShareBtn.disabled = true;
       try {
         const response = await fetch('/download');
         if (!response.ok) throw new Error('Impossible de préparer le fichier à partager.');
         const blob = await response.blob();
-        const file = new File([blob], 'Declaration.xlsx', { type: XLSX_MIME_TYPE });
-        await navigator.share({ files: [file], title: 'Déclaration Excel' });
+
+        if (canShareXlsxFile()) {
+          // Mobile / browsers with native file-share support: share the
+          // .xlsx file itself through the OS share sheet.
+          const file = new File([blob], 'Declaration.xlsx', { type: XLSX_MIME_TYPE });
+          await navigator.share({ files: [file], title: 'Déclaration Excel' });
+        } else {
+          // Desktop fallback (Safari, Firefox, and any browser without
+          // Web Share API file support): download the file so it's ready
+          // to attach, then open WhatsApp Web with a pre-filled message —
+          // WhatsApp Web has no API to attach a file automatically, so the
+          // user drags/attaches the just-downloaded file themselves.
+          triggerBlobDownload(blob, 'Declaration.xlsx');
+          const message = 'Déclaration Excel générée — veuillez joindre le fichier téléchargé (Declaration.xlsx).';
+          window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
+        }
       } catch (err) {
         if (err && err.name === 'AbortError') return; // user cancelled the native share sheet
         showError(err.message || 'Échec du partage — réessayez.');
