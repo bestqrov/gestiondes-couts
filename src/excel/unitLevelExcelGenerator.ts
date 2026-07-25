@@ -34,6 +34,7 @@ export async function addUnitLevelSheet(
   workbook: ExcelJS.Workbook,
   declaration: Declaration,
   branding: BrandingInfo,
+  generatedAt: Date,
   sheetName = 'Unit Detail'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
@@ -68,7 +69,7 @@ export async function addUnitLevelSheet(
     0
   );
 
-  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 3 }] });
+  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
   sheet.columns = [
     { key: 'nomArticle', width: 36 },
@@ -93,7 +94,8 @@ export async function addUnitLevelSheet(
     resolveDocumentTitle(declaration),
     resolveBrandArgb(branding.brandColor),
     resolveBrandDarkArgb(branding.brandColor),
-    branding.logoDataUri
+    branding.logoDataUri,
+    generatedAt
   );
 
   const headerRow = sheet.addRow([
@@ -179,6 +181,6 @@ export async function generateUnitLevelExcel(
   branding: BrandingInfo
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
-  await addUnitLevelSheet(workbook, declaration, branding);
+  await addUnitLevelSheet(workbook, declaration, branding, new Date());
   await workbook.xlsx.writeFile(outputPath);
 }

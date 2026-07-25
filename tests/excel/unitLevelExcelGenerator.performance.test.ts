@@ -32,7 +32,7 @@ function makeLargeDeclaration(quantite: number): Declaration {
     numeroEnregistrement: null,
     dateArrivee: null,
     donneesComptables: null,
-      titreTransport: null,
+    titreTransport: null,
   };
 }
 
@@ -73,7 +73,7 @@ describe('generateUnitLevelExcel performance', () => {
       }
     }
 
-    // quantite data rows + 2 title rows + 1 header row
-    expect(rowCount).toBe(quantite + 3);
+    // quantite data rows + 3 title rows + 1 header row
+    expect(rowCount).toBe(quantite + 4);
   }, 30000);
 });
