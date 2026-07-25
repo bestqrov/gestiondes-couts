@@ -101,5 +101,6 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
     articles,
     ordonnancementTaxes: liquidation.ordonnancementTaxes,
     numeroEnregistrement: dum.numeroEnregistrement ?? null,
+    dateArrivee: dum.dateArrivee ?? null,
   };
 }

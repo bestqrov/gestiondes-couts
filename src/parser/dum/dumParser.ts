@@ -25,6 +25,7 @@ export interface DumResult {
   articles: DumArticleResult[];
   shipmentCost?: DumShipmentCost;
   numeroEnregistrement?: string;
+  dateArrivee?: string;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -94,6 +95,23 @@ function extractRegistrationNumber(text: string): string | undefined {
   return match ? match[1].replace(/\s+/g, ' ') : undefined;
 }
 
+// Field 24 "Date d'arrivée" — a space-separated "DD MM YYYY" (no slashes,
+// unlike most other dates in this document) immediately followed by the
+// 6-digit arrondissement code, the 2-digit bureau code, and the "Crédit
+// d'enlèvement" label — that fixed cluster is the reliable anchor, the same
+// way SHIPMENT_COST_PATTERN anchors on a trailing date. Optional, like
+// shipmentCost/numeroEnregistrement: omitted rather than a parse failure
+// when not found.
+const DATE_ARRIVEE_PATTERN =
+  /(\d{2})\s+(\d{2})\s+(\d{4})\s+\d{6}\s+\d{2}\s+Crédit d'enlèvement/;
+
+function extractDateArrivee(text: string): string | undefined {
+  const match = text.match(DATE_ARRIVEE_PATTERN);
+  if (!match) return undefined;
+  const [, day, month, year] = match;
+  return `${day}/${month}/${year}`;
+}
+
 function extractShipmentCost(text: string): DumShipmentCost | undefined {
   const match = text.match(SHIPMENT_COST_PATTERN);
   if (!match) return undefined;
@@ -155,5 +173,6 @@ export function parseDum(text: string): DumResult {
     articles,
     shipmentCost: extractShipmentCost(text),
     numeroEnregistrement: extractRegistrationNumber(text),
+    dateArrivee: extractDateArrivee(text),
   };
 }

@@ -40,4 +40,7 @@ export interface Declaration {
   // 08/07/2026") — null when the DUM document didn't contain a recognizable
   // one, since it's a display-only field.
   numeroEnregistrement: string | null;
+  // The DUM's field 24 "Date d'arrivée" (e.g. "04/07/2026") — null when not
+  // found, same as numeroEnregistrement.
+  dateArrivee: string | null;
 }

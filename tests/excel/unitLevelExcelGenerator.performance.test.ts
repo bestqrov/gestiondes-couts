@@ -29,6 +29,7 @@ function makeLargeDeclaration(quantite: number): Declaration {
     ],
     ordonnancementTaxes: [],
     numeroEnregistrement: null,
+      dateArrivee: null,
   };
 }
 

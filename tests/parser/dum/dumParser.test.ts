@@ -215,4 +215,28 @@ USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
 
     expect(result.numeroEnregistrement).toBeUndefined();
   });
+
+  it('extracts field 24 "Date d\'arrivée" from the real fixture', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.dateArrivee).toBe('24/06/2026');
+  });
+
+  it('tolerates variable whitespace around the date/arrondissement/bureau cluster', () => {
+    const text = `Crédit d'enlèvement 700002123
+04  07  2026  300913  02 Crédit d'enlèvement 309536130
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.dateArrivee).toBe('04/07/2026');
+  });
+
+  it('leaves dateArrivee undefined (not a hard failure) when the pattern is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.dateArrivee).toBeUndefined();
+  });
 });
