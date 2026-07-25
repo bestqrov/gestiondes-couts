@@ -13,9 +13,13 @@ export async function generateCombinedExcel(
   branding: BrandingInfo
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
+  // Computed once and passed to both sheets so their letterheads show the
+  // identical timestamp, rather than each sheet capturing its own `Date()`
+  // a few milliseconds apart.
+  const generatedAt = new Date();
 
-  await addArticleSummarySheet(workbook, declaration, branding);
-  await addUnitLevelSheet(workbook, declaration, branding, 'Global');
+  await addArticleSummarySheet(workbook, declaration, branding, generatedAt);
+  await addUnitLevelSheet(workbook, declaration, branding, generatedAt, 'Global');
 
   await workbook.xlsx.writeFile(outputPath);
 }
