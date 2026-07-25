@@ -26,9 +26,10 @@ const COLUMN_GROUPS: ColumnGroup[] = [
 export async function addArticleSummarySheet(
   workbook: ExcelJS.Workbook,
   declaration: Declaration,
-  branding: BrandingInfo
+  branding: BrandingInfo,
+  generatedAt: Date
 ): Promise<void> {
-  const sheet = workbook.addWorksheet('Articles', { views: [{ state: 'frozen', ySplit: 3 }] });
+  const sheet = workbook.addWorksheet('Articles', { views: [{ state: 'frozen', ySplit: 4 }] });
 
   // Column widths only here (no `header:`) — the header row is added and
   // styled explicitly below instead of relying on ExcelJS's implicit
@@ -49,7 +50,8 @@ export async function addArticleSummarySheet(
     resolveDocumentTitle(declaration),
     resolveBrandArgb(branding.brandColor),
     resolveBrandDarkArgb(branding.brandColor),
-    branding.logoDataUri
+    branding.logoDataUri,
+    generatedAt
   );
 
   const headerRow = sheet.addRow(['Nom Article', 'HSC', 'Pays', 'Valeur déclarée', 'Unité (Quantity)']);
@@ -73,6 +75,6 @@ export async function generateArticleSummaryExcel(
   branding: BrandingInfo
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
-  await addArticleSummarySheet(workbook, declaration, branding);
+  await addArticleSummarySheet(workbook, declaration, branding, new Date());
   await workbook.xlsx.writeFile(outputPath);
 }

@@ -43,7 +43,8 @@ describe('generateArticleSummaryExcel', () => {
     const sheet = workbook.worksheets[0];
 
     // Row 1: company name (merged, centered, bold). Row 2: document
-    // reference. Row 3: the actual column header row.
+    // reference. Row 3: "Date de génération". Row 4: the actual column
+    // header row.
     const titleRow = sheet.getRow(1);
     expect(titleRow.getCell(1).value).toBe('ACME LOGISTICS SARL');
     expect(sheet.getCell(1, 5).isMerged).toBe(true);
@@ -52,24 +53,27 @@ describe('generateArticleSummaryExcel', () => {
     const subtitleRow = sheet.getRow(2);
     expect(subtitleRow.getCell(1).value).toBe(`Déclaration ${declaration.code} — ${declaration.redevable}`);
 
-    const headerRow = sheet.getRow(3);
+    const dateRow = sheet.getRow(3);
+    expect(String(dateRow.getCell(1).value)).toMatch(/^Date de génération : \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
+
+    const headerRow = sheet.getRow(4);
     expect(headerRow.getCell(1).value).toBe('Nom Article');
     expect(headerRow.getCell(2).value).toBe('HSC');
     expect(headerRow.getCell(3).value).toBe('Pays');
     expect(headerRow.getCell(4).value).toBe('Valeur déclarée');
     expect(headerRow.getCell(5).value).toBe('Unité (Quantity)');
 
-    // 2 title rows + 1 header row + 2 articles = 5 rows total
-    expect(sheet.rowCount).toBe(5);
+    // 3 title rows + 1 header row + 2 articles = 6 rows total
+    expect(sheet.rowCount).toBe(6);
 
-    const row1 = sheet.getRow(4);
+    const row1 = sheet.getRow(5);
     expect(row1.getCell(1).value).toBe('T-SHIRT');
     expect(row1.getCell(2).value).toBe('6109100010');
     expect(row1.getCell(3).value).toBe('ITALIE');
     expect(row1.getCell(4).value).toBeCloseTo(27147.0, 1);
     expect(row1.getCell(5).value).toBeCloseTo(354.0, 1);
 
-    const row2 = sheet.getRow(5);
+    const row2 = sheet.getRow(6);
     expect(row2.getCell(3).value).toBe('BANGLADESH');
     expect(row2.getCell(5).value).toBeCloseTo(200.0, 1);
   });
@@ -140,7 +144,7 @@ describe('generateArticleSummaryExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    expect(sheet.getRow(3).getCell(1).value).toBe('Nom Article');
-    expect(sheet.rowCount).toBe(3);
+    expect(sheet.getRow(4).getCell(1).value).toBe('Nom Article');
+    expect(sheet.rowCount).toBe(4);
   });
 });
