@@ -24,6 +24,7 @@ export interface DumResult {
   creditEnlevementCode: string;
   articles: DumArticleResult[];
   shipmentCost?: DumShipmentCost;
+  numeroEnregistrement?: string;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -81,6 +82,18 @@ const ARTICLE_PATTERN =
 const SHIPMENT_COST_PATTERN =
   /\b(EUR|MAD|USD|GBP)\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d+\s+([\d.]+)\s+(\d[\d\s.,]*?\d)\s+\d{2}\s+\d{2}\s+\d{4}/;
 
+// The "A ENREGISTREMENT" box's registration number — a 7-digit sequence
+// number, a single-letter suffix, and the registration date, e.g.
+// "0066046 E 08/07/2026". Optional, like shipmentCost: if the pattern isn't
+// found, the value is simply omitted rather than treated as a parse
+// failure, since it's a display-only field that doesn't affect merging.
+const REGISTRATION_NUMBER_PATTERN = /\b(\d{7}\s+[A-Z]\s+\d{2}\/\d{2}\/\d{4})\b/;
+
+function extractRegistrationNumber(text: string): string | undefined {
+  const match = text.match(REGISTRATION_NUMBER_PATTERN);
+  return match ? match[1].replace(/\s+/g, ' ') : undefined;
+}
+
 function extractShipmentCost(text: string): DumShipmentCost | undefined {
   const match = text.match(SHIPMENT_COST_PATTERN);
   if (!match) return undefined;
@@ -137,5 +150,10 @@ export function parseDum(text: string): DumResult {
     throw new Error('No articles found in DUM document');
   }
 
-  return { creditEnlevementCode, articles, shipmentCost: extractShipmentCost(text) };
+  return {
+    creditEnlevementCode,
+    articles,
+    shipmentCost: extractShipmentCost(text),
+    numeroEnregistrement: extractRegistrationNumber(text),
+  };
 }

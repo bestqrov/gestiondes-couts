@@ -45,15 +45,16 @@ describe('generateUnitLevelExcel', () => {
     // row 3 is the actual column header row.
     const headerRow = sheet.getRow(3);
     expect(headerRow.getCell(1).value).toBe('Nom Article');
-    expect(headerRow.getCell(2).value).toBe('HSC');
-    expect(headerRow.getCell(3).value).toBe('Serial Number');
+    expect(headerRow.getCell(2).value).toBe('N° Enregistrement');
+    expect(headerRow.getCell(3).value).toBe('HSC');
+    expect(headerRow.getCell(4).value).toBe('Serial Number');
     // union of tax codes across both articles, sorted: 000110, 002109, 007217
     // — headers show each code's designation, not the raw rubrique number.
-    expect(headerRow.getCell(4).value).toBe('DTS IMPORT NORMAL');
-    expect(headerRow.getCell(5).value).toBe('TVA IMPORT AUTRE PDS');
-    expect(headerRow.getCell(6).value).toBe('TAXE F.P.E.I. EXP.');
-    expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
-    expect(headerRow.getCell(8).value).toBe('Prorata');
+    expect(headerRow.getCell(5).value).toBe('DTS IMPORT NORMAL');
+    expect(headerRow.getCell(6).value).toBe('TVA IMPORT AUTRE PDS');
+    expect(headerRow.getCell(7).value).toBe('TAXE F.P.E.I. EXP.');
+    expect(headerRow.getCell(8).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(9).value).toBe('Prorata');
 
     // 2 title rows + header + article 1 (354 units) + article 2 (200 units) = 557
     expect(sheet.rowCount).toBe(557);
@@ -61,23 +62,26 @@ describe('generateUnitLevelExcel', () => {
     // first row of article 1
     const firstRow = sheet.getRow(4);
     expect(firstRow.getCell(1).value).toBe('T-SHIRT');
-    expect(firstRow.getCell(3).value).toBe(1);
+    // N° Enregistrement — the DUM fixture's "A ENREGISTREMENT" registration
+    // number ("0076481 X 25/06/2026"), same on every row.
+    expect(firstRow.getCell(2).value).toBe('0076481 X 25/06/2026');
+    expect(firstRow.getCell(4).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
-    expect(Number(firstRow.getCell(7).value)).toBeCloseTo(27147.0 / 354, 4);
+    expect(Number(firstRow.getCell(8).value)).toBeCloseTo(27147.0 / 354, 4);
     // Prorata — this unit's Valeur Déclarée over the whole declaration's total
     // Valeur Déclarée (article 1's 27147.0 + article 2's 12892.992 = 40039.992).
-    expect(Number(firstRow.getCell(8).value)).toBeCloseTo(27147.0 / 354 / 40039.992, 6);
+    expect(Number(firstRow.getCell(9).value)).toBeCloseTo(27147.0 / 354 / 40039.992, 6);
 
     // last row of article 1, first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(357);
-    expect(lastRowArticle1.getCell(3).value).toBe(354);
+    expect(lastRowArticle1.getCell(4).value).toBe(354);
     const firstRowArticle2 = sheet.getRow(358);
-    expect(firstRowArticle2.getCell(3).value).toBe(1);
+    expect(firstRowArticle2.getCell(4).value).toBe(1);
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
-    expect(Number(firstRowArticle2.getCell(7).value)).toBeCloseTo(12892.992 / 200, 4);
+    expect(Number(firstRowArticle2.getCell(8).value)).toBeCloseTo(12892.992 / 200, 4);
     // Prorata — still divided by the whole declaration's total, not article 2's own total.
-    expect(Number(firstRowArticle2.getCell(8).value)).toBeCloseTo(12892.992 / 200 / 40039.992, 6);
+    expect(Number(firstRowArticle2.getCell(9).value)).toBeCloseTo(12892.992 / 200 / 40039.992, 6);
     // A thicker top border marks where article 2's block starts.
     expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 
@@ -89,9 +93,9 @@ describe('generateUnitLevelExcel', () => {
     let sum007217 = 0;
     for (let rowNum = 4; rowNum <= 357; rowNum++) {
       const row = sheet.getRow(rowNum);
-      sum000110 += Number(row.getCell(4).value);
-      sum002109 += Number(row.getCell(5).value);
-      sum007217 += Number(row.getCell(6).value);
+      sum000110 += Number(row.getCell(5).value);
+      sum002109 += Number(row.getCell(6).value);
+      sum007217 += Number(row.getCell(7).value);
     }
     expect(sum000110).toBeCloseTo(0.0, 2);
     expect(sum002109).toBeCloseTo(5443.0, 2);
@@ -102,9 +106,29 @@ describe('generateUnitLevelExcel', () => {
     // declaration's total Valeur Déclarée, not each article's own total.
     let prorataSum = 0;
     for (let rowNum = 4; rowNum <= 557; rowNum++) {
-      prorataSum += Number(sheet.getRow(rowNum).getCell(8).value);
+      prorataSum += Number(sheet.getRow(rowNum).getCell(9).value);
     }
     expect(prorataSum).toBeCloseTo(1, 6);
+  });
+
+  it('fills every row\'s N° Enregistrement with the DUM\'s "A ENREGISTREMENT" registration number when present', async () => {
+    const declaration = loadRealDeclaration();
+    const withRegistration: Declaration = {
+      ...declaration,
+      numeroEnregistrement: '0066046 E 08/07/2026',
+    };
+    const { filePath, dir } = createTempXlsxPath('unit-level-registration');
+    tempDir = dir;
+
+    await generateUnitLevelExcel(withRegistration, filePath, NO_BRANDING);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const sheet = workbook.worksheets[0];
+
+    expect(sheet.getRow(4).getCell(2).value).toBe('0066046 E 08/07/2026');
+    // Every row (including article 2's) carries the same declaration-wide value.
+    expect(sheet.getRow(358).getCell(2).value).toBe('0066046 E 08/07/2026');
   });
 
   it('throws when an article quantite is not a whole number', async () => {
@@ -154,6 +178,7 @@ describe('generateUnitLevelExcel', () => {
         },
       ],
       ordonnancementTaxes: [],
+      numeroEnregistrement: null,
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-divergent-codes');
     tempDir = dir;
@@ -164,35 +189,35 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    // header: Nom Article | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
+    // header: Nom Article | N° Enregistrement | HSC | Serial Number | 000110 | 002109 | 007217 (sorted union) | Valeur Déclarée
     const headerRow = sheet.getRow(3);
-    expect(headerRow.getCell(4).value).toBe('DTS IMPORT NORMAL');
-    expect(headerRow.getCell(5).value).toBe('TVA IMPORT AUTRE PDS');
-    expect(headerRow.getCell(6).value).toBe('TAXE F.P.E.I. EXP.');
-    expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(5).value).toBe('DTS IMPORT NORMAL');
+    expect(headerRow.getCell(6).value).toBe('TVA IMPORT AUTRE PDS');
+    expect(headerRow.getCell(7).value).toBe('TAXE F.P.E.I. EXP.');
+    expect(headerRow.getCell(8).value).toBe('Valeur Déclarée');
 
     // article A: 3 rows (rows 4-6), has 000110 and 007217 but NOT 002109 -> 002109 column must be 0
     for (let rowNum = 4; rowNum <= 6; rowNum++) {
       const row = sheet.getRow(rowNum);
-      expect(Number(row.getCell(5).value)).toBe(0); // 002109 column, article A doesn't have this code
+      expect(Number(row.getCell(6).value)).toBe(0); // 002109 column, article A doesn't have this code
     }
     // article A's 007217 column (montant=3 across 3 units) should reconcile to 3
     let sumA007217 = 0;
     for (let rowNum = 4; rowNum <= 6; rowNum++) {
-      sumA007217 += Number(sheet.getRow(rowNum).getCell(6).value);
+      sumA007217 += Number(sheet.getRow(rowNum).getCell(7).value);
     }
     expect(sumA007217).toBeCloseTo(3, 2);
 
     // article B: 2 rows (rows 7-8), has ONLY 002109 -> 000110 and 007217 columns must be 0
     for (let rowNum = 7; rowNum <= 8; rowNum++) {
       const row = sheet.getRow(rowNum);
-      expect(Number(row.getCell(4).value)).toBe(0); // 000110 column, article B doesn't have this code
-      expect(Number(row.getCell(6).value)).toBe(0); // 007217 column, article B doesn't have this code
+      expect(Number(row.getCell(5).value)).toBe(0); // 000110 column, article B doesn't have this code
+      expect(Number(row.getCell(7).value)).toBe(0); // 007217 column, article B doesn't have this code
     }
     // article B's 002109 column (montant=10 across 2 units) should reconcile to 10
     let sumB002109 = 0;
     for (let rowNum = 7; rowNum <= 8; rowNum++) {
-      sumB002109 += Number(sheet.getRow(rowNum).getCell(5).value);
+      sumB002109 += Number(sheet.getRow(rowNum).getCell(6).value);
     }
     expect(sumB002109).toBeCloseTo(10, 2);
   });
@@ -233,6 +258,7 @@ describe('generateUnitLevelExcel', () => {
         },
       ],
       ordonnancementTaxes: [{ code: '002701', designation: 'REDV.INF.(AVEC D et T)', montant: 100 }],
+      numeroEnregistrement: null,
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-ordonnancement');
     tempDir = dir;
@@ -243,17 +269,17 @@ describe('generateUnitLevelExcel', () => {
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
 
-    // header: Nom Article | HSC | Serial Number | 000110 | REDV.INF.(AVEC D et T) | Valeur Déclarée | Prorata
+    // header: Nom Article | N° Enregistrement | HSC | Serial Number | 000110 | REDV.INF.(AVEC D et T) | Valeur Déclarée | Prorata
     const headerRow = sheet.getRow(3);
-    expect(headerRow.getCell(5).value).toBe('REDV.INF.(AVEC D et T)');
-    expect(headerRow.getCell(6).value).toBe('Valeur Déclarée');
-    expect(headerRow.getCell(7).value).toBe('Prorata');
+    expect(headerRow.getCell(6).value).toBe('REDV.INF.(AVEC D et T)');
+    expect(headerRow.getCell(7).value).toBe('Valeur Déclarée');
+    expect(headerRow.getCell(8).value).toBe('Prorata');
 
     // 5 rows total (article A: 3 units, article B: 2 units); declaration total
     // Valeur Déclarée = 150, so each unit's Prorata = (its own per-unit value) / 150.
     let sumOrdonnancement = 0;
     for (let rowNum = 4; rowNum <= 8; rowNum++) {
-      sumOrdonnancement += Number(sheet.getRow(rowNum).getCell(5).value);
+      sumOrdonnancement += Number(sheet.getRow(rowNum).getCell(6).value);
     }
     // Reconciles back to the rubrique's full montant, since Prorata sums to 1
     // across every row of the declaration.
@@ -262,6 +288,6 @@ describe('generateUnitLevelExcel', () => {
     // Article A's per-unit value is 100/3; its share of the 002701 montant
     // is (100/3 / 150) × 100.
     const firstRow = sheet.getRow(4);
-    expect(Number(firstRow.getCell(5).value)).toBeCloseTo(((100 / 3) / 150) * 100, 6);
+    expect(Number(firstRow.getCell(6).value)).toBeCloseTo(((100 / 3) / 150) * 100, 6);
   });
 });

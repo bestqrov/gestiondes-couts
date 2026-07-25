@@ -36,4 +36,8 @@ export interface Declaration {
   benNumero: string;
   articles: Article[];
   ordonnancementTaxes: OrdonnancementTaxLine[];
+  // The DUM's "A ENREGISTREMENT" box registration number (e.g. "0066046 E
+  // 08/07/2026") — null when the DUM document didn't contain a recognizable
+  // one, since it's a display-only field.
+  numeroEnregistrement: string | null;
 }

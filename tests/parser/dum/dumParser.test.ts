@@ -191,4 +191,28 @@ USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
 
     expect(result.shipmentCost).toBeUndefined();
   });
+
+  it('extracts the "A ENREGISTREMENT" registration number from the real fixture', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.numeroEnregistrement).toBe('0076481 X 25/06/2026');
+  });
+
+  it('normalizes multi-space gaps in the registration number to a single space', () => {
+    const text = `Crédit d'enlèvement 700002123
+0066046   E   08/07/2026
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.numeroEnregistrement).toBe('0066046 E 08/07/2026');
+  });
+
+  it('leaves numeroEnregistrement undefined (not a hard failure) when the pattern is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.numeroEnregistrement).toBeUndefined();
+  });
 });

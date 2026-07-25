@@ -100,5 +100,6 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
     benNumero: liquidation.header.benNumero,
     articles,
     ordonnancementTaxes: liquidation.ordonnancementTaxes,
+    numeroEnregistrement: dum.numeroEnregistrement ?? null,
   };
 }

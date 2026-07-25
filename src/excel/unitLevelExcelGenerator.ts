@@ -16,8 +16,8 @@ import {
 
 function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
   return [
-    { kind: 'identity', from: 1, to: 3 }, // Nom Article, HSC, Serial Number
-    { kind: 'tax', from: 4, to: 3 + taxCodeCount },
+    { kind: 'identity', from: 1, to: 4 }, // Nom Article, N° Enregistrement, HSC, Serial Number
+    { kind: 'tax', from: 5, to: 4 + taxCodeCount },
     { kind: 'value', from: columnCount - 1, to: columnCount }, // Valeur Déclarée, Prorata
   ];
 }
@@ -44,15 +44,18 @@ export async function addUnitLevelSheet(
   );
   const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
   const allTaxCodeCount = taxCodes.length + extraCodes.length;
-  // Valeur Déclarée and Prorata are the last two columns, after every tax
-  // code column (per-article union, then extra ordonnancement-only codes).
-  const columnCount = 3 + allTaxCodeCount + 2;
+  // "N° Enregistrement" (the DUM's "A ENREGISTREMENT" registration number,
+  // same value on every row) sits right before HSC, ahead of the tax
+  // columns. Valeur Déclarée and Prorata are the last two columns, after
+  // every tax code column (per-article union, then extra ordonnancement-only
+  // codes).
+  const columnCount = 4 + allTaxCodeCount + 2;
   const valeurDeclareeColumn = columnCount - 1;
   const prorataColumn = columnCount;
   const moneyColumns = new Set<number>([
     valeurDeclareeColumn,
-    ...taxCodes.map((_, i) => 4 + i),
-    ...extraCodes.map((_, i) => 4 + taxCodes.length + i),
+    ...taxCodes.map((_, i) => 5 + i),
+    ...extraCodes.map((_, i) => 5 + taxCodes.length + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
@@ -64,6 +67,7 @@ export async function addUnitLevelSheet(
 
   sheet.columns = [
     { key: 'nomArticle', width: 36 },
+    { key: 'numeroEnregistrement', width: 26 },
     { key: 'hsCode', width: 20 },
     { key: 'serialNumber', width: 18 },
     ...taxCodes.map((code) => ({ key: code, width: 24 })),
@@ -85,6 +89,7 @@ export async function addUnitLevelSheet(
 
   const headerRow = sheet.addRow([
     'Nom Article',
+    'N° Enregistrement',
     'HSC',
     'Serial Number',
     ...taxCodes.map(taxCodeDesignation),
@@ -125,6 +130,7 @@ export async function addUnitLevelSheet(
     for (let unit = 0; unit < quantite; unit++) {
       const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
+        numeroEnregistrement: declaration.numeroEnregistrement ?? '',
         hsCode: article.hsCode,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,

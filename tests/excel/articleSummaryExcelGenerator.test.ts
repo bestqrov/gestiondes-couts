@@ -122,6 +122,7 @@ describe('generateArticleSummaryExcel', () => {
       benNumero: '1',
       articles: [],
       ordonnancementTaxes: [],
+      numeroEnregistrement: null,
     };
     const { filePath, dir } = createTempXlsxPath('article-summary-empty');
     tempDir = dir;
