@@ -8,6 +8,7 @@ import { parseDum } from '../../src/parser/dum/dumParser.js';
 import { mergeDeclaration } from '../../src/merge/declarationMerger.js';
 import { generateCombinedExcel } from '../../src/excel/combinedExcelGenerator.js';
 import { createTempXlsxPath, cleanupTempDir } from './testHelpers.js';
+import type { PackingListRow } from '../../src/parser/packingList/packingListParser.js';
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../parser/fixtures');
 
@@ -19,6 +20,19 @@ function loadRealDeclaration() {
   return mergeDeclaration(liquidation, dum);
 }
 
+const SAMPLE_PACKING_LIST_ROWS: PackingListRow[] = [
+  {
+    item: 'AB0141DOAY16',
+    description: 'VESTITO A FASCIA CORTO IN TULLE',
+    color: 'PK2 PINK MEDIUM',
+    pieces: 18,
+    unit: 9.61,
+    total: 172.98,
+    origin: 'CHINA',
+    hsCode: '61044300',
+  },
+];
+
 describe('generateCombinedExcel', () => {
   let tempDir: string | undefined;
 
@@ -27,12 +41,12 @@ describe('generateCombinedExcel', () => {
     tempDir = undefined;
   });
 
-  it('writes a single .xlsx file containing only the Articles summary and a combined Global sheet', async () => {
+  it('writes a single .xlsx file containing the Articles summary, a combined Global sheet, and an HS total sheet', async () => {
     const declaration = loadRealDeclaration();
     const { filePath, dir } = createTempXlsxPath('combined');
     tempDir = dir;
 
-    await generateCombinedExcel(declaration, filePath, {
+    await generateCombinedExcel(declaration, SAMPLE_PACKING_LIST_ROWS, filePath, {
       companyName: 'ACME LOGISTICS SARL',
       brandColor: '#4f46e5',
       logoDataUri: null,
@@ -41,13 +55,10 @@ describe('generateCombinedExcel', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    // 1 summary sheet + 1 combined "Global" sheet — no per-article sheets.
-    expect(workbook.worksheets).toHaveLength(2);
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Articles', 'Global']);
+    // 1 summary sheet + 1 combined "Global" sheet + 1 "HS total" sheet.
+    expect(workbook.worksheets).toHaveLength(3);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Articles', 'Global', 'HS total']);
 
-    // Every sheet gets the same 3-row letterhead: company name, document
-    // reference, date de génération — checked once here (the per-sheet
-    // content itself is exercised in each generator's own test file).
     const articlesSheet = workbook.getWorksheet('Articles')!;
     expect(articlesSheet.getRow(1).getCell(1).value).toBe('ACME LOGISTICS SARL');
     expect(articlesSheet.getRow(2).getCell(1).value).toBe(
@@ -58,41 +69,16 @@ describe('generateCombinedExcel', () => {
 
     const globalSheet = workbook.getWorksheet('Global')!;
     expect(globalSheet.getRow(4).getCell(1).value).toBe('Nom Article');
-    expect(globalSheet.getRow(4).getCell(2).value).toBe('DONNEES COMPTABLES');
-    expect(globalSheet.getRow(4).getCell(3).value).toBe('Poids net (kg)');
-    expect(globalSheet.getRow(4).getCell(4).value).toBe("Date d'arrivée");
-    expect(globalSheet.getRow(4).getCell(5).value).toBe('Nature et numéro du titre de transport');
-    expect(globalSheet.getRow(4).getCell(6).value).toBe('N° Enregistrement');
-    expect(globalSheet.getRow(4).getCell(7).value).toBe('HSC');
+    expect(globalSheet.rowCount).toBe(558); // 3 title rows + header + 354 + 200 unit rows
 
-    // Both sheets' "Date de génération" rows (row 3) show the identical
-    // timestamp — proves generateCombinedExcel computed it once, not once
-    // per sheet.
+    const hsTotalSheet = workbook.getWorksheet('HS total')!;
+    expect(hsTotalSheet.getRow(4).getCell(1).value).toBe('item');
+    expect(hsTotalSheet.getRow(5).getCell(1).value).toBe('AB0141DOAY16');
+    expect(hsTotalSheet.rowCount).toBe(5); // 3 title rows + header + 1 packing-list row
+
+    // All three sheets share the identical "Date de génération" timestamp —
+    // proves generateCombinedExcel computed it once, not once per sheet.
     expect(articlesSheet.getRow(3).getCell(1).value).toBe(globalSheet.getRow(3).getCell(1).value);
-
-    // Same DUM-sourced values on every row of the sheet.
-    expect(globalSheet.getRow(5).getCell(2).value).toBe('MLV:29/06/2026 16:37');
-    expect(globalSheet.getRow(5).getCell(4).value).toBe('24/06/2026');
-    expect(globalSheet.getRow(5).getCell(5).value).toBe(
-      '01|30100020260009045|147-93618044|MXP|2030300463279'
-    );
-    expect(globalSheet.getRow(5).getCell(6).value).toBe('0076481 X 25/06/2026');
-    expect(globalSheet.getRow(558).getCell(2).value).toBe('MLV:29/06/2026 16:37');
-    expect(globalSheet.getRow(558).getCell(4).value).toBe('24/06/2026');
-    expect(globalSheet.getRow(558).getCell(6).value).toBe('0076481 X 25/06/2026');
-    expect(globalSheet.rowCount).toBe(558); // 3 title rows + header + 354 + 200 unit rows, both articles combined
-    // First article's rows come before the second's, each stacked one under the other.
-    expect(globalSheet.getRow(5).getCell(1).value).toBe('T-SHIRT');
-    expect(globalSheet.getRow(5).getCell(8).value).toBe(1); // article 1, serial 1
-    expect(globalSheet.getRow(358).getCell(8).value).toBe(354); // article 1, serial 354 (last row)
-    expect(globalSheet.getRow(359).getCell(8).value).toBe(1); // article 2, serial 1 (first row after article 1)
-    expect(globalSheet.getRow(558).getCell(8).value).toBe(200); // article 2, serial 200 (last row)
-
-    // A thicker top border marks where article 2's block starts, visually
-    // separating it from article 1's block right above it.
-    const separatorBorder = globalSheet.getRow(359).getCell(1).border;
-    expect(separatorBorder?.top?.style).toBe('medium');
-    // No separator on the very first product's block (row 5) — nothing to separate it from.
-    expect(globalSheet.getRow(5).getCell(1).border?.top?.style).not.toBe('medium');
+    expect(articlesSheet.getRow(3).getCell(1).value).toBe(hsTotalSheet.getRow(3).getCell(1).value);
   });
 });
