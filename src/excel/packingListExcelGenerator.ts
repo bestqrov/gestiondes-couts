@@ -24,12 +24,33 @@ const BASE_COLUMN_GROUPS: ColumnGroup[] = [
   { kind: 'identity', from: 7, to: 8 }, // origin, HS CODE
 ];
 
-// Matches a packing-list row to its declaration article by exact name
-// (trimmed, case-insensitive) — "Nom Article" (Global) vs "description"
-// (packing list) — since both name the same product, just from different
-// source documents.
-function normalizeArticleName(name: string): string {
-  return name.trim().toLowerCase();
+// Only the first 6 digits (the HS "position") need to agree to consider a
+// packing-list row and a declaration article the same product — matches the
+// HS_CODE_COMPARISON_LENGTH convention already used to reconcile the
+// Liquidation and DUM's HS codes in declarationMerger.ts. Product names
+// differ too much between the supplier's packing list and the customs
+// documents' OCR'd text to match reliably by name.
+const HS_CODE_MATCH_LENGTH = 6;
+
+function hsCodePrefix(code: string): string {
+  return code.slice(0, HS_CODE_MATCH_LENGTH);
+}
+
+// Sums every declaration article's tax montants, grouped by HS code prefix
+// — multiple articles (e.g. one per color/variant) can share the same HS
+// position, the same way multiple packing-list rows do, so the group total
+// is what "the tax value for this HS code" means.
+function sumTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
+  const totals = new Map<string, Map<string, number>>();
+  for (const article of declaration.articles) {
+    const prefix = hsCodePrefix(article.hsCode);
+    const perCode = totals.get(prefix) ?? new Map<string, number>();
+    for (const tax of article.taxes) {
+      perCode.set(tax.code, (perCode.get(tax.code) ?? 0) + tax.montant);
+    }
+    totals.set(prefix, perCode);
+  }
+  return totals;
 }
 
 // Adds the "HS total" sheet — a direct, unaggregated copy of the uploaded
@@ -56,9 +77,7 @@ export async function addPackingListSheet(
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
   ];
 
-  const articleByName = new Map(
-    declaration.articles.map((article) => [normalizeArticleName(article.nomArticle), article])
-  );
+  const taxTotalsByHsPrefix = sumTaxesByHsPrefix(declaration);
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
@@ -104,7 +123,8 @@ export async function addPackingListSheet(
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
   rows.forEach((row, index) => {
-    const matchedArticle = articleByName.get(normalizeArticleName(row.description));
+    const rowHsPrefix = hsCodePrefix(row.hsCode);
+    const matchedTaxTotals = taxTotalsByHsPrefix.get(rowHsPrefix);
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,
@@ -114,12 +134,11 @@ export async function addPackingListSheet(
       total: row.total,
       origin: row.origin,
       // Only the first 6 digits of the (8-digit) HS code are shown here.
-      hsCode: row.hsCode.slice(0, 6),
+      hsCode: rowHsPrefix,
     };
     let sommeDd = 0;
     for (const code of taxCodes) {
-      const tax = matchedArticle?.taxes.find((t) => t.code === code);
-      const montant = tax?.montant ?? 0;
+      const montant = matchedTaxTotals?.get(code) ?? 0;
       rowValues[code] = montant;
       sommeDd += montant;
     }

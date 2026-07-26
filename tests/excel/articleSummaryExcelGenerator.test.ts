@@ -78,7 +78,7 @@ describe('generateArticleSummaryExcel', () => {
     expect(row2.getCell(5).value).toBeCloseTo(200.0, 1);
   });
 
-  it('embeds the configured logo image on the left of the title row, right-aligning the company name next to it', async () => {
+  it('embeds the configured logo image, keeping the company name centered', async () => {
     // A minimal valid 10x10 PNG, base64-encoded as a data: URI — the same
     // shape a real uploaded logo takes (see LOGO_ALLOWED_MIME_TYPES).
     const logoDataUri =
@@ -102,7 +102,7 @@ describe('generateArticleSummaryExcel', () => {
 
     const titleRow = sheet.getRow(1);
     expect(titleRow.getCell(1).value).toBe('ACME LOGISTICS SARL');
-    expect(titleRow.getCell(1).alignment?.horizontal).toBe('right');
+    expect(titleRow.getCell(1).alignment?.horizontal).toBe('center');
   });
 
   it('falls back to a generic company name when none is configured', async () => {

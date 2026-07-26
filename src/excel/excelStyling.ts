@@ -221,16 +221,13 @@ export async function addSheetTitleRows(
   generatedAt: Date
 ): Promise<void> {
   const logoBuffer = await decodeLogoForExcel(logoDataUri);
-  const hasLogo = logoBuffer !== null;
 
   const titleRow = sheet.addRow([companyName]);
   for (let col = 1; col <= columnCount; col++) {
     titleRow.getCell(col).style = {
       font: { bold: true, size: 16, color: { argb: 'FFFFFFFF' } },
       fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: brandArgb } },
-      // Logo sits on the left of the row, so the company name reads on the
-      // right of it rather than dead-center overlapping the image.
-      alignment: { vertical: 'middle', horizontal: hasLogo ? 'right' : 'center' },
+      alignment: { vertical: 'middle', horizontal: 'center' },
       border: TITLE_BORDER,
     };
   }
@@ -246,8 +243,13 @@ export async function addSheetTitleRows(
       buffer: logoBuffer,
       extension: 'png',
     } as unknown as ExcelJS.Image);
+    // Anchored just to the left of the merged row's horizontal center (in
+    // column-width units), so the logo and the now-centered company name
+    // read as one centered group rather than the logo sitting fixed at the
+    // far-left edge of a wide sheet.
+    const logoAnchorCol = Math.max(0.15, columnCount / 2 - 1.3);
     sheet.addImage(imageId, {
-      tl: { col: 0.15, row: titleRow.number - 1 + 0.12 },
+      tl: { col: logoAnchorCol, row: titleRow.number - 1 + 0.12 },
       ext: { width: 32, height: 32 },
     });
   }

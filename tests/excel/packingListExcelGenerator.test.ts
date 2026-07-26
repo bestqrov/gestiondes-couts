@@ -146,7 +146,7 @@ describe('addPackingListSheet', () => {
     expect((headerRow.getCell(8).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(identityArgb); // HS CODE
   });
 
-  it('adds tax columns from the matching article (Nom Article = description), colored orange', async () => {
+  it('adds tax columns from the matching article (by HS code prefix), colored orange', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-taxes');
     tempDir = dir;
@@ -171,12 +171,12 @@ describe('addPackingListSheet', () => {
     expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL');
     expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS');
 
-    // Row 5 = "VESTITO A FASCIA CORTO IN TULLE" — matches the one article.
+    // Row 5 — HS code 61044300 matches the one article's 610443 prefix.
     const matchedRow = sheet.getRow(5);
     expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(4.32, 2);
     expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(34.6, 2);
 
-    // Row 6 = "BODY A COSTE" — no matching article, taxes default to 0.
+    // Row 6 — HS code 61142000 (prefix 611420) has no matching article, taxes default to 0.
     const unmatchedRow = sheet.getRow(6);
     expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
@@ -194,6 +194,67 @@ describe('addPackingListSheet', () => {
 
     expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
+  });
+
+  it('sums taxes across every article sharing the same HS code prefix, and applies the group total to every matching row', async () => {
+    const declarationWithTwoVariants: Declaration = {
+      ...SAMPLE_DECLARATION,
+      articles: [
+        {
+          numero: 1,
+          hsCode: '61044300',
+          nomArticle: 'VESTITO PINK',
+          pays: 'CHINE',
+          paysCode: 'CN',
+          valeurDeclaree: 100,
+          quantite: 10,
+          unite: 'U',
+          totalArticle: 100,
+          poidsNet: 5,
+          taxes: [{ code: '000110', assiette: 100, taux: 2.5, montant: 2.5 }],
+        },
+        {
+          numero: 2,
+          // Same HS position (610443), different national suffix — treated
+          // as the same HS group, same as declarationMerger's own comparison.
+          hsCode: '61044399',
+          nomArticle: 'VESTITO BLUE',
+          pays: 'CHINE',
+          paysCode: 'CN',
+          valeurDeclaree: 50,
+          quantite: 5,
+          unite: 'U',
+          totalArticle: 50,
+          poidsNet: 2,
+          taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 1.25 }],
+        },
+      ],
+    };
+    const twoColorVariantRows: PackingListRow[] = [
+      { ...SAMPLE_ROWS[0], hsCode: '61044300' },
+      { ...SAMPLE_ROWS[0], item: 'AB0141DOAY17', color: 'BL2 BLUE', hsCode: '61044399' },
+    ];
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-hs-group');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      twoColorVariantRows,
+      declarationWithTwoVariants,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Both rows share HS position 610443, so both get the 2.5 + 1.25 = 3.75 group total.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(3.75, 2);
+    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(3.75, 2);
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {
