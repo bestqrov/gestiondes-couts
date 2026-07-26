@@ -440,7 +440,7 @@
       {{ROLE_BADGE}}
       {{NAV_LINK}}
     </div>
-    <p class="lede" id="pageLede">Déposez les deux documents (Liquidation et DUM) — l'ordre n'a pas d'importance, ils sont identifiés automatiquement. Un fichier Excel avec une feuille par produit sera généré et téléchargé.</p>
+    <p class="lede" id="pageLede">Déposez les trois fichiers (Liquidation, DUM, et l'Excel des articles) — l'ordre de Liquidation/DUM n'a pas d'importance, ils sont identifiés automatiquement. Un fichier Excel avec une feuille par produit sera généré et téléchargé.</p>
 
     <div class="card">
       {{ERROR_BLOCK}}
@@ -474,6 +474,21 @@
             <div class="filename" id="name-dum"></div>
           </div>
           <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <div class="drop-zone" id="zone-packingList">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">Excel des articles</div>
+            <div class="hint">.xlsx — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-packingList"></div>
+          </div>
+          <input type="file" name="packingList" id="input-packingList" accept=".xlsx" required />
         </div>
 
         <button type="submit" id="submitBtn">
@@ -578,6 +593,7 @@
 
     wireDropZone('zone-liquidation', 'input-liquidation', 'name-liquidation');
     wireDropZone('zone-dum', 'input-dum', 'name-dum');
+    wireDropZone('zone-packingList', 'input-packingList', 'name-packingList');
 
     const form = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
@@ -645,10 +661,12 @@
 
       const liquidationFile = document.getElementById('input-liquidation').files[0];
       const dumFile = document.getElementById('input-dum').files[0];
-      if (!liquidationFile || !dumFile) {
+      const packingListFile = document.getElementById('input-packingList').files[0];
+      if (!liquidationFile || !dumFile || !packingListFile) {
         const missing = [];
         if (!liquidationFile) missing.push('Liquidation Douanière');
         if (!dumFile) missing.push('DUM');
+        if (!packingListFile) missing.push('Excel des articles');
         showValidationModal('Fichier(s) manquant(s) : ' + missing.join(', ') + '. Sélectionnez-les avant de générer.');
         return;
       }
@@ -660,6 +678,7 @@
       const formData = new FormData();
       formData.append('liquidation', liquidationFile);
       formData.append('dum', dumFile);
+      formData.append('packingList', packingListFile);
 
       try {
         const response = await fetch('/generate', { method: 'POST', body: formData });
