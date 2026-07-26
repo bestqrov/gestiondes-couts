@@ -9,6 +9,7 @@ import multer from 'multer';
 import type { Collection } from 'mongodb';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';
 import { detectAndParsePair } from '../parser/detectAndParsePair.js';
+import { parsePackingList } from '../parser/packingList/packingListParser.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
@@ -295,19 +296,23 @@ app.post(
   upload.fields([
     { name: 'liquidation', maxCount: 1 },
     { name: 'dum', maxCount: 1 },
+    { name: 'packingList', maxCount: 1 },
   ]),
   async (req, res) => {
     const files = req.files as Record<string, Express.Multer.File[]>;
     const liquidationFile = files.liquidation?.[0];
     const dumFile = files.dum?.[0];
+    const packingListFile = files.packingList?.[0];
 
     try {
-      if (!liquidationFile || !dumFile) {
-        throw new Error('Les deux fichiers (Liquidation et DUM) sont requis.');
+      if (!liquidationFile || !dumFile || !packingListFile) {
+        throw new Error('Les trois fichiers (Liquidation, DUM et Excel des articles) sont requis.');
       }
 
       const liquidationOcr = await extractDocumentText(liquidationFile.path);
       const dumOcr = await extractDocumentText(dumFile.path);
+      const packingListBuffer = await readFile(packingListFile.path);
+      const packingListRows = await parsePackingList(packingListBuffer);
 
       const { liquidation, dum } = detectAndParsePair(liquidationOcr.text, dumOcr.text);
       const declaration = mergeDeclaration(liquidation, dum);
@@ -323,7 +328,7 @@ app.post(
       // producing a spurious "Not Found" (confirmed in production logs).
       const generatedFilePath = path.join(OUTPUT_DIR, `declaration-${randomUUID()}.xlsx`);
       const branding = await getAppSettings(await getSettingsCollection());
-      await generateCombinedExcel(declaration, generatedFilePath, branding);
+      await generateCombinedExcel(declaration, packingListRows, generatedFilePath, branding);
 
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
