@@ -8,7 +8,8 @@ import type { AppSettings } from '../db/appSettingsRepository.js';
 import {
   renderBrandOverrideStyle,
   renderLogoImg,
-  renderCardLogoHeader,
+  renderGenerateLogoPanel,
+  generateLogoPanelEmptyClass,
   renderFaviconLink,
   FONT_OPTIONS,
 } from './brandingStyles.js';
@@ -1094,11 +1095,31 @@ const SETTINGS_PAGE_STYLE = `
 // document, so it wins for this page only without affecting the others.
 const GENERATE_PAGE_STYLE = `
   .card { padding: 32px; }
-  .card-logo-header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-  .card-logo-header-img { height: 56px; max-width: 220px; object-fit: contain; border-radius: 8px; }
+
+  .generate-layout { display: flex; gap: 20px; align-items: stretch; margin-bottom: 8px; }
+  .generate-steps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+  .generate-logo-panel {
+    flex: 0 0 220px; border-radius: 14px; background: var(--brand-soft);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .generate-logo-panel.is-empty { display: none; }
+  .generate-layout:has(.generate-logo-panel.is-empty) { flex-direction: column; }
+  .generate-logo-panel-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+  .step-row { display: flex; align-items: center; gap: 14px; }
+  .step-row .drop-zone { flex: 1; min-width: 0; margin-bottom: 0; }
+  .step-badge {
+    flex: none; width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 800; color: #ffffff;
+    box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.35);
+  }
+  .step-badge-liquidation { background: var(--brand-600); }
+  .step-badge-dum { background: #0891b2; }
+  .step-badge-packing { background: var(--success); }
 
   .drop-zone {
-    position: relative; border: 1.5px dashed var(--line); border-radius: 13px;
+    border: 1.5px dashed var(--line); border-radius: 13px;
     padding: 22px 20px; margin-bottom: 18px; cursor: pointer; background: var(--input-bg);
     transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
     display: flex; gap: 14px; align-items: flex-start;
@@ -1108,7 +1129,6 @@ const GENERATE_PAGE_STYLE = `
   .drop-zone.filled { border-style: solid; border-color: var(--success); background: var(--success-bg); }
   .drop-zone input { display: none; }
   .dz-icon {
-    position: relative;
     flex: none; width: 38px; height: 38px; border-radius: 10px; background: var(--brand-soft);
     display: flex; align-items: center; justify-content: center; color: var(--brand-600);
     transition: background 0.15s, color 0.15s;
@@ -1121,15 +1141,6 @@ const GENERATE_PAGE_STYLE = `
   .drop-zone.filled .dz-icon { background: var(--success-bg); color: var(--success); }
   .dz-icon svg { width: 19px; height: 19px; }
 
-  .dz-step {
-    position: absolute; top: -6px; left: -6px; width: 18px; height: 18px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 800; color: #ffffff;
-    box-shadow: 0 2px 5px -1px rgba(15, 23, 42, 0.35);
-  }
-  .drop-zone-liquidation .dz-step { background: var(--brand-600); }
-  .drop-zone-dum .dz-step { background: #0891b2; }
-  .drop-zone-packing .dz-step { background: var(--success); }
   .dz-body { min-width: 0; flex: 1; }
   .drop-zone .label { font-weight: 600; font-size: 14.5px; color: var(--ink-900); }
   .drop-zone .hint { font-size: 12.5px; color: var(--ink-500); margin-top: 2px; }
@@ -1246,55 +1257,68 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
   const body = `
     <p class="lede">Déposez les trois fichiers (Liquidation, DUM, et l'Excel des articles) — l'ordre de Liquidation/DUM n'a pas d'importance, ils sont identifiés automatiquement.</p>
     <div class="card">
-      ${renderCardLogoHeader(settings)}
       ${errorBlock}
       <form id="generateForm" method="post" action="/generate" enctype="multipart/form-data">
-        <div class="drop-zone drop-zone-liquidation" id="zone-liquidation">
-          <div class="dz-icon">
-            <span class="dz-step">1</span>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div class="dz-body">
-            <div class="label">Liquidation Douanière (BE)</div>
-            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
-            <div class="filename" id="name-liquidation"></div>
-          </div>
-          <input type="file" name="liquidation" id="input-liquidation" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
-        </div>
+        <div class="generate-layout">
+          <div class="generate-steps">
+            <div class="step-row">
+              <div class="step-badge step-badge-liquidation">1</div>
+              <div class="drop-zone drop-zone-liquidation" id="zone-liquidation">
+                <div class="dz-icon">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="dz-body">
+                  <div class="label">Liquidation Douanière (BE)</div>
+                  <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+                  <div class="filename" id="name-liquidation"></div>
+                </div>
+                <input type="file" name="liquidation" id="input-liquidation" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+              </div>
+            </div>
 
-        <div class="drop-zone drop-zone-dum" id="zone-dum">
-          <div class="dz-icon">
-            <span class="dz-step">2</span>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div class="dz-body">
-            <div class="label">DUM</div>
-            <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
-            <div class="filename" id="name-dum"></div>
-          </div>
-          <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
-        </div>
+            <div class="step-row">
+              <div class="step-badge step-badge-dum">2</div>
+              <div class="drop-zone drop-zone-dum" id="zone-dum">
+                <div class="dz-icon">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="dz-body">
+                  <div class="label">DUM</div>
+                  <div class="hint">PDF ou image — cliquez ou glissez-déposez</div>
+                  <div class="filename" id="name-dum"></div>
+                </div>
+                <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+              </div>
+            </div>
 
-        <div class="drop-zone drop-zone-packing" id="zone-packingList">
-          <div class="dz-icon">
-            <span class="dz-step">3</span>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>
+            <div class="step-row">
+              <div class="step-badge step-badge-packing">3</div>
+              <div class="drop-zone drop-zone-packing" id="zone-packingList">
+                <div class="dz-icon">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="dz-body">
+                  <div class="label">Excel des articles</div>
+                  <div class="hint">.xlsx — cliquez ou glissez-déposez</div>
+                  <div class="filename" id="name-packingList"></div>
+                </div>
+                <input type="file" name="packingList" id="input-packingList" accept=".xlsx" required />
+              </div>
+            </div>
           </div>
-          <div class="dz-body">
-            <div class="label">Excel des articles</div>
-            <div class="hint">.xlsx — cliquez ou glissez-déposez</div>
-            <div class="filename" id="name-packingList"></div>
+
+          <div class="generate-logo-panel${generateLogoPanelEmptyClass(settings)}">
+            ${renderGenerateLogoPanel(settings)}
           </div>
-          <input type="file" name="packingList" id="input-packingList" accept=".xlsx" required />
         </div>
 
         <button type="submit" id="submitBtn">

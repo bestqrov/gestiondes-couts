@@ -81,14 +81,21 @@ export function renderLogoImg(settings: AppSettings): string {
   return `<img src="${settings.logoDataUri}" alt="${alt}" style="height:32px;max-width:140px;object-fit:contain;border-radius:6px;" />`;
 }
 
-// A large, prominent logo shown inside the upload card itself (right-aligned,
-// above the drop zones) — bigger than the small topbar one so the company's
-// branding actually reads at a glance on the "Générer une déclaration" page.
-// Empty string (renders nothing, no empty header row) when no logo is set.
-export function renderCardLogoHeader(settings: AppSettings): string {
+// The large logo shown in the dedicated side panel next to the numbered
+// upload steps on the "Générer une déclaration" page — empty string when no
+// logo is set, so the panel (hidden via its "is-empty" class, see
+// generateLogoPanelEmptyClass) never shows as a blank tinted box.
+export function renderGenerateLogoPanel(settings: AppSettings): string {
   if (!settings.logoDataUri) return '';
   const alt = settings.companyName ? escapeHtml(settings.companyName) : 'Logo';
-  return `<div class="card-logo-header"><img src="${settings.logoDataUri}" alt="${alt}" class="card-logo-header-img" /></div>`;
+  return `<img src="${settings.logoDataUri}" alt="${alt}" class="generate-logo-panel-img" />`;
+}
+
+// Appended to the logo panel's class list — "is-empty" collapses the
+// two-column layout back to a single column (see .generate-layout:has(...)
+// in the page's own <style>) when no logo has been configured yet.
+export function generateLogoPanelEmptyClass(settings: AppSettings): string {
+  return settings.logoDataUri ? '' : ' is-empty';
 }
 
 const DEFAULT_BADGE_ICON =
