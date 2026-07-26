@@ -71,6 +71,7 @@ import {
   FONT_OPTIONS,
   renderBrandOverrideStyle,
   renderLogoImg,
+  renderCardLogoHeader,
   renderFaviconLink,
   renderLoginBadge,
   renderLoginTitle,
@@ -286,6 +287,7 @@ app.get('/', async (req, res) => {
       .replace('{{NAV_LINK}}', navLink)
       .replace('{{ROLE_BADGE}}', roleBadge)
       .replace('{{LOGO_IMG}}', renderLogoImg(settings))
+      .replace('{{CARD_LOGO_HEADER}}', renderCardLogoHeader(settings))
       .replace('{{FAVICON_LINK}}', renderFaviconLink(settings))
       .replace('{{BRAND_OVERRIDE}}', renderBrandOverrideStyle(settings))
   );

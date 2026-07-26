@@ -81,6 +81,16 @@ export function renderLogoImg(settings: AppSettings): string {
   return `<img src="${settings.logoDataUri}" alt="${alt}" style="height:32px;max-width:140px;object-fit:contain;border-radius:6px;" />`;
 }
 
+// A large, prominent logo shown inside the upload card itself (right-aligned,
+// above the drop zones) — bigger than the small topbar one so the company's
+// branding actually reads at a glance on the "Générer une déclaration" page.
+// Empty string (renders nothing, no empty header row) when no logo is set.
+export function renderCardLogoHeader(settings: AppSettings): string {
+  if (!settings.logoDataUri) return '';
+  const alt = settings.companyName ? escapeHtml(settings.companyName) : 'Logo';
+  return `<div class="card-logo-header"><img src="${settings.logoDataUri}" alt="${alt}" class="card-logo-header-img" /></div>`;
+}
+
 const DEFAULT_BADGE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 3.5h7l5 5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5A1.5 1.5 0 0 1 6.5 3.5H7Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3.5V8a1 1 0 0 0 1 1h4.5" stroke="white" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 13.2l2.1 2.1 4.3-4.5" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
