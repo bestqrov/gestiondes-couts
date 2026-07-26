@@ -190,7 +190,9 @@ describe('addPackingListSheet', () => {
 
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(38.92, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(38.92 / 18, 6);
-    expect(matchedRow.getCell(12).numFmt).toBe('#,##0.000000');
+    expect(matchedRow.getCell(12).numFmt).toBe('0.000000');
+    // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
+    expect(matchedRow.getCell(4).numFmt).toBe('0');
 
     expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(12).value)).toBe(0);

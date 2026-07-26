@@ -15,6 +15,7 @@ import {
 } from './excelStyling.js';
 
 const BASE_COLUMN_COUNT = 8;
+const PIECES_COLUMN = 4;
 const UNIT_COLUMN = 5;
 const TOTAL_COLUMN = 6;
 const BASE_COLUMN_GROUPS: ColumnGroup[] = [
@@ -155,7 +156,17 @@ export async function addPackingListSheet(
       new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns, sommeDdColumn])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
-    // money format — it's a per-piece fraction, not a currency total.
-    excelRow.getCell(ddUnitaireColumn).numFmt = '#,##0.000000';
+    // money format — it's a per-piece fraction, not a currency total. No
+    // thousands separator (plain "0.000000"), since a grouping comma next
+    // to 6 decimals read as a formatting glitch. Cloning the style (rather
+    // than mutating cell.numFmt directly) matters here: styleDataRow hands
+    // out shared style objects by reference, so mutating one cell's numFmt
+    // in place would silently change every other cell using that same
+    // banded/plain style throughout the sheet.
+    const ddUnitaireCell = excelRow.getCell(ddUnitaireColumn);
+    ddUnitaireCell.style = { ...ddUnitaireCell.style, numFmt: '0.000000' };
+    // Pieces is a plain whole count — no thousands separator, no decimals.
+    const piecesCell = excelRow.getCell(PIECES_COLUMN);
+    piecesCell.style = { ...piecesCell.style, numFmt: '0' };
   });
 }
