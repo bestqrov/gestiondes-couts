@@ -107,6 +107,8 @@ describe('addPackingListSheet', () => {
     expect(row1.getCell(1).value).toBe('AB0141DOAY16');
     expect(row1.getCell(7).value).toBe('CHINA');
     expect(Number(row1.getCell(6).value)).toBeCloseTo(172.98, 2);
+    // Only the first 6 digits of the (8-digit) HS code are shown.
+    expect(row1.getCell(8).value).toBe('610443');
 
     // Original order preserved — BD0015DOAY16 second, not resorted.
     const row2 = sheet.getRow(6);
@@ -178,6 +180,20 @@ describe('addPackingListSheet', () => {
     const unmatchedRow = sheet.getRow(6);
     expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
+
+    // Somme DD (col 11) = sum of the two tax montants; DD unitaire (col 12)
+    // = Somme DD / pieces, formatted to 6 decimal digits.
+    expect(headerRow.getCell(11).value).toBe('Somme DD');
+    expect(headerRow.getCell(12).value).toBe('DD unitaire');
+    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(38.92, 2);
+    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(38.92 / 18, 6);
+    expect(matchedRow.getCell(12).numFmt).toBe('#,##0.000000');
+
+    expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {

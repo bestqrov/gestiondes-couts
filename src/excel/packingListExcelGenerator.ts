@@ -45,13 +45,15 @@ export async function addPackingListSheet(
   sheetName = 'HS total'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
-  const columnCount = BASE_COLUMN_COUNT + taxCodes.length;
+  // Somme DD / DD unitaire sit right after the tax code columns — derived
+  // sums of those tax values, so grouped and colored with them.
+  const sommeDdColumn = BASE_COLUMN_COUNT + taxCodes.length + 1;
+  const ddUnitaireColumn = sommeDdColumn + 1;
+  const columnCount = ddUnitaireColumn;
   const taxColumns = new Set<number>(taxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
-    ...(taxCodes.length > 0
-      ? [{ kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount }]
-      : []),
+    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
   ];
 
   const articleByName = new Map(
@@ -70,6 +72,8 @@ export async function addPackingListSheet(
     { key: 'origin', width: 22 },
     { key: 'hsCode', width: 18 },
     ...taxCodes.map((code) => ({ key: code, width: 24 })),
+    { key: 'sommeDd', width: 18 },
+    { key: 'ddUnitaire', width: 18 },
   ];
 
   await addSheetTitleRows(
@@ -94,6 +98,8 @@ export async function addPackingListSheet(
     'origin',
     'HS CODE',
     ...taxCodes.map(taxCodeDesignation),
+    'Somme DD',
+    'DD unitaire',
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
@@ -107,13 +113,30 @@ export async function addPackingListSheet(
       unit: row.unit,
       total: row.total,
       origin: row.origin,
-      hsCode: row.hsCode,
+      // Only the first 6 digits of the (8-digit) HS code are shown here.
+      hsCode: row.hsCode.slice(0, 6),
     };
+    let sommeDd = 0;
     for (const code of taxCodes) {
       const tax = matchedArticle?.taxes.find((t) => t.code === code);
-      rowValues[code] = tax?.montant ?? 0;
+      const montant = tax?.montant ?? 0;
+      rowValues[code] = montant;
+      sommeDd += montant;
     }
+    // "DD unitaire" — Somme DD spread over this row's piece count, the same
+    // per-unit pattern as Global's Valeur Déclarée / Unité.
+    rowValues.sommeDd = sommeDd;
+    rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
+
     const excelRow = sheet.addRow(rowValues);
-    styleDataRow(excelRow, columnCount, index, new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns]));
+    styleDataRow(
+      excelRow,
+      columnCount,
+      index,
+      new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns, sommeDdColumn])
+    );
+    // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
+    // money format — it's a per-piece fraction, not a currency total.
+    excelRow.getCell(ddUnitaireColumn).numFmt = '#,##0.000000';
   });
 }
