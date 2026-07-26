@@ -1218,7 +1218,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
     : '';
 
   const body = `
-    <p class="lede">Déposez les deux documents (Liquidation et DUM) — l'ordre n'a pas d'importance, ils sont identifiés automatiquement.</p>
+    <p class="lede">Déposez les trois fichiers (Liquidation, DUM, et l'Excel des articles) — l'ordre de Liquidation/DUM n'a pas d'importance, ils sont identifiés automatiquement.</p>
     <div class="card">
       ${errorBlock}
       <form id="generateForm" method="post" action="/generate" enctype="multipart/form-data">
@@ -1250,6 +1250,21 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
             <div class="filename" id="name-dum"></div>
           </div>
           <input type="file" name="dum" id="input-dum" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" required />
+        </div>
+
+        <div class="drop-zone" id="zone-packingList">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 2.75h8l4 4V19.5A1.75 1.75 0 0 1 16.25 21h-9A1.75 1.75 0 0 1 5.5 19.25V4.5A1.75 1.75 0 0 1 6 2.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M13.5 2.75V7a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="dz-body">
+            <div class="label">Excel des articles</div>
+            <div class="hint">.xlsx — cliquez ou glissez-déposez</div>
+            <div class="filename" id="name-packingList"></div>
+          </div>
+          <input type="file" name="packingList" id="input-packingList" accept=".xlsx" required />
         </div>
 
         <button type="submit" id="submitBtn">
@@ -1306,7 +1321,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <h2>Fichiers manquants</h2>
-        <p id="validationModalMessage">Veuillez sélectionner les 2 fichiers (Liquidation et DUM) avant de générer.</p>
+        <p id="validationModalMessage">Veuillez sélectionner les 3 fichiers (Liquidation, DUM et Excel des articles) avant de générer.</p>
         <button type="button" id="validationModalOk">Compris</button>
       </div>
     </div>
@@ -1341,6 +1356,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
 
       wireDropZone('zone-liquidation', 'input-liquidation', 'name-liquidation');
       wireDropZone('zone-dum', 'input-dum', 'name-dum');
+      wireDropZone('zone-packingList', 'input-packingList', 'name-packingList');
 
       const form = document.getElementById('generateForm');
       const submitBtn = document.getElementById('submitBtn');
@@ -1407,10 +1423,12 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
 
         const liquidationFile = document.getElementById('input-liquidation').files[0];
         const dumFile = document.getElementById('input-dum').files[0];
-        if (!liquidationFile || !dumFile) {
+        const packingListFile = document.getElementById('input-packingList').files[0];
+        if (!liquidationFile || !dumFile || !packingListFile) {
           const missing = [];
           if (!liquidationFile) missing.push('Liquidation Douanière');
           if (!dumFile) missing.push('DUM');
+          if (!packingListFile) missing.push('Excel des articles');
           showValidationModal('Fichier(s) manquant(s) : ' + missing.join(', ') + '. Sélectionnez-les avant de générer.');
           return;
         }
@@ -1422,6 +1440,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         const formData = new FormData();
         formData.append('liquidation', liquidationFile);
         formData.append('dum', dumFile);
+        formData.append('packingList', packingListFile);
 
         try {
           const response = await fetch('/generate', { method: 'POST', body: formData });
