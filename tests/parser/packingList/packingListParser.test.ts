@@ -84,6 +84,18 @@ describe('parsePackingList', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('skips a trailing grand-totals row (blank item/description/color/origin/hsCode, but pieces/total populated)', async () => {
+    const buffer = await buildFixtureBuffer([
+      ['CF0093DOAY16', 'CAMICIA CROP IN SATIN', 'WH1 OFF WHITE', 2, '€ 6,65', '€ 13,30', 'CAMBOGIA', '62064000'],
+      [null as unknown as string, null as unknown as string, null as unknown as string, 7290, null as unknown as string, 47928.31, null as unknown as string, null as unknown as string],
+    ]);
+
+    const rows = await parsePackingList(buffer);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].item).toBe('CF0093DOAY16');
+  });
+
   it('preserves the source row order (no sorting/grouping by HS code)', async () => {
     const buffer = await buildFixtureBuffer([
       ['ZZ_LAST', 'ITEM Z', 'COLOR Z', 1, 1, 1, 'CHINA', '90000000'],

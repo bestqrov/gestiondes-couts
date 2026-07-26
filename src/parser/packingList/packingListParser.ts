@@ -65,11 +65,13 @@ function parseMoneyCell(value: ExcelJS.CellValue): number {
   return parsed;
 }
 
+// Real exports can end with a trailing grand-totals row (all identifying
+// fields blank, but numeric fields like "pieces"/"total" carry a sum) — it
+// has no item code, so "item" blank is what actually distinguishes a
+// non-product row from a real packing-list line, not "every column blank".
 function isRowEmpty(row: ExcelJS.Row, columnIndexes: ColumnIndexes): boolean {
-  return Object.values(columnIndexes).every((col) => {
-    const value = row.getCell(col).value;
-    return value === null || value === undefined || String(value).trim() === '';
-  });
+  const itemValue = row.getCell(columnIndexes.item).value;
+  return itemValue === null || itemValue === undefined || String(itemValue).trim() === '';
 }
 
 function cellText(row: ExcelJS.Row, col: number): string {
