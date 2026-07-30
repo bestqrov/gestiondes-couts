@@ -107,8 +107,8 @@ describe('addPackingListSheet', () => {
     expect(row1.getCell(1).value).toBe('AB0141DOAY16');
     expect(row1.getCell(7).value).toBe('CHINA');
     expect(Number(row1.getCell(6).value)).toBeCloseTo(172.98, 2);
-    // Only the first 6 digits of the (8-digit) HS code are shown.
-    expect(row1.getCell(8).value).toBe('610443');
+    // The full HS code is shown (only the 6-digit prefix is used for matching).
+    expect(row1.getCell(8).value).toBe('61044300');
 
     // Original order preserved — BD0015DOAY16 second, not resorted.
     const row2 = sheet.getRow(6);

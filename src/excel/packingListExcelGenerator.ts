@@ -134,8 +134,9 @@ export async function addPackingListSheet(
       unit: row.unit,
       total: row.total,
       origin: row.origin,
-      // Only the first 6 digits of the (8-digit) HS code are shown here.
-      hsCode: rowHsPrefix,
+      // The full HS code is shown here; only the 6-digit prefix is used
+      // above to match against the declaration's tax totals.
+      hsCode: row.hsCode,
     };
     let sommeDd = 0;
     for (const code of taxCodes) {
