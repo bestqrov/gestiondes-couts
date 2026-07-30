@@ -344,6 +344,27 @@
     }
     #status.busy { color: var(--brand-600); font-weight: 600; }
 
+    #progressBar {
+      display: none;
+      margin-top: 10px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--line-soft);
+      overflow: hidden;
+    }
+    #progressBar.visible { display: block; }
+    #progressBar .progress-fill {
+      width: 40%;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--brand-600);
+      animation: progress-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+
     .foot-note {
       text-align: center;
       font-size: 11.5px;
@@ -553,6 +574,7 @@
           Générer HS TOTAL
         </button>
         <div id="status"></div>
+        <div id="progressBar"><div class="progress-fill"></div></div>
       </form>
 
       <div id="successPanel">
@@ -655,6 +677,7 @@
     const form = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
     const statusEl = document.getElementById('status');
+    const progressBar = document.getElementById('progressBar');
     const successPanel = document.getElementById('successPanel');
     const successSubtitle = document.getElementById('successSubtitle');
     const costPanel = document.getElementById('costPanel');
@@ -731,6 +754,7 @@
       submitBtn.disabled = true;
       statusEl.className = 'busy';
       statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
+      progressBar.classList.add('visible');
 
       const formData = new FormData();
       formData.append('liquidation', liquidationFile);
@@ -761,6 +785,7 @@
 
         statusEl.className = '';
         statusEl.textContent = '';
+        progressBar.classList.remove('visible');
         submitBtn.disabled = false;
 
         form.style.display = 'none';
@@ -785,6 +810,7 @@
       } catch (err) {
         statusEl.className = '';
         statusEl.textContent = '';
+        progressBar.classList.remove('visible');
         submitBtn.disabled = false;
         showError(err.message);
       }
