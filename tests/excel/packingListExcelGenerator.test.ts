@@ -200,9 +200,10 @@ describe('addPackingListSheet', () => {
     const matchedRow = sheet.getRow(5);
     expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(4.32, 2);
     expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(34.6, 2);
-    // DTS IMPORT NORMAL is zero-padded to at least 4 digits before the
+    // Every tax column is zero-padded to at least 4 digits before the
     // decimal separator, with no thousands separator.
     expect(matchedRow.getCell(9).numFmt).toBe('0000.00');
+    expect(matchedRow.getCell(10).numFmt).toBe('0000.00');
 
     // Row 6 — HS code 61142000 (prefix 611420) has no matching article, taxes default to 0.
     const unmatchedRow = sheet.getRow(6);
@@ -219,6 +220,8 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(38.92, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(38.92 / 18, 6);
     expect(matchedRow.getCell(12).numFmt).toBe('0.000000');
+    // Somme DD (col 11) is zero-padded the same way as the tax columns.
+    expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
     // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
     expect(matchedRow.getCell(4).numFmt).toBe('0');
 
