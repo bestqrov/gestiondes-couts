@@ -115,6 +115,31 @@ describe('addPackingListSheet', () => {
     expect(row2.getCell(1).value).toBe('BD0015DOAY16');
   });
 
+  it('shows the full HS code even when it has more than 8 digits', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-long-hscode');
+    tempDir = dir;
+
+    const rowsWithLongHsCode: PackingListRow[] = [
+      { ...SAMPLE_ROWS[0], hsCode: '6104430011' },
+    ];
+
+    await addPackingListSheet(
+      workbook,
+      rowsWithLongHsCode,
+      SAMPLE_DECLARATION,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    expect(sheet.getRow(5).getCell(8).value).toBe('6104430011');
+  });
+
   it('colors the header by column group: identity, quantity, value', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-colors');
