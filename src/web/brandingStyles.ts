@@ -88,7 +88,10 @@ export function renderLogoImg(settings: AppSettings): string {
 export function renderGenerateLogoPanel(settings: AppSettings): string {
   if (!settings.logoDataUri) return '';
   const alt = settings.companyName ? escapeHtml(settings.companyName) : 'Logo';
-  return `<img src="${settings.logoDataUri}" alt="${alt}" class="generate-logo-panel-img" />`;
+  // The wrapping "generate-logo-ring" div shrink-wraps to the rendered
+  // image's own size (rather than the panel's), so the dashed ring drawn
+  // around it via ::before matches the logo instead of the whole panel box.
+  return `<div class="generate-logo-ring"><img src="${settings.logoDataUri}" alt="${alt}" class="generate-logo-panel-img" /></div>`;
 }
 
 // Appended to the logo panel's class list — "is-empty" collapses the

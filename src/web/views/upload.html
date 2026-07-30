@@ -202,6 +202,24 @@
     .generate-layout:has(.generate-logo-panel.is-empty) { flex-direction: column; }
     .generate-logo-panel-img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
+    .generate-logo-ring { position: relative; display: inline-block; max-width: 100%; max-height: 100%; }
+    .generate-logo-ring::before {
+      content: '';
+      position: absolute;
+      inset: -14px;
+      border-radius: 50%;
+      border: 3px dashed #d4af37;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .generate-logo-ring.generating::before {
+      opacity: 1;
+      animation: generate-logo-ring-spin 2.2s linear infinite;
+    }
+    @keyframes generate-logo-ring-spin {
+      to { transform: rotate(360deg); }
+    }
+
     .step-row { display: flex; align-items: center; gap: 14px; }
     .step-row .drop-zone { flex: 1; min-width: 0; margin-bottom: 0; }
     .step-badge {
@@ -678,6 +696,7 @@
     const submitBtn = document.getElementById('submitBtn');
     const statusEl = document.getElementById('status');
     const progressBar = document.getElementById('progressBar');
+    const logoRing = document.querySelector('.generate-logo-ring');
     const successPanel = document.getElementById('successPanel');
     const successSubtitle = document.getElementById('successSubtitle');
     const costPanel = document.getElementById('costPanel');
@@ -755,6 +774,7 @@
       statusEl.className = 'busy';
       statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
       progressBar.classList.add('visible');
+      if (logoRing) logoRing.classList.add('generating');
 
       const formData = new FormData();
       formData.append('liquidation', liquidationFile);
@@ -786,6 +806,7 @@
         statusEl.className = '';
         statusEl.textContent = '';
         progressBar.classList.remove('visible');
+        if (logoRing) logoRing.classList.remove('generating');
         submitBtn.disabled = false;
 
         form.style.display = 'none';
@@ -811,6 +832,7 @@
         statusEl.className = '';
         statusEl.textContent = '';
         progressBar.classList.remove('visible');
+        if (logoRing) logoRing.classList.remove('generating');
         submitBtn.disabled = false;
         showError(err.message);
       }

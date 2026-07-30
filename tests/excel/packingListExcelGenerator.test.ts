@@ -219,7 +219,7 @@ describe('addPackingListSheet', () => {
 
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(38.92, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(38.92 / 18, 6);
-    expect(matchedRow.getCell(12).numFmt).toBe('0.000000');
+    expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
     // Somme DD (col 11) is zero-padded the same way as the tax columns.
     expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
     // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
