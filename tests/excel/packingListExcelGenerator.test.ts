@@ -200,6 +200,9 @@ describe('addPackingListSheet', () => {
     const matchedRow = sheet.getRow(5);
     expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(4.32, 2);
     expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(34.6, 2);
+    // DTS IMPORT NORMAL is zero-padded to at least 4 digits before the
+    // decimal separator, with no thousands separator.
+    expect(matchedRow.getCell(9).numFmt).toBe('0000.00');
 
     // Row 6 — HS code 61142000 (prefix 611420) has no matching article, taxes default to 0.
     const unmatchedRow = sheet.getRow(6);

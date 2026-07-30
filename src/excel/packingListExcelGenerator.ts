@@ -79,6 +79,13 @@ export async function addPackingListSheet(
   ];
 
   const taxTotalsByHsPrefix = sumTaxesByHsPrefix(declaration);
+  // "DTS IMPORT NORMAL" (tax code 000110) is zero-padded to at least 4
+  // digits before the decimal separator, with no thousands separator —
+  // requested so every value in the column lines up the same width
+  // (e.g. "0000,00" rather than "0,00"), instead of the shared money format.
+  const dtsImportNormalIndex = taxCodes.indexOf('000110');
+  const dtsImportNormalColumn =
+    dtsImportNormalIndex === -1 ? null : BASE_COLUMN_COUNT + 1 + dtsImportNormalIndex;
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
@@ -169,5 +176,9 @@ export async function addPackingListSheet(
     // Pieces is a plain whole count — no thousands separator, no decimals.
     const piecesCell = excelRow.getCell(PIECES_COLUMN);
     piecesCell.style = { ...piecesCell.style, numFmt: '0' };
+    if (dtsImportNormalColumn !== null) {
+      const dtsImportNormalCell = excelRow.getCell(dtsImportNormalColumn);
+      dtsImportNormalCell.style = { ...dtsImportNormalCell.style, numFmt: '0000.00' };
+    }
   });
 }
