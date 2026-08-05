@@ -40,9 +40,10 @@ function hsCodePrefix(code: string): string {
 
 // Same HS position can be sourced from more than one country, each with its
 // own tax montants (e.g. two variants of the same product, one from China,
-// one from Bangladesh) — so the group total a packing-list row picks up must
-// key on HS code prefix AND country of origin together, not HS code alone,
-// or a row would silently pick up another country's tax montants.
+// one from Bangladesh) — so, when that actually happens, the group total a
+// packing-list row picks up needs to key on HS code prefix AND country of
+// origin together, not HS code alone, or a row would silently pick up
+// another country's tax montants.
 function hsAndOriginKey(hsCode: string, pays: string): string {
   return `${hsCodePrefix(hsCode)}|${normalizeCountryName(pays)}`;
 }
@@ -63,6 +64,44 @@ function sumTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<string
     totals.set(key, perCode);
   }
   return totals;
+}
+
+// Same as sumTaxesByHsAndOrigin, but grouped by HS code prefix alone — the
+// fallback used for the (overwhelmingly common) case where an HS prefix has
+// only one country of origin in the whole declaration, so origin spelling
+// (packing list vs DUM/Liquidation, potentially a country name outside
+// countryNames.ts's known aliases) can't cause a false non-match.
+function sumTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
+  const totals = new Map<string, Map<string, number>>();
+  for (const article of declaration.articles) {
+    const prefix = hsCodePrefix(article.hsCode);
+    const perCode = totals.get(prefix) ?? new Map<string, number>();
+    for (const tax of article.taxes) {
+      perCode.set(tax.code, (perCode.get(tax.code) ?? 0) + tax.montant);
+    }
+    totals.set(prefix, perCode);
+  }
+  return totals;
+}
+
+// HS prefixes with more than one distinct (normalized) country of origin
+// among the declaration's articles — only for these does origin actually
+// need to be part of the match; every other prefix is unambiguous by HS
+// code alone, and forcing an origin match there would only risk a spelling
+// mismatch losing a row's taxes for no benefit.
+function hsPrefixesWithMultipleOrigins(declaration: Declaration): Set<string> {
+  const originsByPrefix = new Map<string, Set<string>>();
+  for (const article of declaration.articles) {
+    const prefix = hsCodePrefix(article.hsCode);
+    const origins = originsByPrefix.get(prefix) ?? new Set<string>();
+    origins.add(normalizeCountryName(article.pays));
+    originsByPrefix.set(prefix, origins);
+  }
+  const ambiguous = new Set<string>();
+  for (const [prefix, origins] of originsByPrefix) {
+    if (origins.size > 1) ambiguous.add(prefix);
+  }
+  return ambiguous;
 }
 
 // Adds the "HS total" sheet — a direct, unaggregated copy of the uploaded
@@ -90,6 +129,8 @@ export async function addPackingListSheet(
   ];
 
   const taxTotalsByHsAndOrigin = sumTaxesByHsAndOrigin(declaration);
+  const taxTotalsByHsPrefix = sumTaxesByHsPrefix(declaration);
+  const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
   // The tax columns (DTS IMPORT NORMAL, TVA IMPORT AUTRE PDS, etc.) and
   // Somme DD are zero-padded to at least 4 digits before the decimal
   // separator, with no thousands separator — requested so every value in
@@ -141,7 +182,16 @@ export async function addPackingListSheet(
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
   rows.forEach((row, index) => {
-    const matchedTaxTotals = taxTotalsByHsAndOrigin.get(hsAndOriginKey(row.hsCode, row.origin));
+    const rowHsPrefix = hsCodePrefix(row.hsCode);
+    // Only prefixes with more than one country of origin in the declaration
+    // need the origin-qualified match; everything else matches by HS prefix
+    // alone (the pre-existing, reliable behavior), with the origin-qualified
+    // lookup as a fallback if the row's origin spelling doesn't line up with
+    // any of that prefix's known origins.
+    const matchedTaxTotals = ambiguousHsPrefixes.has(rowHsPrefix)
+      ? (taxTotalsByHsAndOrigin.get(hsAndOriginKey(row.hsCode, row.origin)) ??
+        taxTotalsByHsPrefix.get(rowHsPrefix))
+      : taxTotalsByHsPrefix.get(rowHsPrefix);
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,

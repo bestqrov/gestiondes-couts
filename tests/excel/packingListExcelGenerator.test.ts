@@ -353,6 +353,54 @@ describe('addPackingListSheet', () => {
     expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(9.99, 2);
   });
 
+  it('still matches by HS code prefix alone when an HS position has only one country of origin, even if the origin spelling has no known alias (regression: origin-only matching zeroed out real files)', async () => {
+    const declarationOneOrigin: Declaration = {
+      ...SAMPLE_DECLARATION,
+      articles: [
+        {
+          numero: 1,
+          hsCode: '61044300',
+          nomArticle: 'VESTITO A FASCIA CORTO IN TULLE',
+          // A pays spelling with no entry in countryNames.ts, and no reason
+          // to match the packing list's own free-text origin spelling
+          // exactly — the point being that HS-only matching shouldn't care.
+          pays: 'REPUBLIQUE TCHEQUE',
+          paysCode: 'CZ',
+          valeurDeclaree: 172.98,
+          quantite: 18,
+          unite: 'U',
+          totalArticle: 172.98,
+          poidsNet: 12,
+          taxes: [{ code: '000110', assiette: 172.98, taux: 2.5, montant: 4.32 }],
+        },
+      ],
+    };
+    const rowWithUnmappedOrigin: PackingListRow[] = [
+      { ...SAMPLE_ROWS[0], hsCode: '61044300', origin: 'CZECH REPUBLIC' },
+    ];
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-single-origin-unmapped');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      rowWithUnmappedOrigin,
+      declarationOneOrigin,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Still matches — this HS prefix has exactly one origin in the
+    // declaration, so the mismatched spelling never comes into play.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(4.32, 2);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');
