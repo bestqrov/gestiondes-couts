@@ -291,6 +291,68 @@ describe('addPackingListSheet', () => {
     expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(3.75, 2);
   });
 
+  it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
+    const declarationWithTwoOrigins: Declaration = {
+      ...SAMPLE_DECLARATION,
+      articles: [
+        {
+          numero: 1,
+          hsCode: '61044300',
+          nomArticle: 'VESTITO PINK',
+          pays: 'CHINE',
+          paysCode: 'CN',
+          valeurDeclaree: 100,
+          quantite: 10,
+          unite: 'U',
+          totalArticle: 100,
+          poidsNet: 5,
+          taxes: [{ code: '000110', assiette: 100, taux: 2.5, montant: 2.5 }],
+        },
+        {
+          numero: 2,
+          // Same HS position, different country — must be kept separate from
+          // the CHINE article's tax montants above.
+          hsCode: '61044300',
+          nomArticle: 'VESTITO BLUE',
+          pays: 'BANGLADESH',
+          paysCode: 'BD',
+          valeurDeclaree: 50,
+          quantite: 5,
+          unite: 'U',
+          totalArticle: 50,
+          poidsNet: 2,
+          taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 9.99 }],
+        },
+      ],
+    };
+    const rowsWithTwoOrigins: PackingListRow[] = [
+      { ...SAMPLE_ROWS[0], hsCode: '61044300', origin: 'CHINA' },
+      { ...SAMPLE_ROWS[0], item: 'AB0141DOAY18', hsCode: '61044300', origin: 'BANGLADESH' },
+    ];
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-hs-and-origin');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      rowsWithTwoOrigins,
+      declarationWithTwoOrigins,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Row 5 (origin CHINA, normalized to CHINE) picks up only the CHINE article's 2.5.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(2.5, 2);
+    // Row 6 (origin BANGLADESH) picks up only the BANGLADESH article's 9.99.
+    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(9.99, 2);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

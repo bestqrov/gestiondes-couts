@@ -14,6 +14,13 @@ import {
   type ColumnGroup,
 } from './excelStyling.js';
 
+// Pays gets its own green highlight (header + every data cell), distinct
+// from the rest of the indigo "identity" group, so it stands out as the key
+// (alongside HSC) that the "HS total" sheet's tax matching is now built on.
+const PAYS_COLUMN = 8;
+const PAYS_HEADER_ARGB = 'FF16A34A';
+const PAYS_CELL_ARGB = 'FFBBF7D0';
+
 function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
   return [
     // Nom Article, DONNEES COMPTABLES, Poids net (kg), Date d'arrivée,
@@ -80,7 +87,7 @@ export async function addUnitLevelSheet(
     { key: 'titreTransport', width: 30 },
     { key: 'numeroEnregistrement', width: 26 },
     { key: 'dateDeclaration', width: 26 },
-    { key: 'pays', width: 0 },
+    { key: 'pays', width: 20 },
     { key: 'hsCode', width: 20 },
     { key: 'serialNumber', width: 18 },
     ...taxCodes.map((code) => ({ key: code, width: 24 })),
@@ -118,6 +125,11 @@ export async function addUnitLevelSheet(
     'Prorata',
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, unitSheetColumnGroups(columnCount, allTaxCodeCount));
+  const paysHeaderCell = headerRow.getCell(PAYS_COLUMN);
+  paysHeaderCell.style = {
+    ...paysHeaderCell.style,
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: PAYS_HEADER_ARGB } },
+  };
 
   let dataRowIndex = 0;
   declaration.articles.forEach((article, articleIndex) => {
@@ -170,6 +182,11 @@ export async function addUnitLevelSheet(
       }
       const row = sheet.addRow(rowValues);
       styleDataRow(row, columnCount, dataRowIndex, moneyColumns, percentColumns);
+      const paysCell = row.getCell(PAYS_COLUMN);
+      paysCell.style = {
+        ...paysCell.style,
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: PAYS_CELL_ARGB } },
+      };
       // A thicker top border marks where each new product's block of unit
       // rows begins, so it's visually obvious where one product ends and
       // the next starts in this combined sheet — skipped for the very

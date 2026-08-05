@@ -87,6 +87,10 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(7).value).toBe('010 301 0076481 2026');
     // Pays — article 1's own DUM field 36 value, distinct from article 2's.
     expect(firstRow.getCell(8).value).toBe('ITALIE');
+    // Pays is highlighted green, both header and data cells, distinct from
+    // the rest of the indigo "identity" group.
+    expect((headerRow.getCell(8).fill as ExcelJS.FillPattern).fgColor?.argb).toBe('FF16A34A');
+    expect((firstRow.getCell(8).fill as ExcelJS.FillPattern).fgColor?.argb).toBe('FFBBF7D0');
     expect(firstRow.getCell(10).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(14).value)).toBeCloseTo(27147.0 / 354, 4);

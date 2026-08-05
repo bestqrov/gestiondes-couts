@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 import type { Declaration } from '../domain/types.js';
+import { normalizeCountryName } from '../domain/countryNames.js';
 import { unionTaxCodes, taxCodeDesignation } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
@@ -37,19 +38,29 @@ function hsCodePrefix(code: string): string {
   return code.slice(0, HS_CODE_MATCH_LENGTH);
 }
 
-// Sums every declaration article's tax montants, grouped by HS code prefix
-// — multiple articles (e.g. one per color/variant) can share the same HS
-// position, the same way multiple packing-list rows do, so the group total
-// is what "the tax value for this HS code" means.
-function sumTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
+// Same HS position can be sourced from more than one country, each with its
+// own tax montants (e.g. two variants of the same product, one from China,
+// one from Bangladesh) — so the group total a packing-list row picks up must
+// key on HS code prefix AND country of origin together, not HS code alone,
+// or a row would silently pick up another country's tax montants.
+function hsAndOriginKey(hsCode: string, pays: string): string {
+  return `${hsCodePrefix(hsCode)}|${normalizeCountryName(pays)}`;
+}
+
+// Sums every declaration article's tax montants, grouped by HS code prefix +
+// country of origin — multiple articles (e.g. one per color/variant) can
+// share the same HS position and origin, the same way multiple packing-list
+// rows do, so the group total is what "the tax value for this HS code and
+// origin" means.
+function sumTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<string, number>> {
   const totals = new Map<string, Map<string, number>>();
   for (const article of declaration.articles) {
-    const prefix = hsCodePrefix(article.hsCode);
-    const perCode = totals.get(prefix) ?? new Map<string, number>();
+    const key = hsAndOriginKey(article.hsCode, article.pays);
+    const perCode = totals.get(key) ?? new Map<string, number>();
     for (const tax of article.taxes) {
       perCode.set(tax.code, (perCode.get(tax.code) ?? 0) + tax.montant);
     }
-    totals.set(prefix, perCode);
+    totals.set(key, perCode);
   }
   return totals;
 }
@@ -78,7 +89,7 @@ export async function addPackingListSheet(
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
   ];
 
-  const taxTotalsByHsPrefix = sumTaxesByHsPrefix(declaration);
+  const taxTotalsByHsAndOrigin = sumTaxesByHsAndOrigin(declaration);
   // The tax columns (DTS IMPORT NORMAL, TVA IMPORT AUTRE PDS, etc.) and
   // Somme DD are zero-padded to at least 4 digits before the decimal
   // separator, with no thousands separator — requested so every value in
@@ -130,8 +141,7 @@ export async function addPackingListSheet(
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
   rows.forEach((row, index) => {
-    const rowHsPrefix = hsCodePrefix(row.hsCode);
-    const matchedTaxTotals = taxTotalsByHsPrefix.get(rowHsPrefix);
+    const matchedTaxTotals = taxTotalsByHsAndOrigin.get(hsAndOriginKey(row.hsCode, row.origin));
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,
