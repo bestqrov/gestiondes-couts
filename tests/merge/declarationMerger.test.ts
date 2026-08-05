@@ -38,6 +38,17 @@ describe('mergeDeclaration', () => {
     expect(article2.pays).toBe('BANGLADESH');
     expect(article2.paysCode).toBe('BD');
     expect(article2.quantite).toBeCloseTo(200.0);
+
+    // dateDeclaration — box 1 "DECLARATION" (010) + box 4 "bureau" (301) +
+    // the "A ENREGISTREMENT" number's sequence (0076481) + its year (2026).
+    expect(declaration.dateDeclaration).toBe('010 301 0076481 2026');
+  });
+
+  it('leaves dateDeclaration null when any of its source fields is missing from the DUM', () => {
+    const { liquidation, dum } = loadRealDeclaration();
+    const declaration = mergeDeclaration(liquidation, { ...dum, bureau: undefined });
+
+    expect(declaration.dateDeclaration).toBeNull();
   });
 
   it('throws when the DUM crédit d\'enlèvement code does not match the Liquidation code', () => {

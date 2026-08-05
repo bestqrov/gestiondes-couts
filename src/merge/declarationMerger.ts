@@ -37,6 +37,20 @@ function hsCodesMatch(liquidationHsCode: string, dumHsCode: string): boolean {
   );
 }
 
+// "date de déclaration" — box 1 "DECLARATION" type + box 4 "bureau" + the "A
+// ENREGISTREMENT" registration number's sequence + that registration's year,
+// e.g. declarationType "010", bureau "300", numeroEnregistrement "0072342 Y
+// 27/07/2026" -> "010 300 0072342 2026". Null when any source field is
+// missing, since it's a display-only composite with no downstream use if
+// incomplete.
+function buildDateDeclaration(dum: DumResult): string | null {
+  if (!dum.declarationType || !dum.bureau || !dum.numeroEnregistrement) return null;
+  const match = dum.numeroEnregistrement.match(/^(\d+)\s+[A-Z]\s+\d{2}\/\d{2}\/(\d{4})$/);
+  if (!match) return null;
+  const [, sequence, year] = match;
+  return `${dum.declarationType} ${dum.bureau} ${sequence} ${year}`;
+}
+
 export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult): Declaration {
   if (!isMatchingCreditEnlevementCode(liquidation.header.code, dum.creditEnlevementCode)) {
     throw new MergeError(
@@ -105,5 +119,6 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
     dateArrivee: dum.dateArrivee ?? null,
     donneesComptables: dum.donneesComptables ?? null,
     titreTransport: dum.titreTransport ?? null,
+    dateDeclaration: buildDateDeclaration(dum),
   };
 }

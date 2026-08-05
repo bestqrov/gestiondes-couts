@@ -15,6 +15,7 @@ const SAMPLE_DECLARATION: Declaration = {
   dateArrivee: null,
   donneesComptables: null,
   titreTransport: null,
+  dateDeclaration: null,
 };
 
 const DECLARATION_WITH_TAXES: Declaration = {

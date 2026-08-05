@@ -52,4 +52,9 @@ export interface Declaration {
   // "08|30000020260005678|P3957263/3|ITGOA|2026500066156") — null when not
   // found, same as numeroEnregistrement.
   titreTransport: string | null;
+  // Synthesized from the DUM's box 1 "DECLARATION" type (e.g. "010"), box 4
+  // "bureau" (e.g. "300"), and the "A ENREGISTREMENT" registration number's
+  // sequence/year (e.g. "0072342"/"2026") — e.g. "010 300 0072342 2026".
+  // Null when any of those source fields is missing.
+  dateDeclaration: string | null;
 }

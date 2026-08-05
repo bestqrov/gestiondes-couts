@@ -33,6 +33,7 @@ function makeLargeDeclaration(quantite: number): Declaration {
     dateArrivee: null,
     donneesComptables: null,
     titreTransport: null,
+    dateDeclaration: null,
   };
 }
 

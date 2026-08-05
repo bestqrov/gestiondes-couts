@@ -130,6 +130,7 @@ describe('generateArticleSummaryExcel', () => {
       dateArrivee: null,
       donneesComptables: null,
       titreTransport: null,
+      dateDeclaration: null,
     };
     const { filePath, dir } = createTempXlsxPath('article-summary-empty');
     tempDir = dir;

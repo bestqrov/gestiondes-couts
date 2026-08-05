@@ -282,4 +282,31 @@ USD 1111.11 22.2 3333.33 99 44.4 5555.55 01 02 2026`;
 
     expect(result.titreTransport).toBeUndefined();
   });
+
+  it('extracts box 1 "DECLARATION" and box 4 "bureau" from the real fixture', () => {
+    const text = readFileSync(fixturePath, 'utf-8');
+    const result = parseDum(text);
+
+    expect(result.declarationType).toBe('010');
+    expect(result.bureau).toBe('301');
+  });
+
+  it('tolerates a different declaration type, bureau code, and exportateur name/pays gap length', () => {
+    const text = `2 8 10 17 5 3 1 4 7 13 16 19 20 010 PRINCIPE SPA ITALIE 8 300 4 145.93 162.00 CHICCORNER
+Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.declarationType).toBe('010');
+    expect(result.bureau).toBe('300');
+  });
+
+  it('leaves declarationType and bureau undefined (not a hard failure) when the pattern is not found', () => {
+    const text = `Crédit d'enlèvement 700002123
+6109100010   1 000.000 5.00   AP 10.0 U MAROC   MA  COLIS  CHEMISE 10.00 NB 1`;
+    const result = parseDum(text);
+
+    expect(result.declarationType).toBeUndefined();
+    expect(result.bureau).toBeUndefined();
+  });
 });

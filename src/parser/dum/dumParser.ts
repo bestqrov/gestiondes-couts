@@ -29,6 +29,8 @@ export interface DumResult {
   dateArrivee?: string;
   donneesComptables?: string;
   titreTransport?: string;
+  declarationType?: string;
+  bureau?: string;
 }
 
 // pdfjs-dist extracts a DUM page's text items in the PDF's internal content-
@@ -102,6 +104,28 @@ const REGISTRATION_NUMBER_PATTERN = /\b(\d{7}\s+[A-Z]\s+\d{2}\/\d{2}\/\d{4})\b/;
 function extractRegistrationNumber(text: string): string | undefined {
   const match = text.match(REGISTRATION_NUMBER_PATTERN);
   return match ? match[1].replace(/\s+/g, ' ') : undefined;
+}
+
+// Box 1 "DECLARATION" (a 3-digit type/regime code, e.g. "010") and box 4
+// "bureau" (a 3-digit office code, e.g. "301") — anchored on the fixed run
+// of box-number labels the "Mod. D.U.M 2014" form template prints just
+// before box 1's value ("2 8 10 17 5 3 1 4 7 13 16 19 20"), confirmed
+// identical across two real samples. Box 4's value follows box 1's, after a
+// short, bounded gap of exportateur name/pays text (variable length, so
+// matched non-greedily) and box 3 "Nombre total des articles" — the same
+// positional-matching approach ARTICLE_PATTERN uses, since labels and
+// values are scattered non-adjacently in the raw extracted text. Optional,
+// like the other DUM display fields.
+const DECLARATION_BUREAU_PATTERN =
+  /2\s+8\s+10\s+17\s+5\s+3\s+1\s+4\s+7\s+13\s+16\s+19\s+20\s+(\d{3})[\s\S]{0,60}?\d+\s+(\d{3})\s+\d+\s+[\d.]+\s+[\d.]+/;
+
+function extractDeclarationBureau(
+  text: string
+): { declarationType: string; bureau: string } | undefined {
+  const match = text.match(DECLARATION_BUREAU_PATTERN);
+  if (!match) return undefined;
+  const [, declarationType, bureau] = match;
+  return { declarationType, bureau };
 }
 
 // Field 24 "Date d'arrivée" — a space-separated "DD MM YYYY" (no slashes,
@@ -213,6 +237,8 @@ export function parseDum(text: string): DumResult {
     throw new Error('No articles found in DUM document');
   }
 
+  const declarationBureau = extractDeclarationBureau(text);
+
   return {
     creditEnlevementCode,
     articles,
@@ -221,5 +247,7 @@ export function parseDum(text: string): DumResult {
     dateArrivee: extractDateArrivee(text),
     donneesComptables: extractDonneesComptables(text),
     titreTransport: extractTitreTransport(text),
+    declarationType: declarationBureau?.declarationType,
+    bureau: declarationBureau?.bureau,
   };
 }

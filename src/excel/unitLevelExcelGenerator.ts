@@ -17,9 +17,10 @@ import {
 function unitSheetColumnGroups(columnCount: number, taxCodeCount: number): ColumnGroup[] {
   return [
     // Nom Article, DONNEES COMPTABLES, Poids net (kg), Date d'arrivée,
-    // Nature et numéro du titre de transport, N° Enregistrement, HSC, Serial Number
-    { kind: 'identity', from: 1, to: 8 },
-    { kind: 'tax', from: 9, to: 8 + taxCodeCount },
+    // Nature et numéro du titre de transport, N° Enregistrement,
+    // Date de déclaration, Pays, HSC, Serial Number
+    { kind: 'identity', from: 1, to: 10 },
+    { kind: 'tax', from: 11, to: 10 + taxCodeCount },
     { kind: 'value', from: columnCount - 1, to: columnCount }, // Valeur Déclarée, Prorata
   ];
 }
@@ -48,20 +49,20 @@ export async function addUnitLevelSheet(
   const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
   const allTaxCodeCount = taxCodes.length + extraCodes.length;
   // DONNEES COMPTABLES, Poids net (kg), Date d'arrivée, Nature et numéro du
-  // titre de transport, and N° Enregistrement (from the DUM) sit right
-  // before HSC, ahead of the tax columns — Poids net is per-article, the
-  // rest are the same value on every row. Valeur Déclarée and Prorata are
-  // the last two columns, after every tax code column (per-article union,
-  // then extra ordonnancement-only codes).
-  const columnCount = 8 + allTaxCodeCount + 2;
+  // titre de transport, N° Enregistrement, and Date de déclaration (from the
+  // DUM) sit right before Pays and HSC, ahead of the tax columns — Poids net
+  // and Pays are per-article, the rest are the same value on every row.
+  // Valeur Déclarée and Prorata are the last two columns, after every tax
+  // code column (per-article union, then extra ordonnancement-only codes).
+  const columnCount = 10 + allTaxCodeCount + 2;
   const valeurDeclareeColumn = columnCount - 1;
   const prorataColumn = columnCount;
   const poidsNetColumn = 3;
   const moneyColumns = new Set<number>([
     poidsNetColumn,
     valeurDeclareeColumn,
-    ...taxCodes.map((_, i) => 9 + i),
-    ...extraCodes.map((_, i) => 9 + taxCodes.length + i),
+    ...taxCodes.map((_, i) => 11 + i),
+    ...extraCodes.map((_, i) => 11 + taxCodes.length + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
@@ -78,6 +79,8 @@ export async function addUnitLevelSheet(
     { key: 'dateArrivee', width: 18 },
     { key: 'titreTransport', width: 30 },
     { key: 'numeroEnregistrement', width: 26 },
+    { key: 'dateDeclaration', width: 26 },
+    { key: 'pays', width: 0 },
     { key: 'hsCode', width: 20 },
     { key: 'serialNumber', width: 18 },
     ...taxCodes.map((code) => ({ key: code, width: 24 })),
@@ -105,6 +108,8 @@ export async function addUnitLevelSheet(
     "Date d'arrivée",
     'Nature et numéro du titre de transport',
     'N° Enregistrement',
+    'Date de déclaration',
+    'Pays',
     'HSC',
     'Serial Number',
     ...taxCodes.map(taxCodeDesignation),
@@ -150,7 +155,9 @@ export async function addUnitLevelSheet(
         dateArrivee: declaration.dateArrivee ?? '',
         titreTransport: declaration.titreTransport ?? '',
         numeroEnregistrement: declaration.numeroEnregistrement ?? '',
+        dateDeclaration: declaration.dateDeclaration ?? '',
         hsCode: article.hsCode,
+        pays: article.pays,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,
         prorata,
