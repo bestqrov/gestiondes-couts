@@ -16,6 +16,7 @@ import {
 } from './excelStyling.js';
 
 const BASE_COLUMN_COUNT = 8;
+const DESCRIPTION_COLUMN = 2;
 const PIECES_COLUMN = 4;
 const UNIT_COLUMN = 5;
 const TOTAL_COLUMN = 6;
@@ -246,6 +247,13 @@ export async function addPackingListSheet(
     // Pieces is a plain whole count — no thousands separator, no decimals.
     const piecesCell = excelRow.getCell(PIECES_COLUMN);
     piecesCell.style = { ...piecesCell.style, numFmt: '0' };
+    // DESCRIPTION is free-form product text — left-aligned like a normal
+    // text cell, not centered like the rest of the sheet's columns.
+    const descriptionCell = excelRow.getCell(DESCRIPTION_COLUMN);
+    descriptionCell.style = {
+      ...descriptionCell.style,
+      alignment: { vertical: 'middle', horizontal: 'left' },
+    };
     for (const column of zeroPaddedColumns) {
       const cell = excelRow.getCell(column);
       cell.style = { ...cell.style, numFmt: '0000.00' };

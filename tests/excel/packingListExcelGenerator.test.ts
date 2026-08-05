@@ -115,6 +115,9 @@ describe('addPackingListSheet', () => {
     // Original order preserved — BD0015DOAY16 second, not resorted.
     const row2 = sheet.getRow(6);
     expect(row2.getCell(1).value).toBe('BD0015DOAY16');
+
+    // DESCRIPTION is left-aligned, not centered like the rest of the sheet.
+    expect(row1.getCell(2).alignment?.horizontal).toBe('left');
   });
 
   it('shows the full HS code even when it has more than 8 digits', async () => {

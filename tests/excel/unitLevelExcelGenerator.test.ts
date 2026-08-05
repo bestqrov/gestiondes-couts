@@ -83,9 +83,9 @@ describe('generateUnitLevelExcel', () => {
     // N° Enregistrement — the DUM fixture's "A ENREGISTREMENT" registration
     // number ("0076481 X 25/06/2026"), same on every row.
     expect(firstRow.getCell(6).value).toBe('0076481 X 25/06/2026');
-    // Date de déclaration — box 1 "010" + box 4 "301" + registration
-    // sequence "0076481" + registration year "2026", same on every row.
-    expect(firstRow.getCell(7).value).toBe('010 301 0076481 2026');
+    // Date de déclaration — box 1 "010" + box 4 "301" + registration year
+    // "2026" + registration sequence "0076481", same on every row.
+    expect(firstRow.getCell(7).value).toBe('010/301/2026/0076481');
     // Pays — article 1's own DUM field 36 value, distinct from article 2's.
     expect(firstRow.getCell(8).value).toBe('ITALIE');
     // Pays is highlighted green, both header and data cells, distinct from
@@ -150,7 +150,7 @@ describe('generateUnitLevelExcel', () => {
       dateArrivee: '04/07/2026',
       donneesComptables: 'MLV:14/07/2026 15:17',
       titreTransport: '08|30000020260005678|P3957263/3|ITGOA|2026500066156',
-      dateDeclaration: '020 400 0099999 2027',
+      dateDeclaration: '020/400/2027/0099999',
     };
     const { filePath, dir } = createTempXlsxPath('unit-level-registration');
     tempDir = dir;
@@ -165,13 +165,13 @@ describe('generateUnitLevelExcel', () => {
     expect(sheet.getRow(5).getCell(4).value).toBe('04/07/2026');
     expect(sheet.getRow(5).getCell(5).value).toBe('08|30000020260005678|P3957263/3|ITGOA|2026500066156');
     expect(sheet.getRow(5).getCell(6).value).toBe('0066046 E 08/07/2026');
-    expect(sheet.getRow(5).getCell(7).value).toBe('020 400 0099999 2027');
+    expect(sheet.getRow(5).getCell(7).value).toBe('020/400/2027/0099999');
     // Every row (including article 2's) carries the same declaration-wide values.
     expect(sheet.getRow(359).getCell(2).value).toBe('MLV:14/07/2026 15:17');
     expect(sheet.getRow(359).getCell(4).value).toBe('04/07/2026');
     expect(sheet.getRow(359).getCell(5).value).toBe('08|30000020260005678|P3957263/3|ITGOA|2026500066156');
     expect(sheet.getRow(359).getCell(6).value).toBe('0066046 E 08/07/2026');
-    expect(sheet.getRow(359).getCell(7).value).toBe('020 400 0099999 2027');
+    expect(sheet.getRow(359).getCell(7).value).toBe('020/400/2027/0099999');
   });
 
   it('throws when an article quantite is not a whole number', async () => {

@@ -40,8 +40,8 @@ describe('mergeDeclaration', () => {
     expect(article2.quantite).toBeCloseTo(200.0);
 
     // dateDeclaration — box 1 "DECLARATION" (010) + box 4 "bureau" (301) +
-    // the "A ENREGISTREMENT" number's sequence (0076481) + its year (2026).
-    expect(declaration.dateDeclaration).toBe('010 301 0076481 2026');
+    // the "A ENREGISTREMENT" number's year (2026) + its sequence (0076481).
+    expect(declaration.dateDeclaration).toBe('010/301/2026/0076481');
   });
 
   it('leaves dateDeclaration null when any of its source fields is missing from the DUM', () => {
