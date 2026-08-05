@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 import type { Declaration } from '../domain/types.js';
 import { normalizeCountryName } from '../domain/countryNames.js';
-import { unionTaxCodes, taxCodeDesignation } from './unitLevelTaxHelpers.js';
+import { allocateTaxAcrossUnits, unionTaxCodes, taxCodeDesignation } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
   styleHeaderRowGrouped,
@@ -48,40 +48,49 @@ function hsAndOriginKey(hsCode: string, pays: string): string {
   return `${hsCodePrefix(hsCode)}|${normalizeCountryName(pays)}`;
 }
 
-// Sums every declaration article's tax montants, grouped by HS code prefix +
-// country of origin — multiple articles (e.g. one per color/variant) can
-// share the same HS position and origin, the same way multiple packing-list
-// rows do, so the group total is what "the tax value for this HS code and
-// origin" means.
-function sumTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<string, number>> {
-  const totals = new Map<string, Map<string, number>>();
-  for (const article of declaration.articles) {
-    const key = hsAndOriginKey(article.hsCode, article.pays);
-    const perCode = totals.get(key) ?? new Map<string, number>();
-    for (const tax of article.taxes) {
-      perCode.set(tax.code, (perCode.get(tax.code) ?? 0) + tax.montant);
-    }
-    totals.set(key, perCode);
+// The per-unit tax montants of an article's very first physical unit (the
+// same allocation Global's row 1 for this article shows) — not the article's
+// full total. Requested explicitly: a packing-list row picks up a single
+// unit's tax value from the matching Global rows, not the sum across every
+// matching unit/article.
+function firstUnitTaxes(article: Declaration['articles'][number]): Map<string, number> {
+  const quantite = Math.round(article.quantite);
+  const perCode = new Map<string, number>();
+  for (const tax of article.taxes) {
+    perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
   }
-  return totals;
+  return perCode;
 }
 
-// Same as sumTaxesByHsAndOrigin, but grouped by HS code prefix alone — the
-// fallback used for the (overwhelmingly common) case where an HS prefix has
-// only one country of origin in the whole declaration, so origin spelling
-// (packing list vs DUM/Liquidation, potentially a country name outside
-// countryNames.ts's known aliases) can't cause a false non-match.
-function sumTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
-  const totals = new Map<string, Map<string, number>>();
+// Maps HS code prefix + country of origin to the first-encountered matching
+// article's first-unit tax montants — multiple articles (e.g. one per
+// color/variant) can share the same HS position and origin, the same way
+// multiple packing-list rows do, but only the first one encountered
+// (declaration.articles order, matching Global's row order) is used, per
+// the same "just the first matching line" rule.
+function firstUnitTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<string, number>> {
+  const result = new Map<string, Map<string, number>>();
+  for (const article of declaration.articles) {
+    const key = hsAndOriginKey(article.hsCode, article.pays);
+    if (result.has(key)) continue;
+    result.set(key, firstUnitTaxes(article));
+  }
+  return result;
+}
+
+// Same as firstUnitTaxesByHsAndOrigin, but grouped by HS code prefix alone —
+// the fallback used for the (overwhelmingly common) case where an HS prefix
+// has only one country of origin in the whole declaration, so origin
+// spelling (packing list vs DUM/Liquidation, potentially a country name
+// outside countryNames.ts's known aliases) can't cause a false non-match.
+function firstUnitTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
+  const result = new Map<string, Map<string, number>>();
   for (const article of declaration.articles) {
     const prefix = hsCodePrefix(article.hsCode);
-    const perCode = totals.get(prefix) ?? new Map<string, number>();
-    for (const tax of article.taxes) {
-      perCode.set(tax.code, (perCode.get(tax.code) ?? 0) + tax.montant);
-    }
-    totals.set(prefix, perCode);
+    if (result.has(prefix)) continue;
+    result.set(prefix, firstUnitTaxes(article));
   }
-  return totals;
+  return result;
 }
 
 // HS prefixes with more than one distinct (normalized) country of origin
@@ -128,8 +137,8 @@ export async function addPackingListSheet(
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
   ];
 
-  const taxTotalsByHsAndOrigin = sumTaxesByHsAndOrigin(declaration);
-  const taxTotalsByHsPrefix = sumTaxesByHsPrefix(declaration);
+  const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(declaration);
+  const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(declaration);
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
   // The tax columns (DTS IMPORT NORMAL, TVA IMPORT AUTRE PDS, etc.) and
   // Somme DD are zero-padded to at least 4 digits before the decimal
@@ -188,10 +197,10 @@ export async function addPackingListSheet(
     // alone (the pre-existing, reliable behavior), with the origin-qualified
     // lookup as a fallback if the row's origin spelling doesn't line up with
     // any of that prefix's known origins.
-    const matchedTaxTotals = ambiguousHsPrefixes.has(rowHsPrefix)
-      ? (taxTotalsByHsAndOrigin.get(hsAndOriginKey(row.hsCode, row.origin)) ??
-        taxTotalsByHsPrefix.get(rowHsPrefix))
-      : taxTotalsByHsPrefix.get(rowHsPrefix);
+    const matchedTaxes = ambiguousHsPrefixes.has(rowHsPrefix)
+      ? (firstUnitTaxesByOrigin.get(hsAndOriginKey(row.hsCode, row.origin)) ??
+        firstUnitTaxesByPrefix.get(rowHsPrefix))
+      : firstUnitTaxesByPrefix.get(rowHsPrefix);
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,
@@ -206,7 +215,7 @@ export async function addPackingListSheet(
     };
     let sommeDd = 0;
     for (const code of taxCodes) {
-      const montant = matchedTaxTotals?.get(code) ?? 0;
+      const montant = matchedTaxes?.get(code) ?? 0;
       rowValues[code] = montant;
       sommeDd += montant;
     }

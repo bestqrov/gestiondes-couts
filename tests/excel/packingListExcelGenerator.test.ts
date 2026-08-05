@@ -173,7 +173,7 @@ describe('addPackingListSheet', () => {
     expect((headerRow.getCell(8).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(identityArgb); // HS CODE
   });
 
-  it('adds tax columns from the matching article (by HS code prefix), colored orange', async () => {
+  it('adds tax columns from the matching article\'s first physical unit (by HS code prefix), colored orange', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-taxes');
     tempDir = dir;
@@ -198,10 +198,18 @@ describe('addPackingListSheet', () => {
     expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL');
     expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS');
 
-    // Row 5 — HS code 61044300 matches the one article's 610443 prefix.
+    // Row 5 — HS code 61044300 matches the one article's 610443 prefix. The
+    // article's montant (4.32 / 34.6) is spread across its 18 units, and
+    // only the FIRST unit's share is taken — not the article's full total.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(4.32, 2);
-    expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(34.6, 2);
+    // allocateTaxAcrossUnits works in integer cents, spreading any leftover
+    // cent onto the first few units — 4.32/18 divides evenly (0.24), but
+    // 34.6/18 doesn't, so the first unit gets 1.93 (192 cents + 1 leftover),
+    // not the plain division's 1.9222.
+    const firstUnit000110 = 0.24;
+    const firstUnit002109 = 1.93;
+    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(firstUnit000110, 2);
+    expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(firstUnit002109, 2);
     // Every tax column is zero-padded to at least 4 digits before the
     // decimal separator, with no thousands separator.
     expect(matchedRow.getCell(9).numFmt).toBe('0000.00');
@@ -212,15 +220,16 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
 
-    // Somme DD (col 11) = sum of the two tax montants; DD unitaire (col 12)
-    // = Somme DD / pieces, formatted to 6 decimal digits.
+    // Somme DD (col 11) = sum of the two first-unit tax values; DD unitaire
+    // (col 12) = Somme DD / pieces, formatted to 6 decimal digits.
     expect(headerRow.getCell(11).value).toBe('Somme DD');
     expect(headerRow.getCell(12).value).toBe('DD unitaire');
     expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
     expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
 
-    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(38.92, 2);
-    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(38.92 / 18, 6);
+    const expectedSommeDd = firstUnit000110 + firstUnit002109;
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
+    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd / 18, 6);
     expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
     // Somme DD (col 11) is zero-padded the same way as the tax columns.
     expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
@@ -231,7 +240,7 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
   });
 
-  it('sums taxes across every article sharing the same HS code prefix, and applies the group total to every matching row', async () => {
+  it('uses only the first matching article\'s first-unit tax value — not summed with other articles sharing the same HS code prefix', async () => {
     const declarationWithTwoVariants: Declaration = {
       ...SAMPLE_DECLARATION,
       articles: [
@@ -253,6 +262,9 @@ describe('addPackingListSheet', () => {
           numero: 2,
           // Same HS position (610443), different national suffix — treated
           // as the same HS group, same as declarationMerger's own comparison.
+          // A deliberately very different montant/quantite (per-unit 5.00,
+          // vs article 1's per-unit 0.25) so any accidental blending with
+          // article 1's value would be obvious.
           hsCode: '61044399',
           nomArticle: 'VESTITO BLUE',
           pays: 'CHINE',
@@ -263,7 +275,7 @@ describe('addPackingListSheet', () => {
           totalArticle: 50,
           poidsNet: 2,
           unitesComplementaires: 1,
-          taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 1.25 }],
+          taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 25 }],
         },
       ],
     };
@@ -289,9 +301,11 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // Both rows share HS position 610443, so both get the 2.5 + 1.25 = 3.75 group total.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(3.75, 2);
-    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(3.75, 2);
+    // Both rows share HS position 610443, but only article 1 (the first
+    // encountered, matching Global's row order) is used — its first unit's
+    // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of both.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(0.25, 2);
+    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(0.25, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
@@ -352,10 +366,12 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // Row 5 (origin CHINA, normalized to CHINE) picks up only the CHINE article's 2.5.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(2.5, 2);
-    // Row 6 (origin BANGLADESH) picks up only the BANGLADESH article's 9.99.
-    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(9.99, 2);
+    // Row 5 (origin CHINA, normalized to CHINE) picks up only the CHINE
+    // article's first-unit value: 2.5 / 10 = 0.25.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(2.5 / 10, 2);
+    // Row 6 (origin BANGLADESH) picks up only the BANGLADESH article's
+    // first-unit value: 9.99 / 5 = 1.998.
+    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(9.99 / 5, 2);
   });
 
   it('still matches by HS code prefix alone when an HS position has only one country of origin, even if the origin spelling has no known alias (regression: origin-only matching zeroed out real files)', async () => {
@@ -403,8 +419,9 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
 
     // Still matches — this HS prefix has exactly one origin in the
-    // declaration, so the mismatched spelling never comes into play.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(4.32, 2);
+    // declaration, so the mismatched spelling never comes into play. Value
+    // is the article's first-unit share: 4.32 / 18.
+    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(4.32 / 18, 2);
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {
