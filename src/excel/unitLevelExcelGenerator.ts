@@ -145,6 +145,13 @@ export async function addUnitLevelSheet(
     // total the way tax montants do (allocateTaxAcrossUnits handles that
     // reconciliation case; this is a plain division).
     const valeurDeclareePerUnit = article.valeurDeclaree / quantite;
+    // Poids net (kg) / Unités complémentaires (DUM fields 33 / 32) — same
+    // per-unit treatment as Valeur Déclarée, not the raw article-wide poids
+    // net repeated on every row. Falls back to the raw poidsNet if
+    // unitesComplementaires is 0 (guards a divide-by-zero rather than
+    // producing Infinity/NaN in the sheet).
+    const poidsNetPerUnit =
+      article.unitesComplementaires > 0 ? article.poidsNet / article.unitesComplementaires : article.poidsNet;
     // Prorata — this unit's share of the whole declaration's total declared
     // value (montant in Valeur Déclarée / the sum of every article's Valeur
     // Déclarée across the declaration), not just its own product's total.
@@ -163,7 +170,7 @@ export async function addUnitLevelSheet(
       const rowValues: Record<string, string | number> = {
         nomArticle: article.nomArticle,
         donneesComptables: declaration.donneesComptables ?? '',
-        poidsNet: article.poidsNet,
+        poidsNet: poidsNetPerUnit,
         dateArrivee: declaration.dateArrivee ?? '',
         titreTransport: declaration.titreTransport ?? '',
         numeroEnregistrement: declaration.numeroEnregistrement ?? '',

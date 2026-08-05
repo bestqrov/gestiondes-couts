@@ -69,6 +69,7 @@ describe('unionTaxCodes', () => {
       taxes: taxCodes.map((code) => ({ code, assiette: 100, taux: 1, montant: 1 })),
       totalArticle: taxCodes.length,
       poidsNet: 10,
+      unitesComplementaires: 10,
     };
   }
 

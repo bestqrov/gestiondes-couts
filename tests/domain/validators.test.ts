@@ -19,6 +19,7 @@ function makeArticle(overrides: Partial<Article> = {}): Article {
     ],
     totalArticle: 5511,
     poidsNet: 43.69,
+    unitesComplementaires: 354,
     ...overrides,
   };
 }

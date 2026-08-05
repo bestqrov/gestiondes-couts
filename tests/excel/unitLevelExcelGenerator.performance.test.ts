@@ -26,6 +26,7 @@ function makeLargeDeclaration(quantite: number): Declaration {
         ],
         totalArticle: 20250,
         poidsNet: 43.69,
+        unitesComplementaires: 354,
       },
     ],
     ordonnancementTaxes: [],

@@ -71,9 +71,10 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(1).value).toBe('T-SHIRT');
     // DONNEES COMPTABLES — the DUM fixture's "MLV:" line, same on every row.
     expect(firstRow.getCell(2).value).toBe('MLV:29/06/2026 16:37');
-    // Poids net (kg) — article 1's own DUM field 33 value (43.69), distinct
-    // from article 2's (16.65), confirming this is per-article not constant.
-    expect(Number(firstRow.getCell(3).value)).toBeCloseTo(43.69, 2);
+    // Poids net (kg) — article 1's own DUM field 33 (43.69) divided by field
+    // 32 "Unités complémentaires" (354.0), a per-unit weight distinct from
+    // article 2's, confirming this is per-article not constant.
+    expect(Number(firstRow.getCell(3).value)).toBeCloseTo(43.69 / 354.0, 6);
     // Date d'arrivée — the DUM fixture's field 24 value ("24/06/2026"), same on every row.
     expect(firstRow.getCell(4).value).toBe('24/06/2026');
     // Nature et numéro du titre de transport — the DUM fixture's field 17
@@ -104,8 +105,8 @@ describe('generateUnitLevelExcel', () => {
     const firstRowArticle2 = sheet.getRow(359);
     expect(firstRowArticle2.getCell(10).value).toBe(1);
     expect(firstRowArticle2.getCell(1).value).toBe('T-SHIRT');
-    // Article 2's own Poids net (kg) value (16.65), not article 1's.
-    expect(Number(firstRowArticle2.getCell(3).value)).toBeCloseTo(16.65, 2);
+    // Article 2's own Poids net (kg) per-unit value (16.65 / 200), not article 1's.
+    expect(Number(firstRowArticle2.getCell(3).value)).toBeCloseTo(16.65 / 200.0, 6);
     // Article 2's own Pays value, distinct from article 1's.
     expect(firstRowArticle2.getCell(8).value).toBe('BANGLADESH');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
@@ -206,6 +207,7 @@ describe('generateUnitLevelExcel', () => {
           ],
           totalArticle: 3,
           poidsNet: 1.5,
+          unitesComplementaires: 1,
         },
         {
           numero: 2,
@@ -219,6 +221,7 @@ describe('generateUnitLevelExcel', () => {
           taxes: [{ code: '002109', assiette: 50, taux: 20, montant: 10 }],
           totalArticle: 10,
           poidsNet: 0.8,
+          unitesComplementaires: 1,
         },
       ],
       ordonnancementTaxes: [],
@@ -292,6 +295,7 @@ describe('generateUnitLevelExcel', () => {
           taxes: [{ code: '000110', assiette: 100, taux: 0, montant: 0 }],
           totalArticle: 0,
           poidsNet: 1.5,
+          unitesComplementaires: 1,
         },
         {
           numero: 2,
@@ -305,6 +309,7 @@ describe('generateUnitLevelExcel', () => {
           taxes: [{ code: '000110', assiette: 50, taux: 0, montant: 0 }],
           totalArticle: 0,
           poidsNet: 0.8,
+          unitesComplementaires: 1,
         },
       ],
       ordonnancementTaxes: [{ code: '002701', designation: 'REDV.INF.(AVEC D et T)', montant: 100 }],

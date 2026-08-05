@@ -27,6 +27,9 @@ export interface Article {
   totalArticle: number;
   // The DUM's field 33 "Poids net (kg)" for this article.
   poidsNet: number;
+  // The DUM's field 32 "Unités complémentaires" — divided into poidsNet to
+  // get a per-unit weight for the Global sheet's "Poids net (kg)" column.
+  unitesComplementaires: number;
 }
 
 // Declaration dates (échéance paiement, date déclaration, etc., visible in the

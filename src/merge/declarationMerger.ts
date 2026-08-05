@@ -98,6 +98,7 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
       taxes,
       totalArticle: liqArticle.totalArticle,
       poidsNet: dumArticle.poidsNet,
+      unitesComplementaires: dumArticle.unitesComplementaires,
     };
   });
 

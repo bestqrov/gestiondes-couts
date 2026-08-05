@@ -10,6 +10,12 @@ export interface DumArticleResult {
   quantite: number;
   unite: string;
   poidsNet: number;
+  // Field 32 "Unités complémentaires" — for most goods (unit "U") this
+  // equals the piece count, but for some HS codes (e.g. perfume, classified
+  // by net weight) it's a genuinely different measure in "KG". Not used as
+  // the article's quantity (see the désignation-line capture below for
+  // that); only used to derive a per-unit Poids net for the Global sheet.
+  unitesComplementaires: number;
 }
 
 export interface DumShipmentCost {
@@ -74,8 +80,12 @@ export interface DumResult {
 // [\d.]+); verified against the real fixture: article 1's captured value
 // (43.69) and article 2's (16.65) are each distinct from that article's
 // unités complémentaires value, ruling out an accidental group swap.
+//
+// Field 32 "Unités complémentaires" (the number right after AP/SP) is also
+// captured — used (divided into Poids net) to show a per-unit weight in the
+// Global sheet, the same "per physical unit" treatment as Valeur Déclarée.
 const ARTICLE_PATTERN =
-  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(?:AP|SP)\s+[\d.]+\s+(?:\d+\s+)?(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
+  /(\d{10})(?:\([^)]*\))?\s+(\d[\d\s.,]*?\d)\s+([\d.]+)\s+(?:AP|SP)\s+([\d.]+)\s+(?:\d+\s+)?(?:U|KG)\s+([A-Z][A-Z]*)\s+([A-Z]{2})\b[\s\S]{0,120}?\s{2,}([A-Z][A-Z-]*(?:\s[A-Z][A-Z-]*)*)\s+([\d.,]+)\s+(NB|U|PAIRE)\s+(\d+)\b/g;
 
 // See design spec §4 — this cluster of shipment-level values (currency,
 // invoiced amount, exchange rate, freight, [a form field-number label,
@@ -212,6 +222,7 @@ export function parseDum(text: string): DumResult {
       hsCode,
       valeurRaw,
       poidsNetRaw,
+      unitesComplementairesRaw,
       paysNom,
       paysCode,
       nomArticleRaw,
@@ -230,6 +241,7 @@ export function parseDum(text: string): DumResult {
       quantite: parseFrenchNumber(quantiteRaw),
       unite,
       poidsNet: parseFrenchNumber(poidsNetRaw),
+      unitesComplementaires: parseFrenchNumber(unitesComplementairesRaw),
     });
   }
 

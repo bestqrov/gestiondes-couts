@@ -32,6 +32,7 @@ const DECLARATION_WITH_TAXES: Declaration = {
       unite: 'U',
       totalArticle: 172.98,
       poidsNet: 12,
+      unitesComplementaires: 1,
       taxes: [
         { code: '000110', assiette: 172.98, taux: 2.5, montant: 4.32 },
         { code: '002109', assiette: 172.98, taux: 20, montant: 34.6 },
@@ -245,6 +246,7 @@ describe('addPackingListSheet', () => {
           unite: 'U',
           totalArticle: 100,
           poidsNet: 5,
+          unitesComplementaires: 1,
           taxes: [{ code: '000110', assiette: 100, taux: 2.5, montant: 2.5 }],
         },
         {
@@ -260,6 +262,7 @@ describe('addPackingListSheet', () => {
           unite: 'U',
           totalArticle: 50,
           poidsNet: 2,
+          unitesComplementaires: 1,
           taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 1.25 }],
         },
       ],
@@ -306,6 +309,7 @@ describe('addPackingListSheet', () => {
           unite: 'U',
           totalArticle: 100,
           poidsNet: 5,
+          unitesComplementaires: 1,
           taxes: [{ code: '000110', assiette: 100, taux: 2.5, montant: 2.5 }],
         },
         {
@@ -321,6 +325,7 @@ describe('addPackingListSheet', () => {
           unite: 'U',
           totalArticle: 50,
           poidsNet: 2,
+          unitesComplementaires: 1,
           taxes: [{ code: '000110', assiette: 50, taux: 2.5, montant: 9.99 }],
         },
       ],
@@ -371,6 +376,7 @@ describe('addPackingListSheet', () => {
           unite: 'U',
           totalArticle: 172.98,
           poidsNet: 12,
+          unitesComplementaires: 1,
           taxes: [{ code: '000110', assiette: 172.98, taux: 2.5, montant: 4.32 }],
         },
       ],

@@ -34,6 +34,7 @@ describe('parseDum', () => {
       quantite: 354.0,
       unite: 'NB',
       poidsNet: 43.69,
+      unitesComplementaires: 354.0,
     });
 
     expect(article2).toEqual({
@@ -46,6 +47,7 @@ describe('parseDum', () => {
       quantite: 200.0,
       unite: 'NB',
       poidsNet: 16.65,
+      unitesComplementaires: 200.0,
     });
   });
 
@@ -76,6 +78,7 @@ describe('parseDum', () => {
         quantite: 40.0,
         unite: 'NB',
         poidsNet: 12.0,
+        unitesComplementaires: 40.0,
       },
     ]);
   });
@@ -112,6 +115,7 @@ describe('parseDum', () => {
         quantite: 480.0,
         unite: 'NB',
         poidsNet: 195.633,
+        unitesComplementaires: 195.633,
       },
     ]);
   });
@@ -150,6 +154,7 @@ describe('parseDum', () => {
         quantite: 4.0,
         unite: 'PAIRE',
         poidsNet: 1.1,
+        unitesComplementaires: 4.0,
       },
     ]);
   });
