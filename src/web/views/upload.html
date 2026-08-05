@@ -175,7 +175,17 @@
       font-size: 14px;
       color: var(--ink-500);
       margin: 10px 0 26px;
-      line-height: 1.55;
+      line-height: 1.6;
+    }
+
+    .lede strong {
+      color: var(--brand-600);
+      font-weight: 700;
+    }
+
+    .lede .lede-note {
+      display: block;
+      margin-top: 4px;
     }
 
     .card {
@@ -519,7 +529,7 @@
       {{ROLE_BADGE}}
       {{NAV_LINK}}
     </div>
-    <p class="lede" id="pageLede">Déposez les trois fichiers (Liquidation, DUM, et l'Excel des articles) — l'ordre de Liquidation/DUM n'a pas d'importance, ils sont identifiés automatiquement. Un fichier Excel avec une feuille par produit sera généré et téléchargé.</p>
+    <p class="lede" id="pageLede"><strong>Déposez les trois fichiers</strong> (Liquidation, DUM, et l'Excel des articles).<span class="lede-note">L'ordre de Liquidation et DUM n'a pas d'importance : ils sont identifiés automatiquement. Un fichier Excel avec une feuille par produit sera généré et téléchargé.</span></p>
 
     <div class="card">
       {{ERROR_BLOCK}}

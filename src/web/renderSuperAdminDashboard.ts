@@ -275,7 +275,9 @@ ${renderFaviconLink(settings)}
   :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
 
   .content { padding: 28px; flex: 1; overflow-y: auto; }
-  .lede { font-size: 13.5px; color: var(--ink-500); margin: 0 0 22px; }
+  .lede { font-size: 13.5px; color: var(--ink-500); margin: 0 0 22px; line-height: 1.6; }
+  .lede strong { color: var(--brand-600); font-weight: 700; }
+  .lede .lede-note { display: block; margin-top: 4px; }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .stat-card { border-radius: 14px; padding: 18px 20px; color: #fff; box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.35); }
@@ -1255,7 +1257,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
     : '';
 
   const body = `
-    <p class="lede">Déposez les trois fichiers (Liquidation, DUM, et l'Excel des articles) — l'ordre de Liquidation/DUM n'a pas d'importance, ils sont identifiés automatiquement.</p>
+    <p class="lede"><strong>Déposez les trois fichiers</strong> (Liquidation, DUM, et l'Excel des articles).<span class="lede-note">L'ordre de Liquidation et DUM n'a pas d'importance : ils sont identifiés automatiquement.</span></p>
     <div class="card">
       ${errorBlock}
       <form id="generateForm" method="post" action="/generate" enctype="multipart/form-data">
