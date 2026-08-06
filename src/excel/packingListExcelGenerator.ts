@@ -53,12 +53,29 @@ function hsAndOriginKey(hsCode: string, pays: string): string {
 // same allocation Global's row 1 for this article shows) — not the article's
 // full total. Requested explicitly: a packing-list row picks up a single
 // unit's tax value from the matching Global rows, not the sum across every
-// matching unit/article.
-function firstUnitTaxes(article: Declaration['articles'][number]): Map<string, number> {
+// matching unit/article. Also folds in the declaration-wide-only
+// ordonnancement taxes (e.g. REDV.INF., RI SEGMA, REMISES CREDIT) using the
+// same montant × Prorata treatment Global gives them, so every tax visible
+// in Global has a matching value here.
+function firstUnitTaxes(
+  article: Declaration['articles'][number],
+  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  declarationValeurDeclareeTotal: number
+): Map<string, number> {
   const quantite = Math.round(article.quantite);
   const perCode = new Map<string, number>();
   for (const tax of article.taxes) {
     perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
+  }
+  if (quantite > 0 && declarationValeurDeclareeTotal > 0) {
+    const prorata = article.valeurDeclaree / quantite / declarationValeurDeclareeTotal;
+    for (const tax of extraOrdonnancementTaxes) {
+      perCode.set(tax.code, tax.montant * prorata);
+    }
+  } else {
+    for (const tax of extraOrdonnancementTaxes) {
+      perCode.set(tax.code, 0);
+    }
   }
   return perCode;
 }
@@ -69,12 +86,16 @@ function firstUnitTaxes(article: Declaration['articles'][number]): Map<string, n
 // multiple packing-list rows do, but only the first one encountered
 // (declaration.articles order, matching Global's row order) is used, per
 // the same "just the first matching line" rule.
-function firstUnitTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<string, number>> {
+function firstUnitTaxesByHsAndOrigin(
+  declaration: Declaration,
+  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  declarationValeurDeclareeTotal: number
+): Map<string, Map<string, number>> {
   const result = new Map<string, Map<string, number>>();
   for (const article of declaration.articles) {
     const key = hsAndOriginKey(article.hsCode, article.pays);
     if (result.has(key)) continue;
-    result.set(key, firstUnitTaxes(article));
+    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationValeurDeclareeTotal));
   }
   return result;
 }
@@ -84,12 +105,16 @@ function firstUnitTaxesByHsAndOrigin(declaration: Declaration): Map<string, Map<
 // has only one country of origin in the whole declaration, so origin
 // spelling (packing list vs DUM/Liquidation, potentially a country name
 // outside countryNames.ts's known aliases) can't cause a false non-match.
-function firstUnitTaxesByHsPrefix(declaration: Declaration): Map<string, Map<string, number>> {
+function firstUnitTaxesByHsPrefix(
+  declaration: Declaration,
+  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  declarationValeurDeclareeTotal: number
+): Map<string, Map<string, number>> {
   const result = new Map<string, Map<string, number>>();
   for (const article of declaration.articles) {
     const prefix = hsCodePrefix(article.hsCode);
     if (result.has(prefix)) continue;
-    result.set(prefix, firstUnitTaxes(article));
+    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationValeurDeclareeTotal));
   }
   return result;
 }
@@ -127,19 +152,41 @@ export async function addPackingListSheet(
   sheetName = 'HS total'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
+  // Rubriques from the Liquidation's RECAPITULATION table that never appear
+  // on any individual article (e.g. REDV.INF., RI SEGMA, REMISES CREDIT) —
+  // same declaration-wide-only taxes Global shows via montant × Prorata.
+  // Included here too so every tax visible in Global also appears in HS
+  // total.
+  const extraOrdonnancementTaxes = declaration.ordonnancementTaxes.filter(
+    (tax) => !taxCodes.includes(tax.code)
+  );
+  const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
+  const allTaxCodes = [...taxCodes, ...extraCodes];
+  const declarationValeurDeclareeTotal = declaration.articles.reduce(
+    (sum, article) => sum + article.valeurDeclaree,
+    0
+  );
   // Somme DD / DD unitaire sit right after the tax code columns — derived
   // sums of those tax values, so grouped and colored with them.
-  const sommeDdColumn = BASE_COLUMN_COUNT + taxCodes.length + 1;
+  const sommeDdColumn = BASE_COLUMN_COUNT + allTaxCodes.length + 1;
   const ddUnitaireColumn = sommeDdColumn + 1;
   const columnCount = ddUnitaireColumn;
-  const taxColumns = new Set<number>(taxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
+  const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
   ];
 
-  const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(declaration);
-  const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(declaration);
+  const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
+    declaration,
+    extraOrdonnancementTaxes,
+    declarationValeurDeclareeTotal
+  );
+  const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(
+    declaration,
+    extraOrdonnancementTaxes,
+    declarationValeurDeclareeTotal
+  );
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
   // The tax columns (DTS IMPORT NORMAL, TVA IMPORT AUTRE PDS, etc.) and
   // Somme DD are zero-padded to at least 4 digits before the decimal
@@ -160,6 +207,7 @@ export async function addPackingListSheet(
     { key: 'origin', width: 22 },
     { key: 'hsCode', width: 18 },
     ...taxCodes.map((code) => ({ key: code, width: 24 })),
+    ...extraCodes.map((code) => ({ key: code, width: 24 })),
     { key: 'sommeDd', width: 18 },
     { key: 'ddUnitaire', width: 18 },
   ];
@@ -186,6 +234,7 @@ export async function addPackingListSheet(
     'origin',
     'HS CODE',
     ...taxCodes.map(taxCodeDesignation),
+    ...extraOrdonnancementTaxes.map((tax) => tax.designation),
     'Somme DD',
     'DD unitaire',
   ]);
@@ -215,7 +264,7 @@ export async function addPackingListSheet(
       hsCode: row.hsCode,
     };
     let sommeDd = 0;
-    for (const code of taxCodes) {
+    for (const code of allTaxCodes) {
       const montant = matchedTaxes?.get(code) ?? 0;
       rowValues[code] = montant;
       sommeDd += montant;

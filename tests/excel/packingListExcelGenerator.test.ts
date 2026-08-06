@@ -427,6 +427,56 @@ describe('addPackingListSheet', () => {
     expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(4.32 / 18, 2);
   });
 
+  it('adds a column for a RECAPITULATION rubrique that never appears on any article, filled as montant × Prorata for the matched article\'s first unit', async () => {
+    // 002701 (REDV.INF.) only shows up in ordonnancementTaxes, never on the
+    // article's own tax rows — same declaration-wide-only rubrique Global
+    // shows via montant × Prorata; it must get its own column here too.
+    const declarationWithOrdonnancement: Declaration = {
+      ...DECLARATION_WITH_TAXES,
+      ordonnancementTaxes: [{ code: '002701', designation: 'REDV.INF.(AVEC D et T)', montant: 100 }],
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-ordonnancement');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      declarationWithOrdonnancement,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+    const headerRow = sheet.getRow(4);
+
+    // Header: item..HS CODE (1-8), 000110 (9), 002109 (10), REDV.INF. (11), Somme DD (12), DD unitaire (13).
+    expect(headerRow.getCell(11).value).toBe('REDV.INF.(AVEC D et T)');
+    expect(headerRow.getCell(12).value).toBe('Somme DD');
+    expect(headerRow.getCell(13).value).toBe('DD unitaire');
+
+    // The declaration's only article has valeurDeclaree 172.98 across 18
+    // units, and it's also the declaration's only article, so its own
+    // Valeur Déclarée is the whole declaration total: Prorata for its first
+    // unit = (172.98 / 18) / 172.98 = 1 / 18. REDV.INF. share = 100 / 18.
+    const matchedRow = sheet.getRow(5);
+    const expectedRedvInf = 100 / 18;
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedRedvInf, 2);
+
+    const firstUnit000110 = 0.24;
+    const firstUnit002109 = 1.93;
+    const expectedSommeDd = firstUnit000110 + firstUnit002109 + expectedRedvInf;
+    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd, 2);
+
+    // Row 6 has no matching article, so the new column defaults to 0 too.
+    const unmatchedRow = sheet.getRow(6);
+    expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');
