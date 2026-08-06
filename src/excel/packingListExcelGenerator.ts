@@ -2,7 +2,12 @@ import ExcelJS from 'exceljs';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 import type { Declaration } from '../domain/types.js';
 import { normalizeCountryName } from '../domain/countryNames.js';
-import { allocateTaxAcrossUnits, unionTaxCodes, taxCodeDesignation } from './unitLevelTaxHelpers.js';
+import {
+  allocateTaxAcrossUnits,
+  unionTaxCodes,
+  taxCodeDesignation,
+  abbreviateDesignation,
+} from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
   styleHeaderRowGrouped,
@@ -162,6 +167,10 @@ export async function addPackingListSheet(
   );
   const extraCodes = extraOrdonnancementTaxes.map((tax) => tax.code);
   const allTaxCodes = [...taxCodes, ...extraCodes];
+  const allTaxDesignations = [
+    ...taxCodes.map(taxCodeDesignation),
+    ...extraOrdonnancementTaxes.map((tax) => tax.designation),
+  ];
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
     (sum, article) => sum + article.valeurDeclaree,
     0
@@ -170,7 +179,11 @@ export async function addPackingListSheet(
   // sums of those tax values, so grouped and colored with them.
   const sommeDdColumn = BASE_COLUMN_COUNT + allTaxCodes.length + 1;
   const ddUnitaireColumn = sommeDdColumn + 1;
-  const columnCount = ddUnitaireColumn;
+  // One "<abbreviation> Total" column per tax (montant x pieces for the
+  // row), right after DD unitaire — same order as the tax code columns
+  // themselves, so column N here always corresponds to tax column N.
+  const taxTotalColumns = allTaxCodes.map((_, i) => ddUnitaireColumn + 1 + i);
+  const columnCount = ddUnitaireColumn + allTaxCodes.length;
   const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
@@ -193,7 +206,7 @@ export async function addPackingListSheet(
   // separator, with no thousands separator — requested so every value in
   // these columns lines up the same width (e.g. "0000,00" rather than
   // "0,00"), instead of the shared money format.
-  const zeroPaddedColumns = new Set<number>([...taxColumns, sommeDdColumn]);
+  const zeroPaddedColumns = new Set<number>([...taxColumns, sommeDdColumn, ...taxTotalColumns]);
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
@@ -210,6 +223,7 @@ export async function addPackingListSheet(
     ...extraCodes.map((code) => ({ key: code, width: 24 })),
     { key: 'sommeDd', width: 18 },
     { key: 'ddUnitaire', width: 18 },
+    ...allTaxCodes.map((code) => ({ key: `${code}_total`, width: 18 })),
   ];
 
   await addSheetTitleRows(
@@ -237,6 +251,7 @@ export async function addPackingListSheet(
     ...extraOrdonnancementTaxes.map((tax) => tax.designation),
     'Somme DD',
     'DD unitaire',
+    ...allTaxDesignations.map((designation) => `${abbreviateDesignation(designation)} Total`),
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
@@ -273,13 +288,19 @@ export async function addPackingListSheet(
     // per-unit pattern as Global's Valeur Déclarée / Unité.
     rowValues.sommeDd = sommeDd;
     rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
+    // "<abbreviation> Total" columns — each tax's per-unit montant spread
+    // across this row's piece count, the same montant x pieces pattern as
+    // the "total" column (unit price x pieces).
+    for (const code of allTaxCodes) {
+      rowValues[`${code}_total`] = Number(rowValues[code]) * row.pieces;
+    }
 
     const excelRow = sheet.addRow(rowValues);
     styleDataRow(
       excelRow,
       columnCount,
       index,
-      new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns, sommeDdColumn])
+      new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns, sommeDdColumn, ...taxTotalColumns])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
     // money format — it's a per-piece fraction, not a currency total. The

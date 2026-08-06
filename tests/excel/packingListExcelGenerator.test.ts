@@ -477,6 +477,49 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
   });
 
+  it('adds a "<abbreviation> Total" column per tax, right after DD unitaire, equal to montant x pieces', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-tax-totals');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      DECLARATION_WITH_TAXES,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+    const headerRow = sheet.getRow(4);
+
+    // Columns 1-8 base, 9 DTS IMPORT NORMAL, 10 TVA IMPORT AUTRE PDS,
+    // 11 Somme DD, 12 DD unitaire, then the two "Total" columns: 13, 14 —
+    // headers built from each tax's designation initials + " Total".
+    expect(headerRow.getCell(13).value).toBe('DIN Total');
+    expect(headerRow.getCell(14).value).toBe('TIAP Total');
+
+    const taxArgb = 'FFD97706';
+    expect((headerRow.getCell(13).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+    expect((headerRow.getCell(14).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+
+    // Row 5 (matched, 18 pieces): tax value x pieces.
+    const matchedRow = sheet.getRow(5);
+    const firstUnit000110 = 0.24;
+    const firstUnit002109 = 1.93;
+    expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(firstUnit000110 * 18, 2);
+    expect(Number(matchedRow.getCell(14).value)).toBeCloseTo(firstUnit002109 * 18, 2);
+    expect(matchedRow.getCell(13).numFmt).toBe('0000.00');
+
+    // Row 6 (unmatched article, taxes default to 0): total stays 0.
+    const unmatchedRow = sheet.getRow(6);
+    expect(Number(unmatchedRow.getCell(13).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(14).value)).toBe(0);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

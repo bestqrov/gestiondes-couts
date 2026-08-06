@@ -51,3 +51,11 @@ const TAX_CODE_DESIGNATIONS: Record<string, string> = {
 export function taxCodeDesignation(code: string): string {
   return TAX_CODE_DESIGNATIONS[code] ?? '';
 }
+
+// First letter of each word in a tax designation, e.g. "TVA IMPORT AUTRE
+// PDS" -> "TIAP" — used to build a short header for that tax's "Total"
+// column (montant x pieces) without hardcoding a separate abbreviation table.
+export function abbreviateDesignation(designation: string): string {
+  const words = designation.match(/[A-Za-z0-9]+/g) ?? [];
+  return words.map((word) => word[0].toUpperCase()).join('');
+}
