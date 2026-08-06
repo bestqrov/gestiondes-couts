@@ -59,3 +59,15 @@ export function abbreviateDesignation(designation: string): string {
   const words = designation.match(/[A-Za-z0-9]+/g) ?? [];
   return words.map((word) => word[0].toUpperCase()).join('');
 }
+
+// RI SEGMA and REMISES CREDIT both abbreviate down to "RC" via pure
+// initials, so their "Total" columns were indistinguishable — spelled-out
+// short names instead of computed initials for these two specifically.
+const TAX_ABBREVIATION_OVERRIDES: Record<string, string> = {
+  '006901': 'Risg', // RI SEGMA
+  '006000': 'Rems', // REMISES CREDIT
+};
+
+export function taxColumnAbbreviation(code: string, designation: string): string {
+  return TAX_ABBREVIATION_OVERRIDES[code] ?? abbreviateDesignation(designation);
+}

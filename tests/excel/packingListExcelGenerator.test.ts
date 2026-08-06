@@ -521,6 +521,41 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(14).value)).toBe(0);
   });
 
+  it('overrides RI SEGMA and REMISES CREDIT\'s "Total" column names, since both abbreviate to "RC" by initials alone', async () => {
+    const declarationWithBothRc: Declaration = {
+      ...SAMPLE_DECLARATION,
+      ordonnancementTaxes: [
+        { code: '006901', designation: 'RI SEGMA', montant: 10 },
+        { code: '006000', designation: 'REMISES CREDIT', montant: 5 },
+      ],
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-rc-override');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      declarationWithBothRc,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+    const headerRow = sheet.getRow(4);
+
+    // Columns 1-8 base, 9 RI SEGMA, 10 REMISES CREDIT, 11 Somme DD,
+    // 12 DD unitaire, 13 RI SEGMA Total, 14 REMISES CREDIT Total.
+    expect(headerRow.getCell(9).value).toBe('RI SEGMA');
+    expect(headerRow.getCell(10).value).toBe('REMISES CREDIT');
+    expect(headerRow.getCell(13).value).toBe('Risg Total');
+    expect(headerRow.getCell(14).value).toBe('Rems Total');
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

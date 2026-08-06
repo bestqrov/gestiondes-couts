@@ -6,7 +6,7 @@ import {
   allocateTaxAcrossUnits,
   unionTaxCodes,
   taxCodeDesignation,
-  abbreviateDesignation,
+  taxColumnAbbreviation,
 } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
@@ -255,7 +255,7 @@ export async function addPackingListSheet(
     ...extraOrdonnancementTaxes.map((tax) => tax.designation),
     'Somme DD',
     'DD unitaire',
-    ...allTaxDesignations.map((designation) => `${abbreviateDesignation(designation)} Total`),
+    ...allTaxCodes.map((code, i) => `${taxColumnAbbreviation(code, allTaxDesignations[i])} Total`),
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
