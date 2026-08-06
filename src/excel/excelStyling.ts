@@ -96,6 +96,7 @@ export const COLUMN_GROUP_ARGB = {
   tax: 'FFD97706', // amber — tax code columns
   value: 'FF059669', // emerald — Valeur Déclarée / money totals
   quantity: 'FF0891B2', // teal — Quantité
+  taxTotal: 'FFDB2777', // rose — per-tax "<abbreviation> Total" columns (montant x pieces)
 } as const;
 
 export type ColumnGroupKind = keyof typeof COLUMN_GROUP_ARGB;

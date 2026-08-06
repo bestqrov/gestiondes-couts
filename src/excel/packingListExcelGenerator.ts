@@ -187,7 +187,11 @@ export async function addPackingListSheet(
   const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
-    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: columnCount },
+    // Tax code columns through DD unitaire stay amber; the new "<abbr>
+    // Total" columns get their own rose color so they read as visibly
+    // distinct from the tax montant columns they're derived from.
+    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: ddUnitaireColumn },
+    { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: columnCount },
   ];
 
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(

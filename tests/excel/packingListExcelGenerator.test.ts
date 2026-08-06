@@ -502,9 +502,10 @@ describe('addPackingListSheet', () => {
     expect(headerRow.getCell(13).value).toBe('DIN Total');
     expect(headerRow.getCell(14).value).toBe('TIAP Total');
 
-    const taxArgb = 'FFD97706';
-    expect((headerRow.getCell(13).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
-    expect((headerRow.getCell(14).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+    // Rose, not the tax columns' amber — visibly distinct at a glance.
+    const taxTotalArgb = 'FFDB2777';
+    expect((headerRow.getCell(13).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(14).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
 
     // Row 5 (matched, 18 pieces): tax value x pieces.
     const matchedRow = sheet.getRow(5);
