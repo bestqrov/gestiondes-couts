@@ -182,13 +182,19 @@ export async function addPackingListSheet(
   // row), right after DD unitaire — same order as the tax code columns
   // themselves, so column N here always corresponds to tax column N.
   const taxTotalColumns = allTaxCodes.map((_, i) => ddUnitaireColumn + 1 + i);
-  const columnCount = ddUnitaireColumn + allTaxCodes.length;
+  // Somme DD TTC / DD unitaire TTC close out the sheet — the row's taxes
+  // summed (montant x pieces, i.e. the sum of the "<tax> Total" columns)
+  // and that sum spread per piece, same relationship as the HT pair.
+  const sommeDdTtcColumn = ddUnitaireColumn + allTaxCodes.length + 1;
+  const ddUnitaireTtcColumn = sommeDdTtcColumn + 1;
+  const columnCount = ddUnitaireTtcColumn;
   const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
-    // Tax code columns through DD unitaire stay amber; the new "<abbr>
-    // Total" columns get their own rose color so they read as visibly
-    // distinct from the tax montant columns they're derived from.
+    // Tax code columns through DD unitaire stay amber; the "<abbr> Total"
+    // columns plus the closing TTC pair get their own rose color so they
+    // read as visibly distinct from the tax montant columns they're
+    // derived from.
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: ddUnitaireColumn },
     { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: columnCount },
   ];
@@ -209,7 +215,12 @@ export async function addPackingListSheet(
   // separator, with no thousands separator — requested so every value in
   // these columns lines up the same width (e.g. "0000,00" rather than
   // "0,00"), instead of the shared money format.
-  const zeroPaddedColumns = new Set<number>([...taxColumns, sommeDdColumn, ...taxTotalColumns]);
+  const zeroPaddedColumns = new Set<number>([
+    ...taxColumns,
+    sommeDdColumn,
+    ...taxTotalColumns,
+    sommeDdTtcColumn,
+  ]);
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
@@ -227,6 +238,8 @@ export async function addPackingListSheet(
     { key: 'sommeDd', width: 18 },
     { key: 'ddUnitaire', width: 18 },
     ...allTaxCodes.map((code) => ({ key: `${code}_total`, width: 18 })),
+    { key: 'sommeDdTtc', width: 18 },
+    { key: 'ddUnitaireTtc', width: 18 },
   ];
 
   await addSheetTitleRows(
@@ -255,6 +268,8 @@ export async function addPackingListSheet(
     'Somme DD HT',
     'DD unitaire HT',
     ...allTaxDesignations.map((designation) => `${designation} Total`),
+    'Somme DD TTC',
+    'DD unitaire TTC',
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
@@ -294,16 +309,32 @@ export async function addPackingListSheet(
     // "<abbreviation> Total" columns — each tax's per-unit montant spread
     // across this row's piece count, the same montant x pieces pattern as
     // the "total" column (unit price x pieces).
+    let sommeDdTtc = 0;
     for (const code of allTaxCodes) {
-      rowValues[`${code}_total`] = Number(rowValues[code]) * row.pieces;
+      const taxTotal = Number(rowValues[code]) * row.pieces;
+      rowValues[`${code}_total`] = taxTotal;
+      sommeDdTtc += taxTotal;
     }
+    // "Somme DD TTC" / "DD unitaire TTC" — the row's "<tax> Total" columns
+    // summed, and that sum spread per piece, same relationship as the HT
+    // pair above but built from the montant x pieces totals instead of the
+    // per-unit montants.
+    rowValues.sommeDdTtc = sommeDdTtc;
+    rowValues.ddUnitaireTtc = row.pieces > 0 ? sommeDdTtc / row.pieces : 0;
 
     const excelRow = sheet.addRow(rowValues);
     styleDataRow(
       excelRow,
       columnCount,
       index,
-      new Set([UNIT_COLUMN, TOTAL_COLUMN, ...taxColumns, sommeDdColumn, ...taxTotalColumns])
+      new Set([
+        UNIT_COLUMN,
+        TOTAL_COLUMN,
+        ...taxColumns,
+        sommeDdColumn,
+        ...taxTotalColumns,
+        sommeDdTtcColumn,
+      ])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
     // money format — it's a per-piece fraction, not a currency total. The
@@ -317,6 +348,8 @@ export async function addPackingListSheet(
     // same banded/plain style throughout the sheet.
     const ddUnitaireCell = excelRow.getCell(ddUnitaireColumn);
     ddUnitaireCell.style = { ...ddUnitaireCell.style, numFmt: '0000.000000' };
+    const ddUnitaireTtcCell = excelRow.getCell(ddUnitaireTtcColumn);
+    ddUnitaireTtcCell.style = { ...ddUnitaireTtcCell.style, numFmt: '0000.000000' };
     // Pieces is a plain whole count — no thousands separator, no decimals.
     const piecesCell = excelRow.getCell(PIECES_COLUMN);
     piecesCell.style = { ...piecesCell.style, numFmt: '0' };

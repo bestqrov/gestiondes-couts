@@ -196,6 +196,7 @@ describe('addPackingListSheet', () => {
     const headerRow = sheet.getRow(4);
 
     const taxArgb = 'FFD97706';
+    const taxTotalArgb = 'FFDB2777';
     expect((headerRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
     expect((headerRow.getCell(10).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
     expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL');
@@ -223,10 +224,11 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
 
-    // Somme DD (col 11) = sum of the two first-unit tax values; DD unitaire
-    // (col 12) = Somme DD / pieces, formatted to 6 decimal digits.
-    expect(headerRow.getCell(11).value).toBe('Somme DD');
-    expect(headerRow.getCell(12).value).toBe('DD unitaire');
+    // Somme DD HT (col 11) = sum of the two first-unit tax values; DD
+    // unitaire HT (col 12) = Somme DD HT / pieces, formatted to 6 decimal
+    // digits.
+    expect(headerRow.getCell(11).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(12).value).toBe('DD unitaire HT');
     expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
     expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
 
@@ -234,13 +236,35 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd / 18, 6);
     expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
-    // Somme DD (col 11) is zero-padded the same way as the tax columns.
+    // Somme DD HT (col 11) is zero-padded the same way as the tax columns.
     expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
     // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
     expect(matchedRow.getCell(4).numFmt).toBe('0');
 
     expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
+
+    // Columns 13/14 are the "<tax> Total" columns (montant x pieces), then
+    // 15 Somme DD TTC / 16 DD unitaire TTC close out the sheet — Somme DD
+    // TTC is the sum of those "<tax> Total" columns for the row, and DD
+    // unitaire TTC spreads that sum per piece.
+    expect(headerRow.getCell(15).value).toBe('Somme DD TTC');
+    expect(headerRow.getCell(16).value).toBe('DD unitaire TTC');
+    expect((headerRow.getCell(15).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(16).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+
+    const expectedTaxTotal000110 = firstUnit000110 * 18;
+    const expectedTaxTotal002109 = firstUnit002109 * 18;
+    const expectedSommeDdTtc = expectedTaxTotal000110 + expectedTaxTotal002109;
+    expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedTaxTotal000110, 2);
+    expect(Number(matchedRow.getCell(14).value)).toBeCloseTo(expectedTaxTotal002109, 2);
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(expectedSommeDdTtc, 2);
+    expect(Number(matchedRow.getCell(16).value)).toBeCloseTo(expectedSommeDdTtc / 18, 6);
+    expect(matchedRow.getCell(15).numFmt).toBe('0000.00');
+    expect(matchedRow.getCell(16).numFmt).toBe('0000.000000');
+
+    expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(16).value)).toBe(0);
   });
 
   it('uses only the first matching article\'s first-unit tax value — not summed with other articles sharing the same HS code prefix', async () => {
@@ -454,10 +478,10 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Header: item..HS CODE (1-8), 000110 (9), 002109 (10), REDV.INF. (11), Somme DD (12), DD unitaire (13).
+    // Header: item..HS CODE (1-8), 000110 (9), 002109 (10), REDV.INF. (11), Somme DD HT (12), DD unitaire HT (13).
     expect(headerRow.getCell(11).value).toBe('REDV.INF.(AVEC D et T)');
-    expect(headerRow.getCell(12).value).toBe('Somme DD');
-    expect(headerRow.getCell(13).value).toBe('DD unitaire');
+    expect(headerRow.getCell(12).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(13).value).toBe('DD unitaire HT');
 
     // The declaration's only article has valeurDeclaree 172.98 across 18
     // units, and it's also the declaration's only article, so its own
@@ -477,7 +501,7 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
   });
 
-  it('adds a "<abbreviation> Total" column per tax, right after DD unitaire, equal to montant x pieces', async () => {
+  it('adds a "<tax designation> Total" column per tax, right after DD unitaire HT, equal to montant x pieces', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-tax-totals');
     tempDir = dir;
@@ -497,10 +521,10 @@ describe('addPackingListSheet', () => {
     const headerRow = sheet.getRow(4);
 
     // Columns 1-8 base, 9 DTS IMPORT NORMAL, 10 TVA IMPORT AUTRE PDS,
-    // 11 Somme DD, 12 DD unitaire, then the two "Total" columns: 13, 14 —
-    // headers built from each tax's designation initials + " Total".
-    expect(headerRow.getCell(13).value).toBe('DIN Total');
-    expect(headerRow.getCell(14).value).toBe('TIAP Total');
+    // 11 Somme DD HT, 12 DD unitaire HT, then the two "Total" columns: 13,
+    // 14 — headers built from each tax's full designation + " Total".
+    expect(headerRow.getCell(13).value).toBe('DTS IMPORT NORMAL Total');
+    expect(headerRow.getCell(14).value).toBe('TVA IMPORT AUTRE PDS Total');
 
     // Rose, not the tax columns' amber — visibly distinct at a glance.
     const taxTotalArgb = 'FFDB2777';
@@ -521,7 +545,7 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(14).value)).toBe(0);
   });
 
-  it('overrides RI SEGMA and REMISES CREDIT\'s "Total" column names, since both abbreviate to "RC" by initials alone', async () => {
+  it('builds RI SEGMA and REMISES CREDIT\'s "Total" column names from their full designation, not an abbreviation', async () => {
     const declarationWithBothRc: Declaration = {
       ...SAMPLE_DECLARATION,
       ordonnancementTaxes: [
@@ -548,12 +572,12 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Columns 1-8 base, 9 RI SEGMA, 10 REMISES CREDIT, 11 Somme DD,
-    // 12 DD unitaire, 13 RI SEGMA Total, 14 REMISES CREDIT Total.
+    // Columns 1-8 base, 9 RI SEGMA, 10 REMISES CREDIT, 11 Somme DD HT,
+    // 12 DD unitaire HT, 13 RI SEGMA Total, 14 REMISES CREDIT Total.
     expect(headerRow.getCell(9).value).toBe('RI SEGMA');
     expect(headerRow.getCell(10).value).toBe('REMISES CREDIT');
-    expect(headerRow.getCell(13).value).toBe('Risg Total');
-    expect(headerRow.getCell(14).value).toBe('Rems Total');
+    expect(headerRow.getCell(13).value).toBe('RI SEGMA Total');
+    expect(headerRow.getCell(14).value).toBe('REMISES CREDIT Total');
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {
