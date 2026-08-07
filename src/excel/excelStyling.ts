@@ -77,16 +77,14 @@ const ROW_STYLE_PERCENT_BANDED: Partial<ExcelJS.Style> = {
   alignment: CENTERED,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
-// A light-green tint carried down every data row of the "Somme DD HT" /
-// "DD unitaire HT" columns (not just their header), so those two columns
-// stay visually distinct from the surrounding amber tax columns all the
-// way down the sheet, not just at the header.
-const SUM_HT_FILL_ARGB = 'FFDCFCE7';
-const ROW_STYLE_SUM_HT: Partial<ExcelJS.Style> = {
-  border: THIN_BORDER,
-  alignment: CENTERED,
-  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: SUM_HT_FILL_ARGB } },
-};
+// Light tints carried down every data row of the "Somme DD HT" / "DD
+// unitaire HT" and "Somme DD TTC" / "DD unitaire TTC" column pairs (not
+// just their header), so those columns stay visually distinct all the way
+// down the sheet, not just at the header. Two different greens, matching
+// each pair's header shade, so HT and TTC also read as distinct from one
+// another.
+export const SUM_HT_ROW_FILL_ARGB = 'FFDCFCE7';
+export const SUM_TTC_ROW_FILL_ARGB = 'FFECFCCB';
 
 /** Applies the shared header look to every cell in a header row. */
 export function styleHeaderRow(row: ExcelJS.Row, columnCount: number): void {
@@ -108,6 +106,7 @@ export const COLUMN_GROUP_ARGB = {
   quantity: 'FF0891B2', // teal — Quantité
   taxTotal: 'FFDB2777', // rose — per-tax "<abbreviation> Total" columns (montant x pieces)
   sumHt: 'FF15803D', // green — Somme DD HT / DD unitaire HT, called out from the amber tax columns
+  sumTtc: 'FF4D7C0F', // lime-green — Somme DD TTC / DD unitaire TTC, a distinct shade of green from sumHt
 } as const;
 
 export type ColumnGroupKind = keyof typeof COLUMN_GROUP_ARGB;
@@ -343,14 +342,18 @@ export function styleDataRow(
 }
 
 /**
- * Overlays the "Somme DD HT" / "DD unitaire HT" light-green tint onto the
- * given columns of an already-styled data row — call after styleDataRow
- * (and after any per-cell numFmt overrides on those columns) so the tint
- * doesn't get clobbered by a later style assignment.
+ * Overlays a flat fill color onto the given columns of an already-styled
+ * data row — call after styleDataRow (and after any per-cell numFmt
+ * overrides on those columns) so the tint doesn't get clobbered by a later
+ * style assignment. Used to carry the "Somme DD HT"/"DD unitaire HT" and
+ * "Somme DD TTC"/"DD unitaire TTC" header colors down their data rows too.
  */
-export function styleSumHtColumns(row: ExcelJS.Row, columns: number[]): void {
+export function styleColumnsFill(row: ExcelJS.Row, columns: number[], fillArgb: string): void {
   for (const col of columns) {
     const cell = row.getCell(col);
-    cell.style = { ...(cell.style as Partial<ExcelJS.Style>), fill: ROW_STYLE_SUM_HT.fill };
+    cell.style = {
+      ...(cell.style as Partial<ExcelJS.Style>),
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: fillArgb } },
+    };
   }
 }

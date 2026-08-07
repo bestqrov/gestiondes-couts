@@ -10,12 +10,14 @@ import {
 import {
   styleDataRow,
   styleHeaderRowGrouped,
-  styleSumHtColumns,
+  styleColumnsFill,
   addSheetTitleRows,
   resolveBrandArgb,
   resolveBrandDarkArgb,
   resolveCompanyName,
   resolveDocumentTitle,
+  SUM_HT_ROW_FILL_ARGB,
+  SUM_TTC_ROW_FILL_ARGB,
   type BrandingInfo,
   type ColumnGroup,
 } from './excelStyling.js';
@@ -195,12 +197,13 @@ export async function addPackingListSheet(
     ...BASE_COLUMN_GROUPS,
     // Tax code columns stay amber; Somme DD HT / DD unitaire HT get their
     // own green so they stand out from the tax montants; the "<tax> Total"
-    // columns plus the closing TTC pair get their own rose color so they
-    // read as visibly distinct from the tax montant columns they're
-    // derived from.
+    // columns get their own rose color; the closing Somme DD TTC / DD
+    // unitaire TTC pair gets a second, distinct shade of green from the HT
+    // pair, so all four read as visibly distinct from each other.
     { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: sommeDdColumn - 1 },
     { kind: 'sumHt' as const, from: sommeDdColumn, to: ddUnitaireColumn },
-    { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: columnCount },
+    { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: sommeDdTtcColumn - 1 },
+    { kind: 'sumTtc' as const, from: sommeDdTtcColumn, to: ddUnitaireTtcColumn },
   ];
 
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
@@ -373,9 +376,11 @@ export async function addPackingListSheet(
       const cell = excelRow.getCell(column);
       cell.style = { ...cell.style, numFmt: '0000.00' };
     }
-    // Somme DD HT / DD unitaire HT carry their green tint down every data
-    // row too, not just the header — applied last so it isn't overwritten
-    // by the numFmt overrides above.
-    styleSumHtColumns(excelRow, [sommeDdColumn, ddUnitaireColumn]);
+    // Somme DD HT/DD unitaire HT and Somme DD TTC/DD unitaire TTC each
+    // carry their own green tint down every data row too, not just the
+    // header — applied last so it isn't overwritten by the numFmt
+    // overrides above.
+    styleColumnsFill(excelRow, [sommeDdColumn, ddUnitaireColumn], SUM_HT_ROW_FILL_ARGB);
+    styleColumnsFill(excelRow, [sommeDdTtcColumn, ddUnitaireTtcColumn], SUM_TTC_ROW_FILL_ARGB);
   });
 }

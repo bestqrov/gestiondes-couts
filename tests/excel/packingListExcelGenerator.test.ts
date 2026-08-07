@@ -257,10 +257,14 @@ describe('addPackingListSheet', () => {
     // 15 Somme DD TTC / 16 DD unitaire TTC close out the sheet — Somme DD
     // TTC is the sum of those "<tax> Total" columns for the row, and DD
     // unitaire TTC spreads that sum per piece.
+    // A second, distinct shade of green from Somme DD HT's — same "called
+    // out from its neighbors" treatment, header plus every data row.
+    const sumTtcArgb = 'FF4D7C0F';
+    const sumTtcRowFillArgb = 'FFECFCCB';
     expect(headerRow.getCell(15).value).toBe('Somme DD TTC');
     expect(headerRow.getCell(16).value).toBe('DD unitaire TTC');
-    expect((headerRow.getCell(15).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
-    expect((headerRow.getCell(16).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(15).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumTtcArgb);
+    expect((headerRow.getCell(16).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumTtcArgb);
 
     const expectedTaxTotal000110 = firstUnit000110 * 18;
     const expectedTaxTotal002109 = firstUnit002109 * 18;
@@ -271,9 +275,12 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(16).value)).toBeCloseTo(expectedSommeDdTtc / 18, 6);
     expect(matchedRow.getCell(15).numFmt).toBe('0000.00');
     expect(matchedRow.getCell(16).numFmt).toBe('0000.000000');
+    expect((matchedRow.getCell(15).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumTtcRowFillArgb);
+    expect((matchedRow.getCell(16).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumTtcRowFillArgb);
 
     expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
     expect(Number(unmatchedRow.getCell(16).value)).toBe(0);
+    expect((unmatchedRow.getCell(15).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumTtcRowFillArgb);
   });
 
   it('uses only the first matching article\'s first-unit tax value — not summed with other articles sharing the same HS code prefix', async () => {
