@@ -10,6 +10,7 @@ import {
 import {
   styleDataRow,
   styleHeaderRowGrouped,
+  styleSumHtColumns,
   addSheetTitleRows,
   resolveBrandArgb,
   resolveBrandDarkArgb,
@@ -174,8 +175,9 @@ export async function addPackingListSheet(
     (sum, article) => sum + article.valeurDeclaree,
     0
   );
-  // Somme DD / DD unitaire sit right after the tax code columns — derived
-  // sums of those tax values, so grouped and colored with them.
+  // Somme DD HT / DD unitaire HT sit right after the tax code columns —
+  // derived sums of those tax values, given their own green header/row
+  // color so they stand out from the amber tax columns next to them.
   const sommeDdColumn = BASE_COLUMN_COUNT + allTaxCodes.length + 1;
   const ddUnitaireColumn = sommeDdColumn + 1;
   // One "<abbreviation> Total" column per tax (montant x pieces for the
@@ -191,11 +193,13 @@ export async function addPackingListSheet(
   const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
-    // Tax code columns through DD unitaire stay amber; the "<abbr> Total"
+    // Tax code columns stay amber; Somme DD HT / DD unitaire HT get their
+    // own green so they stand out from the tax montants; the "<tax> Total"
     // columns plus the closing TTC pair get their own rose color so they
     // read as visibly distinct from the tax montant columns they're
     // derived from.
-    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: ddUnitaireColumn },
+    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: sommeDdColumn - 1 },
+    { kind: 'sumHt' as const, from: sommeDdColumn, to: ddUnitaireColumn },
     { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: columnCount },
   ];
 
@@ -237,7 +241,12 @@ export async function addPackingListSheet(
     ...extraCodes.map((code) => ({ key: code, width: 24 })),
     { key: 'sommeDd', width: 18 },
     { key: 'ddUnitaire', width: 18 },
-    ...allTaxCodes.map((code) => ({ key: `${code}_total`, width: 18 })),
+    // Wide enough to fit the full "<tax designation> Total" header text
+    // (designations vary a lot in length), not the fixed 18 used elsewhere.
+    ...allTaxCodes.map((code, i) => ({
+      key: `${code}_total`,
+      width: Math.max(18, `${allTaxDesignations[i]} Total`.length + 2),
+    })),
     { key: 'sommeDdTtc', width: 18 },
     { key: 'ddUnitaireTtc', width: 18 },
   ];
@@ -364,5 +373,9 @@ export async function addPackingListSheet(
       const cell = excelRow.getCell(column);
       cell.style = { ...cell.style, numFmt: '0000.00' };
     }
+    // Somme DD HT / DD unitaire HT carry their green tint down every data
+    // row too, not just the header — applied last so it isn't overwritten
+    // by the numFmt overrides above.
+    styleSumHtColumns(excelRow, [sommeDdColumn, ddUnitaireColumn]);
   });
 }

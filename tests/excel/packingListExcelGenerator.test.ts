@@ -227,10 +227,13 @@ describe('addPackingListSheet', () => {
     // Somme DD HT (col 11) = sum of the two first-unit tax values; DD
     // unitaire HT (col 12) = Somme DD HT / pieces, formatted to 6 decimal
     // digits.
+    // Green header, distinct from the tax columns' amber — called out from
+    // the tax montants they're derived from.
+    const sumHtArgb = 'FF15803D';
     expect(headerRow.getCell(11).value).toBe('Somme DD HT');
     expect(headerRow.getCell(12).value).toBe('DD unitaire HT');
-    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
-    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxArgb);
+    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
+    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
 
     const expectedSommeDd = firstUnit000110 + firstUnit002109;
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
@@ -238,6 +241,12 @@ describe('addPackingListSheet', () => {
     expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
     // Somme DD HT (col 11) is zero-padded the same way as the tax columns.
     expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
+    // The light-green tint carries down the data rows too, not just the
+    // header, so the columns read as visibly distinct all the way down.
+    const sumHtRowFillArgb = 'FFDCFCE7';
+    expect((matchedRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
+    expect((matchedRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
+    expect((unmatchedRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
     // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
     expect(matchedRow.getCell(4).numFmt).toBe('0');
 
@@ -530,6 +539,11 @@ describe('addPackingListSheet', () => {
     const taxTotalArgb = 'FFDB2777';
     expect((headerRow.getCell(13).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
     expect((headerRow.getCell(14).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+
+    // Wide enough that the full header text isn't truncated — not the flat
+    // 18 used for the other tax columns.
+    expect(sheet.getColumn(13).width).toBeGreaterThanOrEqual('DTS IMPORT NORMAL Total'.length);
+    expect(sheet.getColumn(14).width).toBeGreaterThanOrEqual('TVA IMPORT AUTRE PDS Total'.length);
 
     // Row 5 (matched, 18 pieces): tax value x pieces.
     const matchedRow = sheet.getRow(5);

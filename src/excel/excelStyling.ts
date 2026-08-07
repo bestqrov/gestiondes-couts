@@ -77,6 +77,16 @@ const ROW_STYLE_PERCENT_BANDED: Partial<ExcelJS.Style> = {
   alignment: CENTERED,
   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } },
 };
+// A light-green tint carried down every data row of the "Somme DD HT" /
+// "DD unitaire HT" columns (not just their header), so those two columns
+// stay visually distinct from the surrounding amber tax columns all the
+// way down the sheet, not just at the header.
+const SUM_HT_FILL_ARGB = 'FFDCFCE7';
+const ROW_STYLE_SUM_HT: Partial<ExcelJS.Style> = {
+  border: THIN_BORDER,
+  alignment: CENTERED,
+  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: SUM_HT_FILL_ARGB } },
+};
 
 /** Applies the shared header look to every cell in a header row. */
 export function styleHeaderRow(row: ExcelJS.Row, columnCount: number): void {
@@ -97,6 +107,7 @@ export const COLUMN_GROUP_ARGB = {
   value: 'FF059669', // emerald — Valeur Déclarée / money totals
   quantity: 'FF0891B2', // teal — Quantité
   taxTotal: 'FFDB2777', // rose — per-tax "<abbreviation> Total" columns (montant x pieces)
+  sumHt: 'FF15803D', // green — Somme DD HT / DD unitaire HT, called out from the amber tax columns
 } as const;
 
 export type ColumnGroupKind = keyof typeof COLUMN_GROUP_ARGB;
@@ -328,5 +339,18 @@ export function styleDataRow(
     } else {
       row.getCell(col).style = banded ? ROW_STYLE_PLAIN_BANDED : ROW_STYLE_PLAIN;
     }
+  }
+}
+
+/**
+ * Overlays the "Somme DD HT" / "DD unitaire HT" light-green tint onto the
+ * given columns of an already-styled data row — call after styleDataRow
+ * (and after any per-cell numFmt overrides on those columns) so the tint
+ * doesn't get clobbered by a later style assignment.
+ */
+export function styleSumHtColumns(row: ExcelJS.Row, columns: number[]): void {
+  for (const col of columns) {
+    const cell = row.getCell(col);
+    cell.style = { ...(cell.style as Partial<ExcelJS.Style>), fill: ROW_STYLE_SUM_HT.fill };
   }
 }
