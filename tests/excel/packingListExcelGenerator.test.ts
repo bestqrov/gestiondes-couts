@@ -601,6 +601,40 @@ describe('addPackingListSheet', () => {
     expect(headerRow.getCell(14).value).toBe('REMISES CREDIT Total');
   });
 
+  it('adds a PRORATA column with the matched Global article\'s own Prorata value, not derived from the row\'s own pieces', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-prorata');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      DECLARATION_WITH_TAXES,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+    const headerRow = sheet.getRow(4);
+
+    // Columns 1-8 base, 9-10 taxes, 11-12 Somme/DD unitaire HT, 13-14 tax
+    // totals, 15-16 Somme/DD unitaire TTC, 17 PRORATA.
+    expect(headerRow.getCell(17).value).toBe('PRORATA');
+
+    // Declaration's only article: valeurDeclaree 172.98 across 18 units, and
+    // it's also the declaration's only article, so Prorata for its first
+    // unit = (172.98 / 18) / 172.98 = 1 / 18.
+    const matchedRow = sheet.getRow(5);
+    expect(Number(matchedRow.getCell(17).value)).toBeCloseTo(1 / 18, 6);
+
+    // Row 6 has no matching article, so PRORATA defaults to 0 too.
+    const unmatchedRow = sheet.getRow(6);
+    expect(Number(unmatchedRow.getCell(17).value)).toBe(0);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');
