@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
-import express, { type Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import multer from 'multer';
 import type { Collection } from 'mongodb';
 import { extractDocumentText } from '../ocr/documentTextExtractor.js';
@@ -49,6 +49,9 @@ import {
 import {
   getAppSettings,
   updateAppSettings,
+  incrementGenerationCount,
+  hashDeletePassword,
+  verifyDeletePassword,
   APP_SETTINGS_COLLECTION,
   DEFAULT_APP_SETTINGS,
   type AppSettingsDocument,
@@ -334,6 +337,14 @@ app.post(
       const branding = await getAppSettings(await getSettingsCollection());
       await generateCombinedExcel(declaration, packingListRows, generatedFilePath, branding);
 
+      try {
+        await incrementGenerationCount(await getSettingsCollection());
+      } catch (counterError) {
+        // Same reasoning as the transaction save below — the file already
+        // generated successfully, a counter hiccup shouldn't block it.
+        console.error('Failed to increment the generation counter:', counterError);
+      }
+
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
 
@@ -463,7 +474,15 @@ app.get('/download', async (_req, res) => {
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
 });
 
-app.get('/superadmin/dashboard', requireSuperAdmin, async (req, res) => {
+// Shared by GET /superadmin/dashboard and POST /superadmin/dashboard/reset-
+// counter (which re-renders the same page with a result message instead of
+// redirecting) so both stay in sync with exactly one place that assembles
+// the dashboard's data.
+async function sendDashboard(
+  req: Request,
+  res: Response,
+  extra?: { resetCounterError?: string; resetCounterSuccess?: string }
+): Promise<void> {
   let transactionCount = 0;
   let countryCounts: CountryProductCount[] = [];
   let availablePeriods: string[] = [];
@@ -489,9 +508,42 @@ app.get('/superadmin/dashboard', requireSuperAdmin, async (req, res) => {
       settings,
       countryCounts,
       availablePeriods,
-      selectedPeriod
+      selectedPeriod,
+      extra?.resetCounterError,
+      extra?.resetCounterSuccess
     )
   );
+}
+
+app.get('/superadmin/dashboard', requireSuperAdmin, async (req, res) => {
+  await sendDashboard(req, res);
+});
+
+// Zeroes the display-only generation counter (AppSettings.generationCount)
+// — never the real transactions/Historique data — gated behind the "mot de
+// passe de suppression" configured in Réglages > Identifiants, the same way
+// a superadmin's own login password gates their account.
+app.post('/superadmin/dashboard/reset-counter', requireSuperAdmin, async (req, res) => {
+  const { password } = req.body as { password?: string };
+  const settingsCollection = await getSettingsCollection();
+  const settings = await getAppSettings(settingsCollection);
+
+  if (!settings.deletePasswordHash) {
+    res.status(400);
+    await sendDashboard(req, res, {
+      resetCounterError:
+        "Aucun mot de passe de suppression n'est configuré (Réglages > Identifiants).",
+    });
+    return;
+  }
+  if (!password || !verifyDeletePassword(settings, password)) {
+    res.status(400);
+    await sendDashboard(req, res, { resetCounterError: 'Mot de passe de suppression incorrect.' });
+    return;
+  }
+
+  await updateAppSettings(settingsCollection, { generationCount: 0 });
+  await sendDashboard(req, res, { resetCounterSuccess: 'Compteur de générations réinitialisé.' });
 });
 
 // Lets a superadmin generate a declaration without leaving the sidebar
@@ -751,6 +803,107 @@ app.post('/superadmin/settings/credentials', requireSuperAdmin, async (req, res)
       req.session!.username,
       undefined,
       'Identifiants mis à jour.'
+    )
+  );
+});
+
+// Sets/replaces the "mot de passe de suppression" that gates resetting the
+// dashboard's generation counter — a separate password from the
+// superadmin's own login credentials above, so it can be shared with staff
+// who shouldn't have full account access but do need to reset the counter.
+app.post('/superadmin/settings/delete-password', requireSuperAdmin, async (req, res) => {
+  const { newDeletePassword } = req.body as { newDeletePassword?: string };
+  const settingsCollection = await getSettingsCollection();
+
+  const renderWithError = async (message: string) => {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminSettings(
+          await getAppSettings(settingsCollection),
+          undefined,
+          undefined,
+          req.session!.username,
+          undefined,
+          undefined,
+          message
+        )
+      );
+  };
+
+  if (!newDeletePassword || newDeletePassword.length < 6) {
+    await renderWithError('Le mot de passe de suppression doit contenir au moins 6 caractères.');
+    return;
+  }
+
+  await updateAppSettings(settingsCollection, {
+    deletePasswordHash: hashDeletePassword(newDeletePassword),
+  });
+
+  res.send(
+    renderSuperAdminSettings(
+      await getAppSettings(settingsCollection),
+      undefined,
+      undefined,
+      req.session!.username,
+      undefined,
+      undefined,
+      undefined,
+      'Mot de passe de suppression mis à jour.'
+    )
+  );
+});
+
+// Same "Compteur de générations" reset as POST /superadmin/dashboard/reset-
+// counter, but re-rendering the Réglages page instead of the dashboard, so a
+// superadmin can also reset it from Réglages > Identifiants without leaving
+// that page. Zeroes only the display-only AppSettings.generationCount —
+// never the real transactions/Historique data.
+app.post('/superadmin/settings/reset-counter', requireSuperAdmin, async (req, res) => {
+  const { password } = req.body as { password?: string };
+  const settingsCollection = await getSettingsCollection();
+  const settings = await getAppSettings(settingsCollection);
+
+  const renderWithError = async (message: string) => {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminSettings(
+          await getAppSettings(settingsCollection),
+          undefined,
+          undefined,
+          req.session!.username,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          message
+        )
+      );
+  };
+
+  if (!settings.deletePasswordHash) {
+    await renderWithError("Aucun mot de passe de suppression n'est configuré (Réglages > Identifiants).");
+    return;
+  }
+  if (!password || !verifyDeletePassword(settings, password)) {
+    await renderWithError('Mot de passe de suppression incorrect.');
+    return;
+  }
+
+  await updateAppSettings(settingsCollection, { generationCount: 0 });
+  res.send(
+    renderSuperAdminSettings(
+      await getAppSettings(settingsCollection),
+      undefined,
+      undefined,
+      req.session!.username,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'Compteur de générations réinitialisé.'
     )
   );
 });

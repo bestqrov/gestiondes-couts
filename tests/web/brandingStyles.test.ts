@@ -15,6 +15,8 @@ const EMPTY_SETTINGS: AppSettings = {
   fontFamily: null,
   contactEmail: null,
   contactWhatsapp: null,
+  generationCount: 0,
+  deletePasswordHash: null,
 };
 
 describe('renderBrandOverrideStyle', () => {

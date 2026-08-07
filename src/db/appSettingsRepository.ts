@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import type { Collection } from 'mongodb';
 
 export const APP_SETTINGS_COLLECTION = 'app_settings';
@@ -7,6 +8,8 @@ export const APP_SETTINGS_COLLECTION = 'app_settings';
 // declarations, so there's exactly one document to read or write.
 const SINGLETON_ID = 'singleton';
 
+const SALT_ROUNDS = 10;
+
 export interface AppSettings {
   companyName: string | null;
   logoDataUri: string | null;
@@ -14,6 +17,14 @@ export interface AppSettings {
   fontFamily: string | null;
   contactEmail: string | null;
   contactWhatsapp: string | null;
+  // Display-only tally of successful /generate calls, separate from the
+  // transactions collection (the real, un-resettable declaration history
+  // Historique/Costs pages rely on) — a superadmin can zero this out from
+  // the dashboard without touching that history.
+  generationCount: number;
+  // bcrypt hash of the password required to reset generationCount — never
+  // stored/returned in plaintext, mirroring usersRepository's passwordHash.
+  deletePasswordHash: string | null;
 }
 
 export interface AppSettingsUpdate {
@@ -23,6 +34,8 @@ export interface AppSettingsUpdate {
   fontFamily?: string | null;
   contactEmail?: string | null;
   contactWhatsapp?: string | null;
+  generationCount?: number;
+  deletePasswordHash?: string | null;
 }
 
 export interface AppSettingsDocument extends AppSettings {
@@ -37,6 +50,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   fontFamily: null,
   contactEmail: null,
   contactWhatsapp: null,
+  generationCount: 0,
+  deletePasswordHash: null,
 };
 
 export async function getAppSettings(
@@ -51,6 +66,11 @@ export async function getAppSettings(
     fontFamily: doc.fontFamily,
     contactEmail: doc.contactEmail,
     contactWhatsapp: doc.contactWhatsapp,
+    // Both fields are new — documents written before this feature existed
+    // won't have them, so fall back to the same defaults a fresh singleton
+    // would get.
+    generationCount: doc.generationCount ?? 0,
+    deletePasswordHash: doc.deletePasswordHash ?? null,
   };
 }
 
@@ -67,6 +87,12 @@ export async function updateAppSettings(
     contactEmail: update.contactEmail !== undefined ? update.contactEmail : current.contactEmail,
     contactWhatsapp:
       update.contactWhatsapp !== undefined ? update.contactWhatsapp : current.contactWhatsapp,
+    generationCount:
+      update.generationCount !== undefined ? update.generationCount : current.generationCount,
+    deletePasswordHash:
+      update.deletePasswordHash !== undefined
+        ? update.deletePasswordHash
+        : current.deletePasswordHash,
   };
 
   await collection.updateOne(
@@ -76,4 +102,19 @@ export async function updateAppSettings(
   );
 
   return merged;
+}
+
+export async function incrementGenerationCount(
+  collection: Collection<AppSettingsDocument>
+): Promise<void> {
+  const current = await getAppSettings(collection);
+  await updateAppSettings(collection, { generationCount: current.generationCount + 1 });
+}
+
+export function hashDeletePassword(password: string): string {
+  return bcrypt.hashSync(password, SALT_ROUNDS);
+}
+
+export function verifyDeletePassword(settings: AppSettings, password: string): boolean {
+  return settings.deletePasswordHash !== null && bcrypt.compareSync(password, settings.deletePasswordHash);
 }

@@ -427,12 +427,21 @@ export function renderSuperAdminOverview(
   settings: AppSettings,
   countryCounts: CountryProductCount[],
   availablePeriods: string[] = [],
-  selectedPeriod = ''
+  selectedPeriod = '',
+  resetCounterError?: string,
+  resetCounterSuccess?: string
 ): string {
   const total = users.length;
   const active = users.filter((u) => u.disabledAt === null).length;
   const disabled = users.filter((u) => u.disabledAt !== null).length;
   const superadmins = users.filter((u) => u.role === 'superadmin').length;
+
+  const resetCounterErrorBlock = resetCounterError
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(resetCounterError)}</span></div>`
+    : '';
+  const resetCounterSuccessBlock = resetCounterSuccess
+    ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(resetCounterSuccess)}</span></div>`
+    : '';
 
   const body = `
     <p class="lede">Vue d'ensemble des comptes et de l'activité de l'application.</p>
@@ -445,14 +454,60 @@ export function renderSuperAdminOverview(
     <div class="stat-grid">
       ${statCard('brand', declarationCount, 'Déclarations générées (total)')}
     </div>
+    <div class="card generate-shortcut-card">
+      <div>
+        <h2>Génération</h2>
+        <p class="lede" style="margin-bottom:0;">Générez une nouvelle déclaration sans quitter le tableau de bord.</p>
+      </div>
+      <a href="/superadmin/generate" class="btn-generate-shortcut">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 4.5v11M4.5 10h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Générer une déclaration
+      </a>
+    </div>
     ${renderWorldMapPanel(countryCounts, availablePeriods, selectedPeriod)}
+    <div class="card">
+      <h2>Compteur de générations</h2>
+      <p class="lede">Nombre de déclarations générées depuis la dernière réinitialisation — n'affecte pas l'historique.</p>
+      ${resetCounterErrorBlock}
+      ${resetCounterSuccessBlock}
+      <div class="reset-counter-row">
+        <div class="reset-counter-value">${settings.generationCount}</div>
+        <form method="post" action="/superadmin/dashboard/reset-counter" onsubmit="return confirmResetCounter(this)">
+          <input type="hidden" name="password" />
+          <button type="submit" class="btn-disable">Réinitialiser le compteur</button>
+        </form>
+      </div>
+    </div>
     <div class="card">
       <h2>Accès rapide</h2>
       <p class="lede" style="margin-bottom:0;">Gérez les comptes admin dans <a href="/superadmin/users" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Utilisateurs</a>.</p>
     </div>
+    <script>
+      function confirmResetCounter(form) {
+        var password = prompt('Mot de passe de suppression :');
+        if (!password) return false;
+        form.password.value = password;
+        return confirm('Réinitialiser le compteur de générations à 0 ? Cette action ne supprime pas l\\'historique.');
+      }
+    </script>
   `;
-  return renderShell('dashboard', 'Tableau de bord', body, settings, WORLD_MAP_STYLE);
+  return renderShell('dashboard', 'Tableau de bord', body, settings, WORLD_MAP_STYLE + RESET_COUNTER_STYLE);
 }
+
+const RESET_COUNTER_STYLE = `
+  .reset-counter-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .reset-counter-value { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--brand-700); }
+  .generate-shortcut-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .btn-generate-shortcut {
+    display: flex; align-items: center; gap: 8px; flex: none; padding: 12px 20px;
+    font-size: 13.5px; font-weight: 700; color: #fff; text-decoration: none;
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700)); border-radius: 10px;
+    box-shadow: 0 8px 18px -6px rgba(124, 58, 237, 0.4); transition: filter 0.12s;
+  }
+  .btn-generate-shortcut:hover { filter: brightness(1.05); }
+`;
 
 function renderUserRow(user: User, currentUserId: string): string {
   const isSelf = user.id === currentUserId;
@@ -796,7 +851,11 @@ export function renderSuperAdminSettings(
   successMessage?: string,
   currentUsername?: string,
   credentialsError?: string,
-  credentialsSuccess?: string
+  credentialsSuccess?: string,
+  deletePasswordError?: string,
+  deletePasswordSuccess?: string,
+  resetCounterError?: string,
+  resetCounterSuccess?: string
 ): string {
   const errorBlock = errorMessage
     ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(errorMessage)}</span></div>`
@@ -810,6 +869,18 @@ export function renderSuperAdminSettings(
   const credentialsSuccessBlock = credentialsSuccess
     ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(credentialsSuccess)}</span></div>`
     : '';
+  const deletePasswordErrorBlock = deletePasswordError
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(deletePasswordError)}</span></div>`
+    : '';
+  const deletePasswordSuccessBlock = deletePasswordSuccess
+    ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(deletePasswordSuccess)}</span></div>`
+    : '';
+  const resetCounterErrorBlock = resetCounterError
+    ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(resetCounterError)}</span></div>`
+    : '';
+  const resetCounterSuccessBlock = resetCounterSuccess
+    ? `<div class="error" style="background:var(--success-bg);color:var(--success);border-color:var(--success-line);"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(resetCounterSuccess)}</span></div>`
+    : '';
 
   const currentLogo = settings.logoDataUri
     ? `<img src="${settings.logoDataUri}" alt="Logo actuel" class="logo-preview" />`
@@ -821,7 +892,15 @@ export function renderSuperAdminSettings(
       `<option value="${opt.value}"${opt.value === selectedFont ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
   ).join('');
 
-  const defaultTab = credentialsError || credentialsSuccess ? 'identifiants' : 'profil';
+  const defaultTab =
+    credentialsError ||
+    credentialsSuccess ||
+    deletePasswordError ||
+    deletePasswordSuccess ||
+    resetCounterError ||
+    resetCounterSuccess
+      ? 'identifiants'
+      : 'profil';
 
   const body = `
     <p class="lede">Personnalisez l'identité visuelle de l'application : nom de la société, logo, couleur principale, police, coordonnées et identifiants de connexion.</p>
@@ -972,8 +1051,59 @@ export function renderSuperAdminSettings(
           </button>
         </form>
       </div>
+
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-amber"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div>
+            <h2>Mot de passe de suppression</h2>
+            <p class="settings-section-hint">Requis pour réinitialiser le compteur de générations depuis le Tableau de bord.${settings.deletePasswordHash ? ' Un mot de passe est déjà configuré.' : ' Aucun mot de passe configuré pour le moment.'}</p>
+          </div>
+        </div>
+        ${deletePasswordErrorBlock}
+        ${deletePasswordSuccessBlock}
+        <form method="post" action="/superadmin/settings/delete-password">
+          <div class="settings-field-grid">
+            <div class="field">
+              <label for="newDeletePassword">${settings.deletePasswordHash ? 'Nouveau mot de passe de suppression' : 'Mot de passe de suppression'}</label>
+              <input type="password" id="newDeletePassword" name="newDeletePassword" placeholder="6 caractères minimum" autocomplete="new-password" />
+            </div>
+          </div>
+          <button type="submit" class="settings-save">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5l3.5 3.5L16 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Enregistrer le mot de passe
+          </button>
+        </form>
+      </div>
+
+      <div class="card settings-section">
+        <div class="settings-section-head">
+          <div class="settings-icon settings-icon-amber"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8V6a4 4 0 0 1 8 0v2M5 8h10v8a1.2 1.2 0 0 1-1.2 1.2H6.2A1.2 1.2 0 0 1 5 16V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+          <div>
+            <h2>Déclarations générées (total)</h2>
+            <p class="settings-section-hint">Réinitialise le compteur affiché sur le Tableau de bord — n'affecte pas l'historique réel des déclarations (Historique / Coûts).</p>
+          </div>
+        </div>
+        ${resetCounterErrorBlock}
+        ${resetCounterSuccessBlock}
+        <div class="reset-counter-row">
+          <div class="reset-counter-value">${settings.generationCount}</div>
+          <form method="post" action="/superadmin/settings/reset-counter" onsubmit="return confirmResetCounter(this)">
+            <input type="hidden" name="password" />
+            <button type="submit" class="btn-disable">Réinitialiser le compteur</button>
+          </form>
+        </div>
+      </div>
     </div>
 
+    <script>
+      function confirmResetCounter(form) {
+        var password = prompt('Mot de passe de suppression :');
+        if (!password) return false;
+        form.password.value = password;
+        return confirm('Réinitialiser le compteur de générations à 0 ? Cette action ne supprime pas l\\'historique.');
+      }
+    </script>
     <script>
       var brandColorInput = document.getElementById('brandColor');
       var brandColorHex = document.getElementById('brandColorHex');
@@ -1013,7 +1143,7 @@ export function renderSuperAdminSettings(
     </script>
   `;
 
-  return renderShell('settings', 'Réglages', body, settings, SETTINGS_PAGE_STYLE);
+  return renderShell('settings', 'Réglages', body, settings, SETTINGS_PAGE_STYLE + RESET_COUNTER_STYLE);
 }
 
 const SETTINGS_PAGE_STYLE = `

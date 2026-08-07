@@ -3,6 +3,9 @@ import { createFakeCollection } from '../helpers/fakeMongoCollection.js';
 import {
   getAppSettings,
   updateAppSettings,
+  incrementGenerationCount,
+  hashDeletePassword,
+  verifyDeletePassword,
   type AppSettingsDocument,
 } from '../../src/db/appSettingsRepository.js';
 
@@ -20,6 +23,8 @@ describe('appSettingsRepository', () => {
       fontFamily: null,
       contactEmail: null,
       contactWhatsapp: null,
+      generationCount: 0,
+      deletePasswordHash: null,
     });
   });
 
@@ -41,6 +46,8 @@ describe('appSettingsRepository', () => {
       logoDataUri: 'data:image/png;base64,abc123',
       contactEmail: 'contact@acme.example',
       contactWhatsapp: '+212600000000',
+      generationCount: 0,
+      deletePasswordHash: null,
     });
     expect(await getAppSettings(collection)).toEqual(result);
   });
@@ -58,6 +65,8 @@ describe('appSettingsRepository', () => {
       logoDataUri: null,
       contactEmail: null,
       contactWhatsapp: null,
+      generationCount: 0,
+      deletePasswordHash: null,
     });
   });
 
@@ -68,5 +77,44 @@ describe('appSettingsRepository', () => {
 
     expect(await collection.countDocuments()).toBe(1);
     expect((await getAppSettings(collection)).companyName).toBe('Second');
+  });
+
+  it('incrementGenerationCount bumps the counter atomically, starting from 0', async () => {
+    const collection = makeCollection();
+    expect((await getAppSettings(collection)).generationCount).toBe(0);
+
+    await incrementGenerationCount(collection);
+    await incrementGenerationCount(collection);
+    await incrementGenerationCount(collection);
+
+    expect((await getAppSettings(collection)).generationCount).toBe(3);
+  });
+
+  it('reset (generationCount: 0) does not touch other fields', async () => {
+    const collection = makeCollection();
+    await updateAppSettings(collection, { companyName: 'Acme Corp' });
+    await incrementGenerationCount(collection);
+    await incrementGenerationCount(collection);
+
+    const result = await updateAppSettings(collection, { generationCount: 0 });
+
+    expect(result.generationCount).toBe(0);
+    expect(result.companyName).toBe('Acme Corp');
+  });
+
+  it('hashDeletePassword/verifyDeletePassword round-trip, and reject the wrong password', async () => {
+    const collection = makeCollection();
+    const hash = hashDeletePassword('supersecret');
+    const settings = await updateAppSettings(collection, { deletePasswordHash: hash });
+
+    expect(verifyDeletePassword(settings, 'supersecret')).toBe(true);
+    expect(verifyDeletePassword(settings, 'wrong')).toBe(false);
+  });
+
+  it('verifyDeletePassword rejects any password when none has been configured', async () => {
+    const collection = makeCollection();
+    const settings = await getAppSettings(collection);
+
+    expect(verifyDeletePassword(settings, 'anything')).toBe(false);
   });
 });
