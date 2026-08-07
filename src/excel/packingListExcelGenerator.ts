@@ -192,14 +192,16 @@ export async function addPackingListSheet(
     (sum, article) => sum + article.valeurDeclaree,
     0
   );
-  // Somme DD HT / DD unitaire HT sit right after the tax code columns —
-  // derived sums of those tax values, given their own green header/row
-  // color so they stand out from the amber tax columns next to them.
-  const sommeDdColumn = BASE_COLUMN_COUNT + allTaxCodes.length + 1;
+  // Somme DD HT / DD unitaire HT sit right after HS CODE — the individual
+  // tax montant columns that used to sit here (DTS IMPORT NORMAL, TVA
+  // IMPORT AUTRE PDS, etc.) are intentionally not shown on this sheet;
+  // they're still computed internally (see the row loop below) to feed
+  // Somme DD HT/TTC and the "<tax> Total" columns, just not displayed.
+  const sommeDdColumn = BASE_COLUMN_COUNT + 1;
   const ddUnitaireColumn = sommeDdColumn + 1;
   // One "<abbreviation> Total" column per tax (montant x pieces for the
-  // row), right after DD unitaire — same order as the tax code columns
-  // themselves, so column N here always corresponds to tax column N.
+  // row), right after DD unitaire — same order as allTaxCodes, so column N
+  // here always corresponds to allTaxCodes[N].
   const taxTotalColumns = allTaxCodes.map((_, i) => ddUnitaireColumn + 1 + i);
   // Somme DD TTC / DD unitaire TTC close out the sheet — the row's taxes
   // summed (montant x pieces, i.e. the sum of the "<tax> Total" columns)
@@ -210,17 +212,14 @@ export async function addPackingListSheet(
   // value (see firstUnitTaxes), not derived from this row's own quantities.
   const prorataColumn = ddUnitaireTtcColumn + 1;
   const columnCount = prorataColumn;
-  const taxColumns = new Set<number>(allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i));
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
-    // Tax code columns stay amber; Somme DD HT / DD unitaire HT get their
-    // own green so they stand out from the tax montants; the "<tax> Total"
+    // Somme DD HT / DD unitaire HT get their own green; the "<tax> Total"
     // columns get their own rose color; the closing Somme DD TTC / DD
     // unitaire TTC pair gets a second, distinct shade of green from the HT
-    // pair, so all four read as visibly distinct from each other; PRORATA
+    // pair, so all three read as visibly distinct from each other; PRORATA
     // gets the same emerald "value" color Global uses for its own Prorata
     // column.
-    { kind: 'tax' as const, from: BASE_COLUMN_COUNT + 1, to: sommeDdColumn - 1 },
     { kind: 'sumHt' as const, from: sommeDdColumn, to: ddUnitaireColumn },
     { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: sommeDdTtcColumn - 1 },
     { kind: 'sumTtc' as const, from: sommeDdTtcColumn, to: ddUnitaireTtcColumn },
@@ -238,17 +237,11 @@ export async function addPackingListSheet(
     declarationValeurDeclareeTotal
   );
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
-  // The tax columns (DTS IMPORT NORMAL, TVA IMPORT AUTRE PDS, etc.) and
-  // Somme DD are zero-padded to at least 4 digits before the decimal
-  // separator, with no thousands separator — requested so every value in
-  // these columns lines up the same width (e.g. "0000,00" rather than
-  // "0,00"), instead of the shared money format.
-  const zeroPaddedColumns = new Set<number>([
-    ...taxColumns,
-    sommeDdColumn,
-    ...taxTotalColumns,
-    sommeDdTtcColumn,
-  ]);
+  // Somme DD and the "<tax> Total" columns are zero-padded to at least 4
+  // digits before the decimal separator, with no thousands separator —
+  // requested so every value in these columns lines up the same width (e.g.
+  // "0000,00" rather than "0,00"), instead of the shared money format.
+  const zeroPaddedColumns = new Set<number>([sommeDdColumn, ...taxTotalColumns, sommeDdTtcColumn]);
 
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4 }] });
 
@@ -261,8 +254,6 @@ export async function addPackingListSheet(
     { key: 'total', width: 18 },
     { key: 'origin', width: 22 },
     { key: 'hsCode', width: 18 },
-    ...taxCodes.map((code) => ({ key: code, width: 24 })),
-    ...extraCodes.map((code) => ({ key: code, width: 24 })),
     { key: 'sommeDd', width: 18 },
     { key: 'ddUnitaire', width: 18 },
     // Wide enough to fit the full "<tax designation> Total" header text
@@ -297,8 +288,6 @@ export async function addPackingListSheet(
     'total',
     'origin',
     'HS CODE',
-    ...taxCodes.map(taxCodeDesignation),
-    ...extraOrdonnancementTaxes.map((tax) => tax.designation),
     'Somme DD HT',
     'DD unitaire HT',
     ...allTaxDesignations.map((designation) => `${designation} Total`),
@@ -332,10 +321,14 @@ export async function addPackingListSheet(
       // above to match against the declaration's tax totals.
       hsCode: row.hsCode,
     };
+    // Not displayed as its own columns (see the comment on sommeDdColumn
+    // above), but still needed per-code to build Somme DD HT/TTC and the
+    // "<tax> Total" columns below.
+    const taxMontants = new Map<string, number>();
     let sommeDd = 0;
     for (const code of allTaxCodes) {
       const montant = matchedTaxes?.get(code) ?? 0;
-      rowValues[code] = montant;
+      taxMontants.set(code, montant);
       if (code !== VAT_TAX_CODE) {
         sommeDd += montant;
       }
@@ -349,7 +342,7 @@ export async function addPackingListSheet(
     // the "total" column (unit price x pieces).
     let sommeDdTtc = 0;
     for (const code of allTaxCodes) {
-      const taxTotal = Number(rowValues[code]) * row.pieces;
+      const taxTotal = taxMontants.get(code)! * row.pieces;
       rowValues[`${code}_total`] = taxTotal;
       sommeDdTtc += taxTotal;
     }
@@ -369,14 +362,7 @@ export async function addPackingListSheet(
       excelRow,
       columnCount,
       index,
-      new Set([
-        UNIT_COLUMN,
-        TOTAL_COLUMN,
-        ...taxColumns,
-        sommeDdColumn,
-        ...taxTotalColumns,
-        sommeDdTtcColumn,
-      ]),
+      new Set([UNIT_COLUMN, TOTAL_COLUMN, sommeDdColumn, ...taxTotalColumns, sommeDdTtcColumn]),
       new Set([prorataColumn])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
