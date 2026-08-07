@@ -22,6 +22,11 @@ import {
   type ColumnGroup,
 } from './excelStyling.js';
 
+// TVA IMPORT AUTRE PDS — excluded from Somme DD HT (Hors Taxe: duties
+// without VAT) but still counted in Somme DD TTC (Toutes Taxes Comprises),
+// same HT/TTC distinction the two column pairs' names already promise.
+const VAT_TAX_CODE = '002109';
+
 const BASE_COLUMN_COUNT = 8;
 const DESCRIPTION_COLUMN = 2;
 const PIECES_COLUMN = 4;
@@ -331,7 +336,9 @@ export async function addPackingListSheet(
     for (const code of allTaxCodes) {
       const montant = matchedTaxes?.get(code) ?? 0;
       rowValues[code] = montant;
-      sommeDd += montant;
+      if (code !== VAT_TAX_CODE) {
+        sommeDd += montant;
+      }
     }
     // "DD unitaire" — Somme DD spread over this row's piece count, the same
     // per-unit pattern as Global's Valeur Déclarée / Unité.

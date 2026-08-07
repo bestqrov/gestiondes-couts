@@ -235,7 +235,9 @@ describe('addPackingListSheet', () => {
     expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
     expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
 
-    const expectedSommeDd = firstUnit000110 + firstUnit002109;
+    // 002109 (TVA IMPORT AUTRE PDS) is excluded from Somme DD HT — HT means
+    // "Hors Taxe", i.e. without VAT.
+    const expectedSommeDd = firstUnit000110;
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd / 18, 6);
     expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
@@ -507,9 +509,10 @@ describe('addPackingListSheet', () => {
     const expectedRedvInf = 100 / 18;
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedRedvInf, 2);
 
+    // 002109 (TVA IMPORT AUTRE PDS) is excluded from Somme DD HT — HT means
+    // "Hors Taxe", i.e. without VAT.
     const firstUnit000110 = 0.24;
-    const firstUnit002109 = 1.93;
-    const expectedSommeDd = firstUnit000110 + firstUnit002109 + expectedRedvInf;
+    const expectedSommeDd = firstUnit000110 + expectedRedvInf;
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd, 2);
 
     // Row 6 has no matching article, so the new column defaults to 0 too.
@@ -599,6 +602,41 @@ describe('addPackingListSheet', () => {
     expect(headerRow.getCell(10).value).toBe('REMISES CREDIT');
     expect(headerRow.getCell(13).value).toBe('RI SEGMA Total');
     expect(headerRow.getCell(14).value).toBe('REMISES CREDIT Total');
+  });
+
+  it('excludes TVA IMPORT AUTRE PDS (002109) from Somme DD HT but still counts it in Somme DD TTC', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-vat-excluded-from-ht');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      DECLARATION_WITH_TAXES,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+    const headerRow = sheet.getRow(4);
+
+    // Columns 1-8 base, 9 000110 (DTS IMPORT NORMAL), 10 002109 (TVA IMPORT
+    // AUTRE PDS), 11 Somme DD HT, 12 DD unitaire HT, 15 Somme DD TTC.
+    expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS');
+    expect(headerRow.getCell(11).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(15).value).toBe('Somme DD TTC');
+
+    const matchedRow = sheet.getRow(5);
+    const firstUnit000110 = 0.24;
+    const firstUnit002109 = 1.93;
+    // Somme DD HT = only 000110's first-unit share, VAT left out.
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(firstUnit000110, 2);
+    // Somme DD TTC = both taxes' totals (montant x pieces), VAT included.
+    const expectedSommeDdTtc = (firstUnit000110 + firstUnit002109) * 18;
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(expectedSommeDdTtc, 2);
   });
 
   it('adds a PRORATA column with the matched Global article\'s own Prorata value, not derived from the row\'s own pieces', async () => {
