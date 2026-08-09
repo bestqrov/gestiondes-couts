@@ -1379,6 +1379,20 @@ const GENERATE_PAGE_STYLE = `
   .modal-card h2 { font-size: 16px; margin: 0 0 8px; color: var(--ink-900); }
   .modal-card p { font-size: 13.5px; color: var(--ink-500); margin: 0 0 20px; line-height: 1.5; }
   .modal-card button { margin-top: 0; width: auto; padding: 10px 18px; }
+  .extra-costs-card { max-width: 480px; text-align: left; }
+  .extra-costs-card h2 { text-align: center; }
+  .extra-costs-card p { text-align: center; }
+  .extra-costs-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-bottom: 20px;
+  }
+  .extra-costs-grid label {
+    display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-500); font-weight: 600;
+  }
+  .extra-costs-grid input {
+    border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
+    color: var(--ink-900); background: var(--card-bg);
+  }
+  .extra-costs-actions { display: flex; gap: 10px; justify-content: flex-end; }
 `;
 
 export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: string): string {
@@ -1512,6 +1526,25 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       </div>
     </div>
 
+    <div class="modal-overlay" id="extraCostsModal">
+      <div class="modal-card extra-costs-card">
+        <h2>Frais supplémentaires</h2>
+        <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Laissez à 0 si non applicable.</p>
+        <div class="extra-costs-grid">
+          <label>Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" value="0" /></label>
+          <label>Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" value="0" /></label>
+          <label>Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" value="0" /></label>
+          <label>Transit<input type="number" id="extra-transit" step="0.01" min="0" value="0" /></label>
+          <label>Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" value="0" /></label>
+          <label>MCIA<input type="number" id="extra-mcia" step="0.01" min="0" value="0" /></label>
+        </div>
+        <div class="extra-costs-actions">
+          <button type="button" class="secondary" id="extraCostsCancel">Annuler</button>
+          <button type="button" id="extraCostsConfirm">Générer HS TOTAL</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       function wireDropZone(zoneId, inputId, nameId) {
         const zone = document.getElementById(zoneId);
@@ -1556,6 +1589,10 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const newDeclarationBtn = document.getElementById('newDeclarationBtn');
       const validationModal = document.getElementById('validationModal');
       const validationModalOk = document.getElementById('validationModalOk');
+      const extraCostsModal = document.getElementById('extraCostsModal');
+      const extraCostsCancel = document.getElementById('extraCostsCancel');
+      const extraCostsConfirm = document.getElementById('extraCostsConfirm');
+      const extraCostFieldIds = ['fraisTransport', 'assurance', 'fraisLocaux', 'transit', 'transportNational', 'mcia'];
       const resultsSection = document.getElementById('resultsSection');
       const resultsContent = document.getElementById('resultsContent');
       const showResultsBtn = document.getElementById('showResultsBtn');
@@ -1604,7 +1641,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         form.parentNode.insertBefore(errorDiv, form);
       }
 
-      form.addEventListener('submit', async (e) => {
+      form.addEventListener('submit', (e) => {
         e.preventDefault();
 
         const liquidationFile = document.getElementById('input-liquidation').files[0];
@@ -1619,6 +1656,21 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
           return;
         }
 
+        extraCostsModal.classList.add('visible');
+      });
+
+      extraCostsCancel.addEventListener('click', () => extraCostsModal.classList.remove('visible'));
+      extraCostsModal.addEventListener('click', (e) => {
+        if (e.target === extraCostsModal) extraCostsModal.classList.remove('visible');
+      });
+
+      extraCostsConfirm.addEventListener('click', async () => {
+        extraCostsModal.classList.remove('visible');
+
+        const liquidationFile = document.getElementById('input-liquidation').files[0];
+        const dumFile = document.getElementById('input-dum').files[0];
+        const packingListFile = document.getElementById('input-packingList').files[0];
+
         submitBtn.disabled = true;
         statusEl.className = 'busy';
         statusEl.textContent = 'Traitement en cours (OCR + parsing + génération)...';
@@ -1627,6 +1679,10 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         formData.append('liquidation', liquidationFile);
         formData.append('dum', dumFile);
         formData.append('packingList', packingListFile);
+        extraCostFieldIds.forEach((key) => {
+          const input = document.getElementById('extra-' + key);
+          formData.append(key, String(Number(input.value) || 0));
+        });
 
         try {
           const response = await fetch('/generate', { method: 'POST', body: formData });

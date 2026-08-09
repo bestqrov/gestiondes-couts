@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
 import { addArticleSummarySheet } from './articleSummaryExcelGenerator.js';
 import { addUnitLevelSheet } from './unitLevelExcelGenerator.js';
-import { addPackingListSheet } from './packingListExcelGenerator.js';
+import { addPackingListSheet, type ExtraCosts } from './packingListExcelGenerator.js';
 import type { BrandingInfo } from './excelStyling.js';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 
@@ -14,7 +14,8 @@ export async function generateCombinedExcel(
   declaration: Declaration,
   packingListRows: PackingListRow[],
   outputPath: string,
-  branding: BrandingInfo
+  branding: BrandingInfo,
+  extraCosts?: ExtraCosts
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
   // Computed once and passed to every sheet so their letterheads show the
@@ -24,7 +25,7 @@ export async function generateCombinedExcel(
 
   await addArticleSummarySheet(workbook, declaration, branding, generatedAt);
   await addUnitLevelSheet(workbook, declaration, branding, generatedAt, 'Global');
-  await addPackingListSheet(workbook, packingListRows, declaration, branding, generatedAt);
+  await addPackingListSheet(workbook, packingListRows, declaration, branding, generatedAt, extraCosts);
 
   await workbook.xlsx.writeFile(outputPath);
 }

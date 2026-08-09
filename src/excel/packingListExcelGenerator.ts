@@ -27,6 +27,24 @@ import {
 // same HT/TTC distinction the two column pairs' names already promise.
 const VAT_TAX_CODE = '002109';
 
+// Manually-entered shipment-wide costs (not present in any parsed document)
+// that get spread across every HS total row by that row's matched PRORATA
+// share, one column each, right after PRORATA — same "total x prorata"
+// spread the PRORATA column itself documents. Order here is the order the
+// columns appear in on the sheet.
+export const EXTRA_COST_FIELDS = [
+  { key: 'fraisTransport', label: 'Montant Frais transport' },
+  { key: 'assurance', label: 'Montant Assurance' },
+  { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
+  { key: 'transit', label: 'Transit' },
+  { key: 'transportNational', label: 'Transport national' },
+  { key: 'mcia', label: 'MCIA' },
+] as const;
+
+export type ExtraCostFieldKey = (typeof EXTRA_COST_FIELDS)[number]['key'];
+
+export type ExtraCosts = Record<ExtraCostFieldKey, number>;
+
 const BASE_COLUMN_COUNT = 8;
 const DESCRIPTION_COLUMN = 2;
 const PIECES_COLUMN = 4;
@@ -171,6 +189,14 @@ export async function addPackingListSheet(
   declaration: Declaration,
   branding: BrandingInfo,
   generatedAt: Date,
+  extraCosts: ExtraCosts = {
+    fraisTransport: 0,
+    assurance: 0,
+    fraisLocaux: 0,
+    transit: 0,
+    transportNational: 0,
+    mcia: 0,
+  },
   sheetName = 'HS total'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
@@ -211,19 +237,22 @@ export async function addPackingListSheet(
   // PRORATA closes out the sheet — the matched Global article's own Prorata
   // value (see firstUnitTaxes), not derived from this row's own quantities.
   const prorataColumn = ddUnitaireTtcColumn + 1;
-  const columnCount = prorataColumn;
+  // One column per manually-entered extra cost field, right after PRORATA,
+  // same order as EXTRA_COST_FIELDS.
+  const extraCostColumns = EXTRA_COST_FIELDS.map((_, i) => prorataColumn + 1 + i);
+  const columnCount = extraCostColumns[extraCostColumns.length - 1];
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
     // Somme DD HT / DD unitaire HT get their own green; the "<tax> Total"
     // columns get their own rose color; the closing Somme DD TTC / DD
     // unitaire TTC pair gets a second, distinct shade of green from the HT
     // pair, so all three read as visibly distinct from each other; PRORATA
-    // gets the same emerald "value" color Global uses for its own Prorata
-    // column.
+    // and the extra cost columns get the same emerald "value" color Global
+    // uses for its own Prorata column.
     { kind: 'sumHt' as const, from: sommeDdColumn, to: ddUnitaireColumn },
     { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: sommeDdTtcColumn - 1 },
     { kind: 'sumTtc' as const, from: sommeDdTtcColumn, to: ddUnitaireTtcColumn },
-    { kind: 'value' as const, from: prorataColumn, to: prorataColumn },
+    { kind: 'value' as const, from: prorataColumn, to: columnCount },
   ];
 
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
@@ -265,6 +294,7 @@ export async function addPackingListSheet(
     { key: 'sommeDdTtc', width: 18 },
     { key: 'ddUnitaireTtc', width: 18 },
     { key: 'prorata', width: 18 },
+    ...EXTRA_COST_FIELDS.map((field) => ({ key: field.key, width: Math.max(18, field.label.length + 2) })),
   ];
 
   await addSheetTitleRows(
@@ -294,6 +324,7 @@ export async function addPackingListSheet(
     'Somme DD TTC',
     'DD unitaire TTC',
     'PRORATA',
+    ...EXTRA_COST_FIELDS.map((field) => field.label),
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
@@ -355,14 +386,28 @@ export async function addPackingListSheet(
     // PRORATA — the matched Global article's own Prorata value (its first
     // unit row's, same as every tax column above), not a value derived from
     // this row's own pieces/total.
-    rowValues.prorata = matchedData?.prorata ?? 0;
+    const prorata = matchedData?.prorata ?? 0;
+    rowValues.prorata = prorata;
+    // Each extra cost field's shipment-wide total spread across this row by
+    // its matched PRORATA share, same "total x prorata" split Global uses
+    // for its declaration-wide-only taxes (see firstUnitTaxes above).
+    for (const field of EXTRA_COST_FIELDS) {
+      rowValues[field.key] = extraCosts[field.key] * prorata;
+    }
 
     const excelRow = sheet.addRow(rowValues);
     styleDataRow(
       excelRow,
       columnCount,
       index,
-      new Set([UNIT_COLUMN, TOTAL_COLUMN, sommeDdColumn, ...taxTotalColumns, sommeDdTtcColumn]),
+      new Set([
+        UNIT_COLUMN,
+        TOTAL_COLUMN,
+        sommeDdColumn,
+        ...taxTotalColumns,
+        sommeDdTtcColumn,
+        ...extraCostColumns,
+      ]),
       new Set([prorataColumn])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal

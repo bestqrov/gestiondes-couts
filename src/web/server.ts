@@ -335,7 +335,20 @@ app.post(
       // producing a spurious "Not Found" (confirmed in production logs).
       const generatedFilePath = path.join(OUTPUT_DIR, `declaration-${randomUUID()}.xlsx`);
       const branding = await getAppSettings(await getSettingsCollection());
-      await generateCombinedExcel(declaration, packingListRows, generatedFilePath, branding);
+      const extraCostBody = req.body as Record<string, string | undefined>;
+      const parseExtraCost = (value: string | undefined): number => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const extraCosts = {
+        fraisTransport: parseExtraCost(extraCostBody.fraisTransport),
+        assurance: parseExtraCost(extraCostBody.assurance),
+        fraisLocaux: parseExtraCost(extraCostBody.fraisLocaux),
+        transit: parseExtraCost(extraCostBody.transit),
+        transportNational: parseExtraCost(extraCostBody.transportNational),
+        mcia: parseExtraCost(extraCostBody.mcia),
+      };
+      await generateCombinedExcel(declaration, packingListRows, generatedFilePath, branding, extraCosts);
 
       try {
         await incrementGenerationCount(await getSettingsCollection());
