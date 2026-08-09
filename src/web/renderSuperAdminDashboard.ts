@@ -1400,6 +1400,7 @@ const GENERATE_PAGE_STYLE = `
   @media (max-width: 720px) {
     .extra-costs-grid { grid-template-columns: 1fr 1fr; }
   }
+  .drop-zone.zone-locked { opacity: 0.45; pointer-events: none; cursor: not-allowed; }
 `;
 
 export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: string): string {
@@ -1579,6 +1580,44 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       wireDropZone('zone-dum', 'input-dum', 'name-dum');
       wireDropZone('zone-packingList', 'input-packingList', 'name-packingList');
 
+      const extraCostFields = [
+        { key: 'fraisTransport', label: 'Montant Frais transport' },
+        { key: 'assurance', label: 'Montant Assurance' },
+        { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
+        { key: 'transit', label: 'Transit' },
+        { key: 'transportNational', label: 'Transport national' },
+        { key: 'mcia', label: 'MCIA' },
+      ];
+      const dropZones = [
+        { zoneId: 'zone-liquidation', inputId: 'input-liquidation' },
+        { zoneId: 'zone-dum', inputId: 'input-dum' },
+        { zoneId: 'zone-packingList', inputId: 'input-packingList' },
+      ];
+
+      function extraCostsAreComplete() {
+        return extraCostFields.every((field) => {
+          const raw = document.getElementById('extra-' + field.key).value.trim();
+          if (raw === '') return false;
+          const numeric = Number(raw);
+          return Number.isFinite(numeric) && numeric >= 0;
+        });
+      }
+
+      function updateDropZonesLock() {
+        const unlocked = extraCostsAreComplete();
+        dropZones.forEach(({ zoneId, inputId }) => {
+          const zone = document.getElementById(zoneId);
+          const input = document.getElementById(inputId);
+          zone.classList.toggle('zone-locked', !unlocked);
+          input.disabled = !unlocked;
+        });
+      }
+
+      extraCostFields.forEach((field) => {
+        document.getElementById('extra-' + field.key).addEventListener('input', updateDropZonesLock);
+      });
+      updateDropZonesLock();
+
       const form = document.getElementById('generateForm');
       const submitBtn = document.getElementById('submitBtn');
       const statusEl = document.getElementById('status');
@@ -1591,14 +1630,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const newDeclarationBtn = document.getElementById('newDeclarationBtn');
       const validationModal = document.getElementById('validationModal');
       const validationModalOk = document.getElementById('validationModalOk');
-      const extraCostFields = [
-        { key: 'fraisTransport', label: 'Montant Frais transport' },
-        { key: 'assurance', label: 'Montant Assurance' },
-        { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
-        { key: 'transit', label: 'Transit' },
-        { key: 'transportNational', label: 'Transport national' },
-        { key: 'mcia', label: 'MCIA' },
-      ];
       const resultsSection = document.getElementById('resultsSection');
       const resultsContent = document.getElementById('resultsContent');
       const showResultsBtn = document.getElementById('showResultsBtn');
