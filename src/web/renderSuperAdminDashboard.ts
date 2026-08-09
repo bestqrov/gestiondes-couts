@@ -1404,14 +1404,14 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
   const body = `
     <div class="card extra-costs-inline-card">
       <h2>Frais supplémentaires</h2>
-      <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Laissez à 0 si non applicable.</p>
+      <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Tous les champs sont obligatoires.</p>
       <div class="extra-costs-grid">
-        <label>Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" value="0" /></label>
-        <label>Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" value="0" /></label>
-        <label>Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" value="0" /></label>
-        <label>Transit<input type="number" id="extra-transit" step="0.01" min="0" value="0" /></label>
-        <label>Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" value="0" /></label>
-        <label>MCIA<input type="number" id="extra-mcia" step="0.01" min="0" value="0" /></label>
+        <label>Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" required /></label>
+        <label>Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" required /></label>
+        <label>Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" required /></label>
+        <label>Transit<input type="number" id="extra-transit" step="0.01" min="0" required /></label>
+        <label>Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" required /></label>
+        <label>MCIA<input type="number" id="extra-mcia" step="0.01" min="0" required /></label>
       </div>
     </div>
 
@@ -1585,7 +1585,14 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const newDeclarationBtn = document.getElementById('newDeclarationBtn');
       const validationModal = document.getElementById('validationModal');
       const validationModalOk = document.getElementById('validationModalOk');
-      const extraCostFieldIds = ['fraisTransport', 'assurance', 'fraisLocaux', 'transit', 'transportNational', 'mcia'];
+      const extraCostFields = [
+        { key: 'fraisTransport', label: 'Montant Frais transport' },
+        { key: 'assurance', label: 'Montant Assurance' },
+        { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
+        { key: 'transit', label: 'Transit' },
+        { key: 'transportNational', label: 'Transport national' },
+        { key: 'mcia', label: 'MCIA' },
+      ];
       const resultsSection = document.getElementById('resultsSection');
       const resultsContent = document.getElementById('resultsContent');
       const showResultsBtn = document.getElementById('showResultsBtn');
@@ -1634,8 +1641,29 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         form.parentNode.insertBefore(errorDiv, form);
       }
 
+      function validateExtraCosts() {
+        for (const field of extraCostFields) {
+          const input = document.getElementById('extra-' + field.key);
+          const raw = input.value.trim();
+          if (raw === '') {
+            showValidationModal('SVP saisissez le montant de "' + field.label + '".');
+            input.focus();
+            return false;
+          }
+          const numeric = Number(raw);
+          if (!Number.isFinite(numeric) || numeric < 0) {
+            showValidationModal('Le montant de "' + field.label + '" doit être un nombre valide, supérieur ou égal à 0.');
+            input.focus();
+            return false;
+          }
+        }
+        return true;
+      }
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        if (!validateExtraCosts()) return;
 
         const liquidationFile = document.getElementById('input-liquidation').files[0];
         const dumFile = document.getElementById('input-dum').files[0];
@@ -1657,9 +1685,9 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         formData.append('liquidation', liquidationFile);
         formData.append('dum', dumFile);
         formData.append('packingList', packingListFile);
-        extraCostFieldIds.forEach((key) => {
-          const input = document.getElementById('extra-' + key);
-          formData.append(key, String(Number(input.value) || 0));
+        extraCostFields.forEach((field) => {
+          const input = document.getElementById('extra-' + field.key);
+          formData.append(field.key, input.value.trim());
         });
 
         try {
