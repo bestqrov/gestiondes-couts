@@ -1385,12 +1385,18 @@ const GENERATE_PAGE_STYLE = `
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 16px;
   }
   .extra-costs-grid label {
-    display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-500); font-weight: 600;
+    display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 700;
   }
   .extra-costs-grid input {
     border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
-    color: var(--ink-900); background: var(--card-bg);
+    color: var(--ink-900); background: var(--card-bg); font-weight: 400;
   }
+  .extra-costs-grid label.ec-transport { color: #4F46E5; }
+  .extra-costs-grid label.ec-assurance { color: #D97706; }
+  .extra-costs-grid label.ec-fraisLocaux { color: #059669; }
+  .extra-costs-grid label.ec-transit { color: #DB2777; }
+  .extra-costs-grid label.ec-transportNational { color: #0891B2; }
+  .extra-costs-grid label.ec-mcia { color: #7C3AED; }
   @media (max-width: 720px) {
     .extra-costs-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -1406,12 +1412,12 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       <h2>Frais supplémentaires</h2>
       <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Tous les champs sont obligatoires.</p>
       <div class="extra-costs-grid">
-        <label>Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" required /></label>
-        <label>Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" required /></label>
-        <label>Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" required /></label>
-        <label>Transit<input type="number" id="extra-transit" step="0.01" min="0" required /></label>
-        <label>Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" required /></label>
-        <label>MCIA<input type="number" id="extra-mcia" step="0.01" min="0" required /></label>
+        <label class="ec-transport">Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" required /></label>
+        <label class="ec-assurance">Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" required /></label>
+        <label class="ec-fraisLocaux">Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" required /></label>
+        <label class="ec-transit">Transit<input type="number" id="extra-transit" step="0.01" min="0" required /></label>
+        <label class="ec-transportNational">Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" required /></label>
+        <label class="ec-mcia">MCIA<input type="number" id="extra-mcia" step="0.01" min="0" required /></label>
       </div>
     </div>
 
