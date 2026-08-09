@@ -197,13 +197,21 @@ describe('addPackingListSheet', () => {
 
     // Requested: the individual tax montant columns (DTS IMPORT NORMAL, TVA
     // IMPORT AUTRE PDS, ...) that used to sit between HS CODE and Somme DD
-    // HT are no longer shown — Somme DD HT (col 9) sits right after HS CODE
-    // (col 8).
+    // HT are no longer shown as their own columns — instead their "<tax>
+    // Total" columns (11/12 below) sit right after HS CODE (col 8), and
+    // Somme DD HT (col 11) sits right after those, immediately before Somme
+    // DD TTC.
+    const taxTotalArgb = 'FFDB2777';
+    expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL Total');
+    expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS Total');
+    expect((headerRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(10).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+
     const sumHtArgb = 'FF15803D';
-    expect(headerRow.getCell(9).value).toBe('Somme DD HT');
-    expect(headerRow.getCell(10).value).toBe('DD unitaire HT');
-    expect((headerRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
-    expect((headerRow.getCell(10).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
+    expect(headerRow.getCell(11).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(12).value).toBe('DD unitaire HT');
+    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
+    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtArgb);
 
     // Row 5 — HS code 61044300 matches the one article's 610443 prefix. The
     // article's montant (4.32 / 34.6) is spread across its 18 units, and
@@ -219,37 +227,30 @@ describe('addPackingListSheet', () => {
     // 002109 (TVA IMPORT AUTRE PDS) is excluded from Somme DD HT — HT means
     // "Hors Taxe", i.e. without VAT.
     const expectedSommeDd = firstUnit000110;
-    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(expectedSommeDd, 2);
-    expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(expectedSommeDd / 18, 6);
-    expect(matchedRow.getCell(10).numFmt).toBe('0000.000000');
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
+    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd / 18, 6);
+    expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
     // Somme DD HT is zero-padded to at least 4 digits, no thousands separator.
-    expect(matchedRow.getCell(9).numFmt).toBe('0000.00');
+    expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
     // The light-green tint carries down the data rows too, not just the
     // header, so the columns read as visibly distinct all the way down.
     const sumHtRowFillArgb = 'FFDCFCE7';
-    expect((matchedRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
-    expect((matchedRow.getCell(10).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
+    expect((matchedRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
+    expect((matchedRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
     // Pieces (col 4) is a plain whole count — no thousands separator, no decimals.
     expect(matchedRow.getCell(4).numFmt).toBe('0');
 
     // Row 6 — HS code 61142000 (prefix 611420) has no matching article, so
     // Somme DD HT defaults to 0.
     const unmatchedRow = sheet.getRow(6);
-    expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
-    expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
-    expect((unmatchedRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
+    expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
+    expect((unmatchedRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(sumHtRowFillArgb);
 
-    // Columns 11/12 are the "<tax> Total" columns (montant x pieces), then
     // 13 Somme DD TTC / 14 DD unitaire TTC close out the taxes section —
-    // Somme DD TTC is the sum of those "<tax> Total" columns for the row
-    // (VAT included, unlike Somme DD HT), and DD unitaire TTC spreads that
-    // sum per piece.
-    const taxTotalArgb = 'FFDB2777';
-    expect(headerRow.getCell(11).value).toBe('DTS IMPORT NORMAL Total');
-    expect(headerRow.getCell(12).value).toBe('TVA IMPORT AUTRE PDS Total');
-    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
-    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
-
+    // Somme DD TTC is the sum of the "<tax> Total" columns for the row (VAT
+    // included, unlike Somme DD HT), and DD unitaire TTC spreads that sum
+    // per piece.
     const sumTtcArgb = 'FF4D7C0F';
     const sumTtcRowFillArgb = 'FFECFCCB';
     expect(headerRow.getCell(13).value).toBe('Somme DD TTC');
@@ -260,8 +261,8 @@ describe('addPackingListSheet', () => {
     const expectedTaxTotal000110 = firstUnit000110 * 18;
     const expectedTaxTotal002109 = firstUnit002109 * 18;
     const expectedSommeDdTtc = expectedTaxTotal000110 + expectedTaxTotal002109;
-    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedTaxTotal000110, 2);
-    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedTaxTotal002109, 2);
+    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(expectedTaxTotal000110, 2);
+    expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(expectedTaxTotal002109, 2);
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
     expect(Number(matchedRow.getCell(14).value)).toBeCloseTo(expectedSommeDdTtc / 18, 6);
     expect(matchedRow.getCell(13).numFmt).toBe('0000.00');
@@ -338,11 +339,12 @@ describe('addPackingListSheet', () => {
     // Both rows share HS position 610443, but only article 1 (the first
     // encountered, matching Global's row order) is used — its first unit's
     // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of
-    // both. Read via Somme DD HT (col 9, right after HS CODE) since the
-    // individual tax columns aren't shown; the only tax here is 000110 (not
-    // VAT), so Somme DD HT equals that value exactly.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(0.25, 2);
-    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(0.25, 2);
+    // both. Read via Somme DD HT (col 10, right after the one tax's "Total"
+    // column at col 9) since the individual tax columns aren't shown; the
+    // only tax here is 000110 (not VAT), so Somme DD HT equals that value
+    // exactly.
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25, 2);
+    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
@@ -406,11 +408,12 @@ describe('addPackingListSheet', () => {
     // Row 5 (origin CHINA, normalized to CHINE) picks up only the CHINE
     // article's first-unit value: 2.5 / 10 = 0.25. Row 6 (origin
     // BANGLADESH) picks up only the BANGLADESH article's first-unit value:
-    // 9.99 / 5 = 1.998. Read via Somme DD HT (col 9) since the individual
-    // tax columns aren't shown; the only tax here is 000110 (not VAT), so
-    // Somme DD HT equals that value exactly.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(2.5 / 10, 2);
-    expect(Number(sheet.getRow(6).getCell(9).value)).toBeCloseTo(9.99 / 5, 2);
+    // 9.99 / 5 = 1.998. Read via Somme DD HT (col 10, right after the one
+    // tax's "Total" column at col 9) since the individual tax columns
+    // aren't shown; the only tax here is 000110 (not VAT), so Somme DD HT
+    // equals that value exactly.
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(2.5 / 10, 2);
+    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(9.99 / 5, 2);
   });
 
   it('still matches by HS code prefix alone when an HS position has only one country of origin, even if the origin spelling has no known alias (regression: origin-only matching zeroed out real files)', async () => {
@@ -459,8 +462,9 @@ describe('addPackingListSheet', () => {
 
     // Still matches — this HS prefix has exactly one origin in the
     // declaration, so the mismatched spelling never comes into play. Value
-    // is the article's first-unit share: 4.32 / 18.
-    expect(Number(sheet.getRow(5).getCell(9).value)).toBeCloseTo(4.32 / 18, 2);
+    // is the article's first-unit share: 4.32 / 18. Read via Somme DD HT
+    // (col 10, right after the one tax's "Total" column at col 9).
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(4.32 / 18, 2);
   });
 
   it('adds a column for a RECAPITULATION rubrique that never appears on any article, filled as montant × Prorata for the matched article\'s first unit', async () => {
@@ -490,14 +494,15 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Header: item..HS CODE (1-8), Somme DD HT (9), DD unitaire HT (10),
-    // then the "<tax> Total" columns in allTaxCodes order (000110, 002109,
-    // 002701): 11, 12, REDV.INF. Total (13). REDV.INF. no longer gets its
-    // own montant column (the individual tax columns aren't shown), but it
-    // still feeds Somme DD HT and gets its own "Total" column.
-    expect(headerRow.getCell(9).value).toBe('Somme DD HT');
-    expect(headerRow.getCell(10).value).toBe('DD unitaire HT');
-    expect(headerRow.getCell(13).value).toBe('REDV.INF.(AVEC D et T) Total');
+    // Header: item..HS CODE (1-8), then the "<tax> Total" columns in
+    // allTaxCodes order (000110, 002109, 002701): 9, 10, REDV.INF. Total
+    // (11), then Somme DD HT (12), DD unitaire HT (13), right before Somme
+    // DD TTC. REDV.INF. no longer gets its own montant column (the
+    // individual tax columns aren't shown), but it still feeds Somme DD HT
+    // and gets its own "Total" column.
+    expect(headerRow.getCell(11).value).toBe('REDV.INF.(AVEC D et T) Total');
+    expect(headerRow.getCell(12).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(13).value).toBe('DD unitaire HT');
 
     // The declaration's only article has valeurDeclaree 172.98 across 18
     // units, and it's also the declaration's only article, so its own
@@ -510,14 +515,14 @@ describe('addPackingListSheet', () => {
     // "Hors Taxe", i.e. without VAT. REDV.INF. is not VAT, so it counts.
     const firstUnit000110 = 0.24;
     const expectedSommeDd = firstUnit000110 + expectedRedvInf;
-    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(expectedSommeDd, 2);
-    expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedRedvInf * 18, 2);
+    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd, 2);
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedRedvInf * 18, 2);
 
     // Row 6 has no matching article, so Somme DD HT and REDV.INF. Total
     // default to 0 too.
     const unmatchedRow = sheet.getRow(6);
-    expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
-    expect(Number(unmatchedRow.getCell(13).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
   });
 
   it('adds a "<tax designation> Total" column per tax, right after DD unitaire HT, equal to montant x pieces', async () => {
@@ -539,35 +544,36 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Columns 1-8 base, 9 Somme DD HT, 10 DD unitaire HT, then the two
-    // "Total" columns: 11, 12 — headers built from each tax's full
-    // designation + " Total" (the individual tax montant columns
-    // themselves are no longer shown).
-    expect(headerRow.getCell(11).value).toBe('DTS IMPORT NORMAL Total');
-    expect(headerRow.getCell(12).value).toBe('TVA IMPORT AUTRE PDS Total');
+    // Columns 1-8 base, then the two "Total" columns right after HS CODE:
+    // 9, 10 — headers built from each tax's full designation + " Total"
+    // (the individual tax montant columns themselves are no longer shown).
+    // Somme DD HT / DD unitaire HT (11, 12) follow, right before Somme DD
+    // TTC.
+    expect(headerRow.getCell(9).value).toBe('DTS IMPORT NORMAL Total');
+    expect(headerRow.getCell(10).value).toBe('TVA IMPORT AUTRE PDS Total');
 
     // Rose, distinct from the neighboring Somme DD HT/TTC greens.
     const taxTotalArgb = 'FFDB2777';
-    expect((headerRow.getCell(11).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
-    expect((headerRow.getCell(12).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(9).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
+    expect((headerRow.getCell(10).fill as ExcelJS.FillPattern).fgColor?.argb).toBe(taxTotalArgb);
 
     // Wide enough that the full header text isn't truncated — not the flat
     // 18 used for the other columns.
-    expect(sheet.getColumn(11).width).toBeGreaterThanOrEqual('DTS IMPORT NORMAL Total'.length);
-    expect(sheet.getColumn(12).width).toBeGreaterThanOrEqual('TVA IMPORT AUTRE PDS Total'.length);
+    expect(sheet.getColumn(9).width).toBeGreaterThanOrEqual('DTS IMPORT NORMAL Total'.length);
+    expect(sheet.getColumn(10).width).toBeGreaterThanOrEqual('TVA IMPORT AUTRE PDS Total'.length);
 
     // Row 5 (matched, 18 pieces): tax value x pieces.
     const matchedRow = sheet.getRow(5);
     const firstUnit000110 = 0.24;
     const firstUnit002109 = 1.93;
-    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(firstUnit000110 * 18, 2);
-    expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(firstUnit002109 * 18, 2);
-    expect(matchedRow.getCell(11).numFmt).toBe('0000.00');
+    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(firstUnit000110 * 18, 2);
+    expect(Number(matchedRow.getCell(10).value)).toBeCloseTo(firstUnit002109 * 18, 2);
+    expect(matchedRow.getCell(9).numFmt).toBe('0000.00');
 
     // Row 6 (unmatched article, taxes default to 0): total stays 0.
     const unmatchedRow = sheet.getRow(6);
-    expect(Number(unmatchedRow.getCell(11).value)).toBe(0);
-    expect(Number(unmatchedRow.getCell(12).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(9).value)).toBe(0);
+    expect(Number(unmatchedRow.getCell(10).value)).toBe(0);
   });
 
   it('builds RI SEGMA and REMISES CREDIT\'s "Total" column names from their full designation, not an abbreviation', async () => {
@@ -597,13 +603,13 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Columns 1-8 base, 9 Somme DD HT, 10 DD unitaire HT (RI SEGMA/REMISES
-    // CREDIT no longer get their own montant columns), 11 RI SEGMA Total,
-    // 12 REMISES CREDIT Total.
-    expect(headerRow.getCell(9).value).toBe('Somme DD HT');
-    expect(headerRow.getCell(10).value).toBe('DD unitaire HT');
-    expect(headerRow.getCell(11).value).toBe('RI SEGMA Total');
-    expect(headerRow.getCell(12).value).toBe('REMISES CREDIT Total');
+    // Columns 1-8 base, 9 RI SEGMA Total, 10 REMISES CREDIT Total (RI
+    // SEGMA/REMISES CREDIT no longer get their own montant columns), then
+    // 11 Somme DD HT, 12 DD unitaire HT, right before Somme DD TTC.
+    expect(headerRow.getCell(9).value).toBe('RI SEGMA Total');
+    expect(headerRow.getCell(10).value).toBe('REMISES CREDIT Total');
+    expect(headerRow.getCell(11).value).toBe('Somme DD HT');
+    expect(headerRow.getCell(12).value).toBe('DD unitaire HT');
   });
 
   it('excludes TVA IMPORT AUTRE PDS (002109) from Somme DD HT but still counts it in Somme DD TTC', async () => {
@@ -625,16 +631,16 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Columns 1-8 base, 9 Somme DD HT, 10 DD unitaire HT, 11-12 tax totals
-    // (000110, 002109), 13 Somme DD TTC.
-    expect(headerRow.getCell(9).value).toBe('Somme DD HT');
+    // Columns 1-8 base, 9-10 tax totals (000110, 002109), 11 Somme DD HT,
+    // 12 DD unitaire HT, 13 Somme DD TTC.
+    expect(headerRow.getCell(11).value).toBe('Somme DD HT');
     expect(headerRow.getCell(13).value).toBe('Somme DD TTC');
 
     const matchedRow = sheet.getRow(5);
     const firstUnit000110 = 0.24;
     const firstUnit002109 = 1.93;
     // Somme DD HT = only 000110's first-unit share, VAT left out.
-    expect(Number(matchedRow.getCell(9).value)).toBeCloseTo(firstUnit000110, 2);
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(firstUnit000110, 2);
     // Somme DD TTC = both taxes' totals (montant x pieces), VAT included.
     const expectedSommeDdTtc = (firstUnit000110 + firstUnit002109) * 18;
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
@@ -659,7 +665,7 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
     const headerRow = sheet.getRow(4);
 
-    // Columns 1-8 base, 9-10 Somme/DD unitaire HT, 11-12 tax totals, 13-14
+    // Columns 1-8 base, 9-10 tax totals, 11-12 Somme/DD unitaire HT, 13-14
     // Somme/DD unitaire TTC, 15 PRORATA.
     expect(headerRow.getCell(15).value).toBe('PRORATA');
 

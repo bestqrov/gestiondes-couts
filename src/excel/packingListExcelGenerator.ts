@@ -218,21 +218,22 @@ export async function addPackingListSheet(
     (sum, article) => sum + article.valeurDeclaree,
     0
   );
-  // Somme DD HT / DD unitaire HT sit right after HS CODE — the individual
-  // tax montant columns that used to sit here (DTS IMPORT NORMAL, TVA
-  // IMPORT AUTRE PDS, etc.) are intentionally not shown on this sheet;
-  // they're still computed internally (see the row loop below) to feed
-  // Somme DD HT/TTC and the "<tax> Total" columns, just not displayed.
-  const sommeDdColumn = BASE_COLUMN_COUNT + 1;
-  const ddUnitaireColumn = sommeDdColumn + 1;
   // One "<abbreviation> Total" column per tax (montant x pieces for the
-  // row), right after DD unitaire — same order as allTaxCodes, so column N
-  // here always corresponds to allTaxCodes[N].
-  const taxTotalColumns = allTaxCodes.map((_, i) => ddUnitaireColumn + 1 + i);
+  // row), right after HS CODE — same order as allTaxCodes, so column N here
+  // always corresponds to allTaxCodes[N].
+  const taxTotalColumns = allTaxCodes.map((_, i) => BASE_COLUMN_COUNT + 1 + i);
+  // Somme DD HT / DD unitaire HT sit right after the "<tax> Total" columns,
+  // immediately before Somme DD TTC / DD unitaire TTC — the individual tax
+  // montant columns that used to sit right after HS CODE (DTS IMPORT
+  // NORMAL, TVA IMPORT AUTRE PDS, etc.) are intentionally not shown on this
+  // sheet; they're still computed internally (see the row loop below) to
+  // feed Somme DD HT/TTC and the "<tax> Total" columns, just not displayed.
+  const sommeDdColumn = BASE_COLUMN_COUNT + allTaxCodes.length + 1;
+  const ddUnitaireColumn = sommeDdColumn + 1;
   // Somme DD TTC / DD unitaire TTC close out the sheet — the row's taxes
   // summed (montant x pieces, i.e. the sum of the "<tax> Total" columns)
   // and that sum spread per piece, same relationship as the HT pair.
-  const sommeDdTtcColumn = ddUnitaireColumn + allTaxCodes.length + 1;
+  const sommeDdTtcColumn = ddUnitaireColumn + 1;
   const ddUnitaireTtcColumn = sommeDdTtcColumn + 1;
   // PRORATA closes out the sheet — the matched Global article's own Prorata
   // value (see firstUnitTaxes), not derived from this row's own quantities.
@@ -249,8 +250,8 @@ export async function addPackingListSheet(
     // pair, so all three read as visibly distinct from each other; PRORATA
     // and the extra cost columns get the same emerald "value" color Global
     // uses for its own Prorata column.
+    { kind: 'taxTotal' as const, from: BASE_COLUMN_COUNT + 1, to: sommeDdColumn - 1 },
     { kind: 'sumHt' as const, from: sommeDdColumn, to: ddUnitaireColumn },
-    { kind: 'taxTotal' as const, from: ddUnitaireColumn + 1, to: sommeDdTtcColumn - 1 },
     { kind: 'sumTtc' as const, from: sommeDdTtcColumn, to: ddUnitaireTtcColumn },
     { kind: 'value' as const, from: prorataColumn, to: columnCount },
   ];
@@ -283,14 +284,14 @@ export async function addPackingListSheet(
     { key: 'total', width: 18 },
     { key: 'origin', width: 22 },
     { key: 'hsCode', width: 18 },
-    { key: 'sommeDd', width: 18 },
-    { key: 'ddUnitaire', width: 18 },
     // Wide enough to fit the full "<tax designation> Total" header text
     // (designations vary a lot in length), not the fixed 18 used elsewhere.
     ...allTaxCodes.map((code, i) => ({
       key: `${code}_total`,
       width: Math.max(18, `${allTaxDesignations[i]} Total`.length + 2),
     })),
+    { key: 'sommeDd', width: 18 },
+    { key: 'ddUnitaire', width: 18 },
     { key: 'sommeDdTtc', width: 18 },
     { key: 'ddUnitaireTtc', width: 18 },
     { key: 'prorata', width: 18 },
@@ -318,9 +319,9 @@ export async function addPackingListSheet(
     'total',
     'origin',
     'HS CODE',
+    ...allTaxDesignations.map((designation) => `${designation} Total`),
     'Somme DD HT',
     'DD unitaire HT',
-    ...allTaxDesignations.map((designation) => `${designation} Total`),
     'Somme DD TTC',
     'DD unitaire TTC',
     'PRORATA',
