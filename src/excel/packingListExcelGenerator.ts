@@ -392,7 +392,7 @@ export async function addPackingListSheet(
     // its matched PRORATA share, same "total x prorata" split Global uses
     // for its declaration-wide-only taxes (see firstUnitTaxes above).
     for (const field of EXTRA_COST_FIELDS) {
-      rowValues[field.key] = extraCosts[field.key] * prorata;
+      rowValues[field.key] = Math.round(extraCosts[field.key] * prorata * 100) / 100;
     }
 
     const excelRow = sheet.addRow(rowValues);
