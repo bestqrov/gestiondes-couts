@@ -386,13 +386,17 @@ export async function addPackingListSheet(
     // PRORATA — the matched Global article's own Prorata value (its first
     // unit row's, same as every tax column above), not a value derived from
     // this row's own pieces/total.
-    const prorata = matchedData?.prorata ?? 0;
+    // Rounded to match the PRORATA column's 0.00% display (4 decimal places
+    // of the raw fraction) so the extra-cost columns below, which multiply
+    // by this same value, derive from what's actually shown, not a longer
+    // float tail hidden by display-only formatting.
+    const prorata = Math.round((matchedData?.prorata ?? 0) * 10000) / 10000;
     rowValues.prorata = prorata;
     // Each extra cost field's shipment-wide total spread across this row by
     // its matched PRORATA share, same "total x prorata" split Global uses
     // for its declaration-wide-only taxes (see firstUnitTaxes above).
     for (const field of EXTRA_COST_FIELDS) {
-      rowValues[field.key] = Math.round(extraCosts[field.key] * prorata * 100) / 100;
+      rowValues[field.key] = extraCosts[field.key] * prorata;
     }
 
     const excelRow = sheet.addRow(rowValues);
