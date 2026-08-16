@@ -357,18 +357,9 @@ export async function addPackingListSheet(
     // above), but still needed per-code to build Somme DD HT/TTC and the
     // "<tax> Total" columns below.
     const taxMontants = new Map<string, number>();
-    let sommeDd = 0;
     for (const code of allTaxCodes) {
-      const montant = matchedTaxes?.get(code) ?? 0;
-      taxMontants.set(code, montant);
-      if (code !== VAT_TAX_CODE) {
-        sommeDd += montant;
-      }
+      taxMontants.set(code, matchedTaxes?.get(code) ?? 0);
     }
-    // "DD unitaire" — Somme DD spread over this row's piece count, the same
-    // per-unit pattern as Global's Valeur Déclarée / Unité.
-    rowValues.sommeDd = sommeDd;
-    rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
     // "<abbreviation> Total" columns — each tax's per-unit montant spread
     // across this row's piece count, the same montant x pieces pattern as
     // the "total" column (unit price x pieces).
@@ -379,11 +370,17 @@ export async function addPackingListSheet(
       sommeDdTtc += taxTotal;
     }
     // "Somme DD TTC" / "DD unitaire TTC" — the row's "<tax> Total" columns
-    // summed, and that sum spread per piece, same relationship as the HT
-    // pair above but built from the montant x pieces totals instead of the
-    // per-unit montants.
+    // summed, and that sum spread per piece.
     rowValues.sommeDdTtc = sommeDdTtc;
     rowValues.ddUnitaireTtc = row.pieces > 0 ? sommeDdTtc / row.pieces : 0;
+    // "Somme DD HT" — Somme DD TTC minus the TVA IMPORT AUTRE PDS Total
+    // column, i.e. every tax's total except VAT. "DD unitaire" spreads that
+    // over this row's piece count, same per-unit pattern as Global's Valeur
+    // Déclarée / Unité.
+    const vatTotal = (taxMontants.get(VAT_TAX_CODE) ?? 0) * row.pieces;
+    const sommeDd = sommeDdTtc - vatTotal;
+    rowValues.sommeDd = sommeDd;
+    rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
     // PRORATA — the matched Global article's own Prorata value (its first
     // unit row's, same as every tax column above), not a value derived from
     // this row's own pieces/total.

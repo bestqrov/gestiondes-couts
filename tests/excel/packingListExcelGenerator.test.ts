@@ -224,9 +224,9 @@ describe('addPackingListSheet', () => {
     const firstUnit000110 = 0.24;
     const firstUnit002109 = 1.93;
 
-    // 002109 (TVA IMPORT AUTRE PDS) is excluded from Somme DD HT — HT means
-    // "Hors Taxe", i.e. without VAT.
-    const expectedSommeDd = firstUnit000110;
+    // Somme DD HT = Somme DD TTC - TVA IMPORT AUTRE PDS Total, i.e. every
+    // tax's row total (montant x pieces) except VAT.
+    const expectedSommeDd = firstUnit000110 * 18;
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedSommeDd, 2);
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd / 18, 6);
     expect(matchedRow.getCell(12).numFmt).toBe('0000.000000');
@@ -341,10 +341,10 @@ describe('addPackingListSheet', () => {
     // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of
     // both. Read via Somme DD HT (col 10, right after the one tax's "Total"
     // column at col 9) since the individual tax columns aren't shown; the
-    // only tax here is 000110 (not VAT), so Somme DD HT equals that value
-    // exactly.
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25, 2);
-    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25, 2);
+    // only tax here is 000110 (not VAT), so Somme DD HT equals Somme DD TTC,
+    // i.e. that per-unit value spread across each row's 18 pieces.
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
+    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
@@ -408,12 +408,14 @@ describe('addPackingListSheet', () => {
     // Row 5 (origin CHINA, normalized to CHINE) picks up only the CHINE
     // article's first-unit value: 2.5 / 10 = 0.25. Row 6 (origin
     // BANGLADESH) picks up only the BANGLADESH article's first-unit value:
-    // 9.99 / 5 = 1.998. Read via Somme DD HT (col 10, right after the one
-    // tax's "Total" column at col 9) since the individual tax columns
-    // aren't shown; the only tax here is 000110 (not VAT), so Somme DD HT
-    // equals that value exactly.
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(2.5 / 10, 2);
-    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(9.99 / 5, 2);
+    // 999 cents / 5 doesn't divide evenly, so allocateTaxAcrossUnits gives
+    // the first unit 200 cents (2.00), not the plain division's 1.998. Read
+    // via Somme DD HT (col 10, right after the one tax's "Total" column at
+    // col 9) since the individual tax columns aren't shown; the only tax
+    // here is 000110 (not VAT), so Somme DD HT equals Somme DD TTC, i.e.
+    // that per-unit value spread across each row's 18 pieces.
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo((2.5 / 10) * 18, 2);
+    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(2.0 * 18, 2);
   });
 
   it('still matches by HS code prefix alone when an HS position has only one country of origin, even if the origin spelling has no known alias (regression: origin-only matching zeroed out real files)', async () => {
@@ -462,9 +464,10 @@ describe('addPackingListSheet', () => {
 
     // Still matches — this HS prefix has exactly one origin in the
     // declaration, so the mismatched spelling never comes into play. Value
-    // is the article's first-unit share: 4.32 / 18. Read via Somme DD HT
-    // (col 10, right after the one tax's "Total" column at col 9).
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(4.32 / 18, 2);
+    // is the article's first-unit share (4.32 / 18) spread across the row's
+    // 18 pieces, i.e. 4.32 again. Read via Somme DD HT (col 10, right after
+    // the one tax's "Total" column at col 9).
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo((4.32 / 18) * 18, 2);
   });
 
   it('adds a column for a RECAPITULATION rubrique that never appears on any article, filled as montant × Prorata for the matched article\'s first unit', async () => {
@@ -514,7 +517,7 @@ describe('addPackingListSheet', () => {
     // 002109 (TVA IMPORT AUTRE PDS) is excluded from Somme DD HT — HT means
     // "Hors Taxe", i.e. without VAT. REDV.INF. is not VAT, so it counts.
     const firstUnit000110 = 0.24;
-    const expectedSommeDd = firstUnit000110 + expectedRedvInf;
+    const expectedSommeDd = (firstUnit000110 + expectedRedvInf) * 18;
     expect(Number(matchedRow.getCell(12).value)).toBeCloseTo(expectedSommeDd, 2);
     expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(expectedRedvInf * 18, 2);
 
@@ -639,8 +642,8 @@ describe('addPackingListSheet', () => {
     const matchedRow = sheet.getRow(5);
     const firstUnit000110 = 0.24;
     const firstUnit002109 = 1.93;
-    // Somme DD HT = only 000110's first-unit share, VAT left out.
-    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(firstUnit000110, 2);
+    // Somme DD HT = 000110's total (montant x pieces), VAT left out.
+    expect(Number(matchedRow.getCell(11).value)).toBeCloseTo(firstUnit000110 * 18, 2);
     // Somme DD TTC = both taxes' totals (montant x pieces), VAT included.
     const expectedSommeDdTtc = (firstUnit000110 + firstUnit002109) * 18;
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
