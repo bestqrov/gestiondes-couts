@@ -14,8 +14,21 @@ import {
   FONT_OPTIONS,
 } from './brandingStyles.js';
 import { renderWorldMapPanel, WORLD_MAP_STYLE } from './worldMap.js';
+import { BASE_EXTRA_COST_FIELDS } from '../excel/packingListExcelGenerator.js';
 
 export type SuperAdminPage = 'dashboard' | 'generate' | 'users' | 'costs' | 'settings';
+
+// Cycles through this palette by column index, so any custom field added on
+// top of the 6 built-ins still gets a distinct color instead of falling back
+// to plain ink.
+const EXTRA_COST_COLOR_CLASSES = [
+  'ec-color-0',
+  'ec-color-1',
+  'ec-color-2',
+  'ec-color-3',
+  'ec-color-4',
+  'ec-color-5',
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -1385,20 +1398,36 @@ const GENERATE_PAGE_STYLE = `
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 16px;
   }
   .extra-costs-grid label {
-    display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 700;
+    display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 700; position: relative;
   }
   .extra-costs-grid input {
     border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
     color: var(--ink-900); background: var(--card-bg); font-weight: 400;
   }
-  .extra-costs-grid label.ec-transport { color: #4F46E5; }
-  .extra-costs-grid label.ec-assurance { color: #D97706; }
-  .extra-costs-grid label.ec-fraisLocaux { color: #059669; }
-  .extra-costs-grid label.ec-transit { color: #DB2777; }
-  .extra-costs-grid label.ec-transportNational { color: #0891B2; }
-  .extra-costs-grid label.ec-mcia { color: #7C3AED; }
+  .extra-costs-grid label.ec-color-0 { color: #4F46E5; }
+  .extra-costs-grid label.ec-color-1 { color: #D97706; }
+  .extra-costs-grid label.ec-color-2 { color: #059669; }
+  .extra-costs-grid label.ec-color-3 { color: #DB2777; }
+  .extra-costs-grid label.ec-color-4 { color: #0891B2; }
+  .extra-costs-grid label.ec-color-5 { color: #7C3AED; }
+  .ec-remove-form { position: absolute; top: 0; right: 0; }
+  .ec-remove-btn {
+    width: 18px; height: 18px; padding: 0; border-radius: 50%; border: none;
+    background: var(--line); color: var(--ink-500); font-size: 13px; line-height: 1;
+    cursor: pointer; margin: 0;
+  }
+  .ec-remove-btn:hover { background: #FCA5A5; color: #7F1D1D; }
+  .ec-add-form {
+    display: flex; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);
+  }
+  .ec-add-form input {
+    flex: 1; border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
+    color: var(--ink-900); background: var(--card-bg);
+  }
+  .ec-add-form button { margin: 0; white-space: nowrap; }
   @media (max-width: 720px) {
     .extra-costs-grid { grid-template-columns: 1fr 1fr; }
+    .ec-add-form { flex-direction: column; }
   }
   .drop-zone.zone-locked { opacity: 0.45; pointer-events: none; cursor: not-allowed; }
 `;
@@ -1408,18 +1437,30 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
     ? `<div class="error"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escapeHtml(errorMessage)}</span></div>`
     : '';
 
+  const customFields = settings.extraCostFields ?? [];
+  const allExtraCostFields = [...BASE_EXTRA_COST_FIELDS, ...customFields];
+  const customFieldKeys = new Set(customFields.map((field) => field.key));
+  const extraCostFieldRows = allExtraCostFields
+    .map((field, i) => {
+      const colorClass = EXTRA_COST_COLOR_CLASSES[i % EXTRA_COST_COLOR_CLASSES.length];
+      const deleteButton = customFieldKeys.has(field.key)
+        ? `<form method="post" action="/superadmin/extra-cost-fields/${encodeURIComponent(field.key)}/delete" class="ec-remove-form" onsubmit="return confirm('Supprimer ce frais ?');"><button type="submit" class="ec-remove-btn" title="Supprimer" aria-label="Supprimer">&times;</button></form>`
+        : '';
+      return `<label class="${colorClass}">${escapeHtml(field.label)}${deleteButton}<input type="number" id="extra-${escapeHtml(field.key)}" step="0.01" min="0" required /></label>`;
+    })
+    .join('\n        ');
+
   const body = `
     <div class="card extra-costs-inline-card">
       <h2>Frais supplémentaires</h2>
       <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Tous les champs sont obligatoires.</p>
       <div class="extra-costs-grid">
-        <label class="ec-transport">Montant Frais transport<input type="number" id="extra-fraisTransport" step="0.01" min="0" required /></label>
-        <label class="ec-assurance">Montant Assurance<input type="number" id="extra-assurance" step="0.01" min="0" required /></label>
-        <label class="ec-fraisLocaux">Frais locaux passage mead<input type="number" id="extra-fraisLocaux" step="0.01" min="0" required /></label>
-        <label class="ec-transit">Transit<input type="number" id="extra-transit" step="0.01" min="0" required /></label>
-        <label class="ec-transportNational">Transport national<input type="number" id="extra-transportNational" step="0.01" min="0" required /></label>
-        <label class="ec-mcia">MCIA<input type="number" id="extra-mcia" step="0.01" min="0" required /></label>
+        ${extraCostFieldRows}
       </div>
+      <form method="post" action="/superadmin/extra-cost-fields" class="ec-add-form">
+        <input type="text" name="label" placeholder="Nouveau frais (ex. Douane côtière)" maxlength="60" required />
+        <button type="submit" class="secondary">+ Ajouter un frais</button>
+      </form>
     </div>
 
     <p class="lede"><strong>Déposez les trois fichiers</strong> (Liquidation, DUM, et l'Excel des articles).<span class="lede-note">L'ordre de Liquidation et DUM n'a pas d'importance : ils sont identifiés automatiquement.</span></p>
@@ -1580,14 +1621,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       wireDropZone('zone-dum', 'input-dum', 'name-dum');
       wireDropZone('zone-packingList', 'input-packingList', 'name-packingList');
 
-      const extraCostFields = [
-        { key: 'fraisTransport', label: 'Montant Frais transport' },
-        { key: 'assurance', label: 'Montant Assurance' },
-        { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
-        { key: 'transit', label: 'Transit' },
-        { key: 'transportNational', label: 'Transport national' },
-        { key: 'mcia', label: 'MCIA' },
-      ];
+      const extraCostFields = ${JSON.stringify(allExtraCostFields).replace(/</g, '\\u003c')};
       const dropZones = [
         { zoneId: 'zone-liquidation', inputId: 'input-liquidation' },
         { zoneId: 'zone-dum', inputId: 'input-dum' },

@@ -31,8 +31,11 @@ const VAT_TAX_CODE = '002109';
 // that get spread across every HS total row by that row's matched PRORATA
 // share, one column each, right after PRORATA — same "total x prorata"
 // spread the PRORATA column itself documents. Order here is the order the
-// columns appear in on the sheet.
-export const EXTRA_COST_FIELDS = [
+// columns appear in on the sheet. These 6 are always present; a superadmin
+// can add further custom ones (persisted in AppSettings.extraCostFields —
+// see appSettingsRepository.ts), which get appended after these in the
+// order they were added.
+export const BASE_EXTRA_COST_FIELDS = [
   { key: 'fraisTransport', label: 'Montant Frais transport' },
   { key: 'assurance', label: 'Montant Assurance' },
   { key: 'fraisLocaux', label: 'Frais locaux passage mead' },
@@ -41,9 +44,14 @@ export const EXTRA_COST_FIELDS = [
   { key: 'mcia', label: 'MCIA' },
 ] as const;
 
-export type ExtraCostFieldKey = (typeof EXTRA_COST_FIELDS)[number]['key'];
+export interface ExtraCostField {
+  key: string;
+  label: string;
+}
 
-export type ExtraCosts = Record<ExtraCostFieldKey, number>;
+export type ExtraCostFieldKey = string;
+
+export type ExtraCosts = Record<string, number>;
 
 const BASE_COLUMN_COUNT = 8;
 const DESCRIPTION_COLUMN = 2;
@@ -189,14 +197,11 @@ export async function addPackingListSheet(
   declaration: Declaration,
   branding: BrandingInfo,
   generatedAt: Date,
-  extraCosts: ExtraCosts = {
-    fraisTransport: 0,
-    assurance: 0,
-    fraisLocaux: 0,
-    transit: 0,
-    transportNational: 0,
-    mcia: 0,
-  },
+  extraCosts: ExtraCosts = {},
+  // Which extra-cost columns to render, and in what order — defaults to the
+  // 6 built-in fields; a superadmin's custom fields (AppSettings.extraCostFields)
+  // get passed in appended after those by the caller.
+  extraCostFields: readonly ExtraCostField[] = BASE_EXTRA_COST_FIELDS,
   sheetName = 'HS total'
 ): Promise<void> {
   const taxCodes = unionTaxCodes(declaration.articles);
@@ -239,8 +244,8 @@ export async function addPackingListSheet(
   // value (see firstUnitTaxes), not derived from this row's own quantities.
   const prorataColumn = ddUnitaireTtcColumn + 1;
   // One column per manually-entered extra cost field, right after PRORATA,
-  // same order as EXTRA_COST_FIELDS.
-  const extraCostColumns = EXTRA_COST_FIELDS.map((_, i) => prorataColumn + 1 + i);
+  // same order as extraCostFields.
+  const extraCostColumns = extraCostFields.map((_, i) => prorataColumn + 1 + i);
   const columnCount = extraCostColumns[extraCostColumns.length - 1];
   const columnGroups: ColumnGroup[] = [
     ...BASE_COLUMN_GROUPS,
@@ -295,7 +300,7 @@ export async function addPackingListSheet(
     { key: 'sommeDdTtc', width: 18 },
     { key: 'ddUnitaireTtc', width: 18 },
     { key: 'prorata', width: 18 },
-    ...EXTRA_COST_FIELDS.map((field) => ({ key: field.key, width: Math.max(18, field.label.length + 2) })),
+    ...extraCostFields.map((field) => ({ key: field.key, width: Math.max(18, field.label.length + 2) })),
   ];
 
   await addSheetTitleRows(
@@ -325,7 +330,7 @@ export async function addPackingListSheet(
     'Somme DD TTC',
     'DD unitaire TTC',
     'PRORATA',
-    ...EXTRA_COST_FIELDS.map((field) => field.label),
+    ...extraCostFields.map((field) => field.label),
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
@@ -393,8 +398,8 @@ export async function addPackingListSheet(
     // Each extra cost field's shipment-wide total spread across this row by
     // its matched PRORATA share, same "total x prorata" split Global uses
     // for its declaration-wide-only taxes (see firstUnitTaxes above).
-    for (const field of EXTRA_COST_FIELDS) {
-      rowValues[field.key] = extraCosts[field.key] * prorata;
+    for (const field of extraCostFields) {
+      rowValues[field.key] = (extraCosts[field.key] ?? 0) * prorata;
     }
 
     const excelRow = sheet.addRow(rowValues);

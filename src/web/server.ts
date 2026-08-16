@@ -13,6 +13,10 @@ import { parsePackingList } from '../parser/packingList/packingListParser.js';
 import { mergeDeclaration } from '../merge/declarationMerger.js';
 import { validateArticle } from '../domain/validators.js';
 import { generateCombinedExcel } from '../excel/combinedExcelGenerator.js';
+import {
+  BASE_EXTRA_COST_FIELDS,
+  type ExtraCosts,
+} from '../excel/packingListExcelGenerator.js';
 import { renderResultsPage, renderResultsFragment } from './renderResultsPage.js';
 import {
   renderSuperAdminOverview,
@@ -335,20 +339,24 @@ app.post(
       // producing a spurious "Not Found" (confirmed in production logs).
       const generatedFilePath = path.join(OUTPUT_DIR, `declaration-${randomUUID()}.xlsx`);
       const branding = await getAppSettings(await getSettingsCollection());
+      const extraCostFields = [...BASE_EXTRA_COST_FIELDS, ...branding.extraCostFields];
       const extraCostBody = req.body as Record<string, string | undefined>;
       const parseExtraCost = (value: string | undefined): number => {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : 0;
       };
-      const extraCosts = {
-        fraisTransport: parseExtraCost(extraCostBody.fraisTransport),
-        assurance: parseExtraCost(extraCostBody.assurance),
-        fraisLocaux: parseExtraCost(extraCostBody.fraisLocaux),
-        transit: parseExtraCost(extraCostBody.transit),
-        transportNational: parseExtraCost(extraCostBody.transportNational),
-        mcia: parseExtraCost(extraCostBody.mcia),
-      };
-      await generateCombinedExcel(declaration, packingListRows, generatedFilePath, branding, extraCosts);
+      const extraCosts: ExtraCosts = {};
+      for (const field of extraCostFields) {
+        extraCosts[field.key] = parseExtraCost(extraCostBody[field.key]);
+      }
+      await generateCombinedExcel(
+        declaration,
+        packingListRows,
+        generatedFilePath,
+        branding,
+        extraCosts,
+        extraCostFields
+      );
 
       try {
         await incrementGenerationCount(await getSettingsCollection());
@@ -565,6 +573,66 @@ app.post('/superadmin/dashboard/reset-counter', requireSuperAdmin, async (req, r
 // as the standalone admin tool at "/", just wrapped in the sidebar shell.
 app.get('/superadmin/generate', requireSuperAdmin, async (_req, res) => {
   res.send(renderSuperAdminGenerate(await getAppSettings(await getSettingsCollection())));
+});
+
+// Turns a free-text "Frais supplémentaires" label into a camelCase key safe
+// to use as an Excel column key / form field id, mirroring the style of the
+// 6 built-in keys (fraisTransport, transportNational, ...).
+function slugifyExtraCostLabel(label: string): string {
+  const words = label
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return 'frais';
+  const [first, ...rest] = words;
+  return (
+    first.toLowerCase() +
+    rest.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join('')
+  );
+}
+
+app.post('/superadmin/extra-cost-fields', requireSuperAdmin, async (req, res) => {
+  const { label } = req.body as { label?: string };
+  const trimmed = label?.trim();
+  const settingsCollection = await getSettingsCollection();
+  if (!trimmed) {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminGenerate(await getAppSettings(settingsCollection), 'Le libellé du frais est requis.')
+      );
+    return;
+  }
+
+  const settings = await getAppSettings(settingsCollection);
+  const existingKeys = new Set([
+    ...BASE_EXTRA_COST_FIELDS.map((field) => field.key),
+    ...settings.extraCostFields.map((field) => field.key),
+  ]);
+  const baseKey = slugifyExtraCostLabel(trimmed);
+  let key = baseKey;
+  let suffix = 2;
+  while (existingKeys.has(key)) {
+    key = `${baseKey}${suffix}`;
+    suffix++;
+  }
+
+  const updated = await updateAppSettings(settingsCollection, {
+    extraCostFields: [...settings.extraCostFields, { key, label: trimmed }],
+  });
+  res.send(renderSuperAdminGenerate(updated));
+});
+
+app.post('/superadmin/extra-cost-fields/:key/delete', requireSuperAdmin, async (req, res) => {
+  const settingsCollection = await getSettingsCollection();
+  const settings = await getAppSettings(settingsCollection);
+  const updated = await updateAppSettings(settingsCollection, {
+    extraCostFields: settings.extraCostFields.filter((field) => field.key !== req.params.key),
+  });
+  res.send(renderSuperAdminGenerate(updated));
 });
 
 app.get('/superadmin/users', requireSuperAdmin, async (req, res) => {

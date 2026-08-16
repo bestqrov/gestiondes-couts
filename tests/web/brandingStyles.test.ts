@@ -17,6 +17,7 @@ const EMPTY_SETTINGS: AppSettings = {
   contactWhatsapp: null,
   generationCount: 0,
   deletePasswordHash: null,
+  extraCostFields: [],
 };
 
 describe('renderBrandOverrideStyle', () => {

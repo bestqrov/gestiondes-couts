@@ -10,6 +10,15 @@ const SINGLETON_ID = 'singleton';
 
 const SALT_ROUNDS = 10;
 
+// A custom "Frais supplémentaires" field a superadmin has added on top of
+// the 6 built-in ones (BASE_EXTRA_COST_FIELDS in packingListExcelGenerator.ts)
+// — same {key,label} shape, so both lists can be concatenated and fed
+// straight to the Excel generator.
+export interface ExtraCostFieldSetting {
+  key: string;
+  label: string;
+}
+
 export interface AppSettings {
   companyName: string | null;
   logoDataUri: string | null;
@@ -25,6 +34,9 @@ export interface AppSettings {
   // bcrypt hash of the password required to reset generationCount — never
   // stored/returned in plaintext, mirroring usersRepository's passwordHash.
   deletePasswordHash: string | null;
+  // Custom extra-cost fields added from /superadmin/generate, appended after
+  // the 6 built-in ones on the "HS total" sheet.
+  extraCostFields: ExtraCostFieldSetting[];
 }
 
 export interface AppSettingsUpdate {
@@ -36,6 +48,7 @@ export interface AppSettingsUpdate {
   contactWhatsapp?: string | null;
   generationCount?: number;
   deletePasswordHash?: string | null;
+  extraCostFields?: ExtraCostFieldSetting[];
 }
 
 export interface AppSettingsDocument extends AppSettings {
@@ -52,6 +65,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   contactWhatsapp: null,
   generationCount: 0,
   deletePasswordHash: null,
+  extraCostFields: [],
 };
 
 export async function getAppSettings(
@@ -71,6 +85,7 @@ export async function getAppSettings(
     // would get.
     generationCount: doc.generationCount ?? 0,
     deletePasswordHash: doc.deletePasswordHash ?? null,
+    extraCostFields: doc.extraCostFields ?? [],
   };
 }
 
@@ -93,6 +108,8 @@ export async function updateAppSettings(
       update.deletePasswordHash !== undefined
         ? update.deletePasswordHash
         : current.deletePasswordHash,
+    extraCostFields:
+      update.extraCostFields !== undefined ? update.extraCostFields : current.extraCostFields,
   };
 
   await collection.updateOne(

@@ -25,6 +25,7 @@ describe('appSettingsRepository', () => {
       contactWhatsapp: null,
       generationCount: 0,
       deletePasswordHash: null,
+      extraCostFields: [],
     });
   });
 
@@ -48,6 +49,7 @@ describe('appSettingsRepository', () => {
       contactWhatsapp: '+212600000000',
       generationCount: 0,
       deletePasswordHash: null,
+      extraCostFields: [],
     });
     expect(await getAppSettings(collection)).toEqual(result);
   });
@@ -67,6 +69,7 @@ describe('appSettingsRepository', () => {
       contactWhatsapp: null,
       generationCount: 0,
       deletePasswordHash: null,
+      extraCostFields: [],
     });
   });
 
