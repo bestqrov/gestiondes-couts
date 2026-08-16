@@ -1444,7 +1444,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
     .map((field, i) => {
       const colorClass = EXTRA_COST_COLOR_CLASSES[i % EXTRA_COST_COLOR_CLASSES.length];
       const deleteButton = customFieldKeys.has(field.key)
-        ? `<form method="post" action="/superadmin/extra-cost-fields/${encodeURIComponent(field.key)}/delete" class="ec-remove-form" onsubmit="return confirm('Supprimer ce frais ?');"><button type="submit" class="ec-remove-btn" title="Supprimer" aria-label="Supprimer">&times;</button></form>`
+        ? `<form method="post" action="/superadmin/extra-cost-fields/${encodeURIComponent(field.key)}/delete" class="ec-remove-form" onsubmit="return confirmDeleteExtraCostField(this)"><input type="hidden" name="password" /><button type="submit" class="ec-remove-btn" title="Supprimer" aria-label="Supprimer">&times;</button></form>`
         : '';
       return `<label class="${colorClass}">${escapeHtml(field.label)}${deleteButton}<input type="number" id="extra-${escapeHtml(field.key)}" step="0.01" min="0" required /></label>`;
     })
@@ -1590,6 +1590,13 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
 
 
     <script>
+      function confirmDeleteExtraCostField(form) {
+        var password = prompt('Mot de passe de suppression :');
+        if (!password) return false;
+        form.password.value = password;
+        return confirm('Supprimer ce frais supplémentaire ?');
+      }
+
       function wireDropZone(zoneId, inputId, nameId) {
         const zone = document.getElementById(zoneId);
         const input = document.getElementById(inputId);

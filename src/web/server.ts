@@ -627,8 +627,26 @@ app.post('/superadmin/extra-cost-fields', requireSuperAdmin, async (req, res) =>
 });
 
 app.post('/superadmin/extra-cost-fields/:key/delete', requireSuperAdmin, async (req, res) => {
+  const { password } = req.body as { password?: string };
   const settingsCollection = await getSettingsCollection();
   const settings = await getAppSettings(settingsCollection);
+
+  if (!settings.deletePasswordHash) {
+    res
+      .status(400)
+      .send(
+        renderSuperAdminGenerate(
+          settings,
+          "Aucun mot de passe de suppression n'est configuré (Réglages > Identifiants)."
+        )
+      );
+    return;
+  }
+  if (!password || !verifyDeletePassword(settings, password)) {
+    res.status(400).send(renderSuperAdminGenerate(settings, 'Mot de passe de suppression incorrect.'));
+    return;
+  }
+
   const updated = await updateAppSettings(settingsCollection, {
     extraCostFields: settings.extraCostFields.filter((field) => field.key !== req.params.key),
   });
