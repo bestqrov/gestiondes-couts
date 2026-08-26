@@ -76,7 +76,9 @@ const BASE_COLUMN_GROUPS: ColumnGroup[] = [
 const HS_CODE_MATCH_LENGTH = 6;
 
 function hsCodePrefix(code: string): string {
-  return code.slice(0, HS_CODE_MATCH_LENGTH);
+  // Strips any non-digit characters (dots, spaces, dashes) before taking the
+  // prefix — see unitLevelTaxHelpers.ts's matching hsCodePrefix.
+  return code.replace(/\D/g, '').slice(0, HS_CODE_MATCH_LENGTH);
 }
 
 // Same HS position can be sourced from more than one country, each with its

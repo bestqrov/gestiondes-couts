@@ -8,7 +8,10 @@ import { normalizeCountryName } from '../domain/countryNames.js';
 const HS_CODE_GROUP_LENGTH = 6;
 
 export function hsCodePrefix(code: string): string {
-  return code.slice(0, HS_CODE_GROUP_LENGTH);
+  // Strips any non-digit characters (dots, spaces, dashes) before taking the
+  // prefix — declaration-sourced codes are always plain digits, but this
+  // keeps the comparison safe against any less-clean source too.
+  return code.replace(/\D/g, '').slice(0, HS_CODE_GROUP_LENGTH);
 }
 
 // Same HS position can be sourced from more than one country, each with its

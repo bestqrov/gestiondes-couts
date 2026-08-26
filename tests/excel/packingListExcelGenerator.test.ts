@@ -181,6 +181,31 @@ describe('addPackingListSheet', () => {
     expect(sheet.getRow(6).getCell(8).value).toBe('61142000');
   });
 
+  it('still matches a row whose HS code is dot- or space-formatted (e.g. straight from an unnormalized source), not just plain digits', async () => {
+    const rows: PackingListRow[] = [{ ...SAMPLE_ROWS[0], hsCode: '6104.43.0099' }];
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-dotted-hscode');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      rows,
+      DECLARATION_WITH_TAXES,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Matches DECLARATION_WITH_TAXES's article (hsCode '61044300') by its
+    // 6-digit prefix ('610443'), so it shows the declaration's HS code, not
+    // '6104.43.0099' left un-normalized.
+    expect(sheet.getRow(5).getCell(8).value).toBe('61044300');
+  });
+
   it('colors the header by column group: identity, quantity, value', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-colors');
