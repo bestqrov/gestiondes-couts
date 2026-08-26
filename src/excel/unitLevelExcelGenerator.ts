@@ -68,10 +68,10 @@ export async function addUnitLevelSheet(
   const moneyColumns = new Set<number>([
     poidsNetColumn,
     valeurDeclareeColumn,
+    prorataColumn,
     ...taxCodes.map((_, i) => 11 + i),
     ...extraCodes.map((_, i) => 11 + taxCodes.length + i),
   ]);
-  const percentColumns = new Set<number>([prorataColumn]);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
     (sum, article) => sum + article.valeurDeclaree,
     0
@@ -152,10 +152,16 @@ export async function addUnitLevelSheet(
     // producing Infinity/NaN in the sheet).
     const poidsNetPerUnit =
       article.unitesComplementaires > 0 ? article.poidsNet / article.unitesComplementaires : article.poidsNet;
-    // Prorata — this unit's share of the whole declaration's total declared
-    // value (montant in Valeur Déclarée / the sum of every article's Valeur
-    // Déclarée across the declaration), not just its own product's total.
-    const prorata = valeurDeclareePerUnit / declarationValeurDeclareeTotal;
+    // Prorata share — this unit's share of the whole declaration's total
+    // declared value (montant in Valeur Déclarée / the sum of every
+    // article's Valeur Déclarée across the declaration), not just its own
+    // product's total. Used only to spread the declaration-wide-only
+    // ordonnancement taxes below; the PRORATA column itself displays the
+    // unit's own declared value, not this share (see prorataDisplay).
+    const prorataShare = valeurDeclareePerUnit / declarationValeurDeclareeTotal;
+    // Prorata (displayed) — the unit's own declared value, not divided
+    // across the declaration's total declared value.
+    const prorataDisplay = valeurDeclareePerUnit;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {
@@ -179,16 +185,16 @@ export async function addUnitLevelSheet(
         pays: article.pays,
         serialNumber: unit + 1,
         valeurDeclaree: valeurDeclareePerUnit,
-        prorata,
+        prorata: prorataDisplay,
       };
       for (const code of taxCodes) {
         rowValues[code] = perCodeAllocations.get(code)![unit];
       }
       for (const tax of extraOrdonnancementTaxes) {
-        rowValues[tax.code] = tax.montant * prorata;
+        rowValues[tax.code] = tax.montant * prorataShare;
       }
       const row = sheet.addRow(rowValues);
-      styleDataRow(row, columnCount, dataRowIndex, moneyColumns, percentColumns);
+      styleDataRow(row, columnCount, dataRowIndex, moneyColumns);
       const paysCell = row.getCell(PAYS_COLUMN);
       paysCell.style = {
         ...paysCell.style,

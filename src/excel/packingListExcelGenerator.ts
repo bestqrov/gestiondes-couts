@@ -93,13 +93,18 @@ function hsAndOriginKey(hsCode: string, pays: string): string {
 // unit's tax value from the matching Global rows, not the sum across every
 // matching unit/article. Also folds in the declaration-wide-only
 // ordonnancement taxes (e.g. REDV.INF., RI SEGMA, REMISES CREDIT) using the
-// same montant × Prorata treatment Global gives them, so every tax visible
-// in Global has a matching value here. `prorata` is Global's own Prorata
-// value for this article (same on every one of its unit rows), picked up
-// the same "first matching line, not a sum" way for the PRORATA column.
+// same montant × Prorata-share treatment Global gives them, so every tax
+// visible in Global has a matching value here. `prorataDisplay` is the
+// matched article's own raw Valeur Déclarée (not divided by its quantite or
+// by the declaration's total) — every packing-list row matching the same
+// HS+origin shows this same undivided value in the PRORATA column;
+// `prorataShare` is the (undisplayed) per-unit declaration-wide share still
+// used to spread the ordonnancement taxes above and the manual extra-cost
+// columns below.
 interface FirstUnitData {
   taxes: Map<string, number>;
-  prorata: number;
+  prorataShare: number;
+  prorataDisplay: number;
 }
 
 function firstUnitTaxes(
@@ -112,20 +117,21 @@ function firstUnitTaxes(
   for (const tax of article.taxes) {
     perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
   }
-  const prorata =
+  const prorataDisplay = article.valeurDeclaree;
+  const prorataShare =
     quantite > 0 && declarationValeurDeclareeTotal > 0
       ? article.valeurDeclaree / quantite / declarationValeurDeclareeTotal
       : 0;
   if (quantite > 0 && declarationValeurDeclareeTotal > 0) {
     for (const tax of extraOrdonnancementTaxes) {
-      perCode.set(tax.code, tax.montant * prorata);
+      perCode.set(tax.code, tax.montant * prorataShare);
     }
   } else {
     for (const tax of extraOrdonnancementTaxes) {
       perCode.set(tax.code, 0);
     }
   }
-  return { taxes: perCode, prorata };
+  return { taxes: perCode, prorataShare, prorataDisplay };
 }
 
 // Maps HS code prefix + country of origin to the first-encountered matching
@@ -386,20 +392,19 @@ export async function addPackingListSheet(
     const sommeDd = sommeDdTtc - vatTotal;
     rowValues.sommeDd = sommeDd;
     rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
-    // PRORATA — the matched Global article's own Prorata value (its first
-    // unit row's, same as every tax column above), not a value derived from
+    // PRORATA — the matched article's own raw Valeur Déclarée, not divided
+    // by its quantite or by the declaration's total, and not derived from
     // this row's own pieces/total.
-    // Rounded to match the PRORATA column's 0.00% display (4 decimal places
-    // of the raw fraction) so the extra-cost columns below, which multiply
-    // by this same value, derive from what's actually shown, not a longer
-    // float tail hidden by display-only formatting.
-    const prorata = Math.round((matchedData?.prorata ?? 0) * 10000) / 10000;
-    rowValues.prorata = prorata;
+    rowValues.prorata = matchedData?.prorataDisplay ?? 0;
     // Each extra cost field's shipment-wide total spread across this row by
-    // its matched PRORATA share, same "total x prorata" split Global uses
-    // for its declaration-wide-only taxes (see firstUnitTaxes above).
+    // its matched declaration-wide Prorata share (not the displayed Prorata
+    // value above), same "total x share" split Global uses for its
+    // declaration-wide-only taxes (see firstUnitTaxes above). Rounded to 4
+    // decimal places of the raw fraction so these columns derive from a
+    // stable, reproducible share rather than a longer float tail.
+    const prorataShare = Math.round((matchedData?.prorataShare ?? 0) * 10000) / 10000;
     for (const field of extraCostFields) {
-      rowValues[field.key] = (extraCosts[field.key] ?? 0) * prorata;
+      rowValues[field.key] = (extraCosts[field.key] ?? 0) * prorataShare;
     }
 
     const excelRow = sheet.addRow(rowValues);
@@ -413,9 +418,9 @@ export async function addPackingListSheet(
         sommeDdColumn,
         ...taxTotalColumns,
         sommeDdTtcColumn,
+        prorataColumn,
         ...extraCostColumns,
-      ]),
-      new Set([prorataColumn])
+      ])
     );
     // DD unitaire keeps 6 decimal digits rather than the shared 2-decimal
     // money format — it's a per-piece fraction, not a currency total. The
