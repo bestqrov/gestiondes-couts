@@ -684,6 +684,69 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
   });
 
+  it('splits PRORATA across multiple rows sharing one HS+origin group by each row\'s own pieces, summing back to 100%', async () => {
+    // One declaration article, 300 physical units — Global's own per-unit
+    // Prorata for it is 1/300. Three packing-list rows for the same HS+origin
+    // (e.g. 3 color variants), with deliberately uneven pieces (50/100/150),
+    // stand for those 300 units between them.
+    const declaration: Declaration = {
+      ...SAMPLE_DECLARATION,
+      articles: [
+        {
+          numero: 1,
+          hsCode: '61044300',
+          nomArticle: 'VESTITO A FASCIA CORTO IN TULLE',
+          pays: 'CHINE',
+          paysCode: 'CN',
+          valeurDeclaree: 3000,
+          quantite: 300,
+          unite: 'U',
+          totalArticle: 3000,
+          poidsNet: 12,
+          unitesComplementaires: 1,
+          taxes: [{ code: '000110', assiette: 3000, taux: 2.5, montant: 75 }],
+        },
+      ],
+    };
+    const rows: PackingListRow[] = [
+      { ...SAMPLE_ROWS[0], color: 'PK2 PINK', pieces: 50, origin: 'CHINA' },
+      { ...SAMPLE_ROWS[0], color: 'BL2 BLUE', pieces: 100, origin: 'CHINA' },
+      { ...SAMPLE_ROWS[0], color: 'WH2 WHITE', pieces: 150, origin: 'CHINA' },
+    ];
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-prorata-split');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      rows,
+      declaration,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Columns 1-8 base, 9 tax total (only 000110 here), 10-11 Somme/DD
+    // unitaire HT, 12-13 Somme/DD unitaire TTC, 14 PRORATA — one column
+    // fewer than the two-tax-code fixtures above.
+    expect(sheet.getRow(4).getCell(14).value).toBe('PRORATA');
+
+    // 50/300, 100/300, 150/300 — proportional to each row's own pieces, not
+    // a flat repeat of the article's own per-unit share.
+    let prorataSum = 0;
+    const expected = [50 / 300, 100 / 300, 150 / 300];
+    for (let i = 0; i < 3; i++) {
+      const value = Number(sheet.getRow(5 + i).getCell(14).value);
+      expect(value).toBeCloseTo(expected[i], 4);
+      prorataSum += value;
+    }
+    expect(prorataSum).toBeCloseTo(1, 4);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

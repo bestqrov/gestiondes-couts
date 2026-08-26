@@ -7,6 +7,7 @@ import {
   unionTaxCodes,
   taxCodeDesignation,
   hsAndOriginKey,
+  valeurDeclareeTotalsByHsAndOrigin,
 } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
@@ -98,16 +99,27 @@ function hsCodePrefix(code: string): string {
 // the same "first matching line, not a sum" way for the PRORATA column.
 interface FirstUnitData {
   taxes: Map<string, number>;
+  // Global's own per-unit Prorata for this article (Valeur Déclarée / unit,
+  // over its HS+origin group's combined Valeur Déclarée) — summing this
+  // value across every physical unit of every article in the group always
+  // totals to 1, by construction. A packing-list row stands for `pieces`
+  // physical units, so its own PRORATA is this value × row.pieces, not this
+  // value alone (seeing the bare per-unit share repeated, unmultiplied, on
+  // every row sharing the group is the bug this exists to fix).
+  prorata: number;
 }
 
-// `declarationTotal` is the whole declaration's Valeur Déclarée sum — used
-// only to spread extraOrdonnancementTaxes' declaration-wide montants, since
-// those rubriques only have a single montant for the whole declaration, not
-// one per article, and need a share that sums to 1 across the whole
-// declaration to reconcile back to that single montant.
+// `groupTotal` is this article's HS+origin group's combined Valeur Déclarée
+// (Global's own Prorata pool for it). `declarationTotal` is the whole
+// declaration's Valeur Déclarée sum — used only to spread
+// extraOrdonnancementTaxes' declaration-wide montants, since those rubriques
+// only have a single montant for the whole declaration, not one per
+// article, and need a share that sums to 1 across the whole declaration to
+// reconcile back to that single montant.
 function firstUnitTaxes(
   article: Declaration['articles'][number],
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  groupTotal: number,
   declarationTotal: number
 ): FirstUnitData {
   const quantite = Math.round(article.quantite);
@@ -115,6 +127,8 @@ function firstUnitTaxes(
   for (const tax of article.taxes) {
     perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
   }
+  const prorata =
+    quantite > 0 && groupTotal > 0 ? article.valeurDeclaree / quantite / groupTotal : 0;
   const declarationShare =
     quantite > 0 && declarationTotal > 0 ? article.valeurDeclaree / quantite / declarationTotal : 0;
   if (declarationShare > 0) {
@@ -126,7 +140,7 @@ function firstUnitTaxes(
       perCode.set(tax.code, 0);
     }
   }
-  return { taxes: perCode };
+  return { taxes: perCode, prorata };
 }
 
 // Maps HS code prefix + country of origin to the first-encountered matching
@@ -138,13 +152,15 @@ function firstUnitTaxes(
 function firstUnitTaxesByHsAndOrigin(
   declaration: Declaration,
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  valeurDeclareeTotalsByGroup: Map<string, number>,
   declarationTotal: number
 ): Map<string, FirstUnitData> {
   const result = new Map<string, FirstUnitData>();
   for (const article of declaration.articles) {
     const key = hsAndOriginKey(article.hsCode, article.pays);
     if (result.has(key)) continue;
-    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationTotal));
+    const groupTotal = valeurDeclareeTotalsByGroup.get(key) ?? 0;
+    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
   }
   return result;
 }
@@ -157,13 +173,15 @@ function firstUnitTaxesByHsAndOrigin(
 function firstUnitTaxesByHsPrefix(
   declaration: Declaration,
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
+  valeurDeclareeTotalsByGroup: Map<string, number>,
   declarationTotal: number
 ): Map<string, FirstUnitData> {
   const result = new Map<string, FirstUnitData>();
   for (const article of declaration.articles) {
     const prefix = hsCodePrefix(article.hsCode);
     if (result.has(prefix)) continue;
-    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationTotal));
+    const groupTotal = valeurDeclareeTotalsByGroup.get(hsAndOriginKey(article.hsCode, article.pays)) ?? 0;
+    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
   }
   return result;
 }
@@ -241,9 +259,11 @@ export async function addPackingListSheet(
   // and that sum spread per piece, same relationship as the HT pair.
   const sommeDdTtcColumn = ddUnitaireColumn + 1;
   const ddUnitaireTtcColumn = sommeDdTtcColumn + 1;
-  // PRORATA closes out the sheet — this row's own share of its HS+origin
-  // group's combined declared value (see the row loop below), so the
-  // PRORATA of every row sharing the same pays + HS code sums to ~100%.
+  // PRORATA closes out the sheet — the matched article's own per-unit
+  // Prorata (see firstUnitTaxes) × this row's pieces (see the row loop
+  // below), so PRORATA sums to ~100% across every row sharing the same
+  // pays + HS code, in proportion to how many physical units each row
+  // stands for.
   const prorataColumn = ddUnitaireTtcColumn + 1;
   // One column per manually-entered extra cost field, right after PRORATA,
   // same order as extraCostFields.
@@ -263,41 +283,30 @@ export async function addPackingListSheet(
     { kind: 'value' as const, from: prorataColumn, to: columnCount },
   ];
 
+  const valeurDeclareeTotalsByGroup = valeurDeclareeTotalsByHsAndOrigin(declaration.articles);
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
     declaration,
     extraOrdonnancementTaxes,
+    valeurDeclareeTotalsByGroup,
     declarationValeurDeclareeTotal
   );
   const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(
     declaration,
     extraOrdonnancementTaxes,
+    valeurDeclareeTotalsByGroup,
     declarationValeurDeclareeTotal
   );
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
-  // Resolves a packing-list row to its matched declaration data plus the key
-  // that match was found under (an HS+origin key when ambiguous and matched,
-  // the bare HS prefix otherwise) — undefined when no declaration article
-  // matches this row at all. Reused below to sum every *matched* row's own
-  // `total` within its group, so PRORATA is this row's share of that group's
-  // rows, not the matched declaration article's own per-unit share, and an
-  // unmatched row still gets no PRORATA share.
-  function resolveRowMatch(row: PackingListRow): { key: string; data: FirstUnitData } | undefined {
+  // Resolves a packing-list row to its matched declaration data — an
+  // HS+origin match when ambiguous, the bare HS prefix otherwise —
+  // undefined when no declaration article matches this row at all.
+  function resolveRowMatch(row: PackingListRow): FirstUnitData | undefined {
     const prefix = hsCodePrefix(row.hsCode);
     if (!ambiguousHsPrefixes.has(prefix)) {
-      const data = firstUnitTaxesByPrefix.get(prefix);
-      return data ? { key: prefix, data } : undefined;
+      return firstUnitTaxesByPrefix.get(prefix);
     }
     const originKey = hsAndOriginKey(row.hsCode, row.origin);
-    const originData = firstUnitTaxesByOrigin.get(originKey);
-    if (originData) return { key: originKey, data: originData };
-    const prefixData = firstUnitTaxesByPrefix.get(prefix);
-    return prefixData ? { key: prefix, data: prefixData } : undefined;
-  }
-  const rowTotalsByGroupKey = new Map<string, number>();
-  for (const row of rows) {
-    const match = resolveRowMatch(row);
-    if (!match) continue;
-    rowTotalsByGroupKey.set(match.key, (rowTotalsByGroupKey.get(match.key) ?? 0) + row.total);
+    return firstUnitTaxesByOrigin.get(originKey) ?? firstUnitTaxesByPrefix.get(prefix);
   }
   // Somme DD and the "<tax> Total" columns are zero-padded to at least 4
   // digits before the decimal separator, with no thousands separator —
@@ -363,7 +372,7 @@ export async function addPackingListSheet(
 
   rows.forEach((row, index) => {
     const match = resolveRowMatch(row);
-    const matchedTaxes = match?.data.taxes;
+    const matchedTaxes = match?.taxes;
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,
@@ -404,16 +413,16 @@ export async function addPackingListSheet(
     const sommeDd = sommeDdTtc - vatTotal;
     rowValues.sommeDd = sommeDd;
     rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
-    // PRORATA — this row's own `total` (declared value) as a share of the
-    // combined `total` of every packing-list row sharing its HS+origin
-    // group, so summing PRORATA across every row of that group reconciles
-    // to ~100%, whatever the number of rows or their individual weights.
+    // PRORATA — the matched article's own per-unit Prorata (Global's Valeur
+    // Déclarée / unit, over its HS+origin group's combined Valeur Déclarée)
+    // × this row's pieces, since a packing-list row stands for `pieces`
+    // physical units, not one. Summing this across every row sharing the
+    // same pays + HS code therefore reconciles to ~100% of that group.
     // Rounded to match the PRORATA column's 0.00% display (4 decimal places
     // of the raw fraction) so the extra-cost columns below, which multiply
     // by this same value, derive from what's actually shown, not a longer
     // float tail hidden by display-only formatting.
-    const groupTotal = match ? rowTotalsByGroupKey.get(match.key) ?? 0 : 0;
-    const prorata = groupTotal > 0 ? Math.round((row.total / groupTotal) * 10000) / 10000 : 0;
+    const prorata = match ? Math.round(match.prorata * row.pieces * 10000) / 10000 : 0;
     rowValues.prorata = prorata;
     // Each extra cost field's shipment-wide total spread across this row by
     // its matched PRORATA share, same "total x prorata" split Global uses
