@@ -859,84 +859,13 @@ describe('addPackingListSheet', () => {
     expect(Number(syntheticRow.getCell(6).value)).toBeCloseTo(2790, 2); // total = valeurDeclaree
 
     // PRORATA (column 15, same as the two-tax-code fixtures above) — the
-    // synthetic row is the only one representing this whole group (100% of
-    // its 4 pieces, none matched by any real row), so it comes out to 100%.
+    // synthetic row is the only one representing this whole group, so it's
+    // fixed at 100%, not derived from a (possibly rounding-drifted)
+    // per-unit × pieces multiplication.
     expect(Number(syntheticRow.getCell(15).value)).toBeCloseTo(1, 6);
 
     // Sanity: the real, matched row for the OTHER group is unaffected.
     expect(sheet.getRow(5).getCell(8).value).toBe('61044300');
-  });
-
-  it('adds a synthetic "leftover" row when real packing-list rows only partly cover a group\'s declaration quantite', async () => {
-    // One declaration article, 18 physical units (6403999090, TURQUIE).
-    // Packing-list rows for the same HS+origin only add up to 16 pieces
-    // between them (1+2+2+2+2+2+2+1+1+1 = 16) — 2 units the packing list
-    // just doesn't itemize. Real rows' PRORATA alone would sum to 16/18
-    // (~88.9%), not 100%.
-    const declaration: Declaration = {
-      ...SAMPLE_DECLARATION,
-      articles: [
-        {
-          numero: 1,
-          hsCode: '6403999090',
-          nomArticle: 'AUTRE CHAUSSURES',
-          pays: 'TURQUIE',
-          paysCode: 'TR',
-          valeurDeclaree: 12890,
-          quantite: 18,
-          unite: 'U',
-          totalArticle: 12890,
-          poidsNet: 50,
-          unitesComplementaires: 1,
-          taxes: [{ code: '000110', assiette: 12890, taux: 2.5, montant: 322.25 }],
-        },
-      ],
-    };
-    const piecesPerRow = [1, 2, 2, 2, 2, 2, 2, 1, 1, 1];
-    const rows: PackingListRow[] = piecesPerRow.map((pieces, i) => ({
-      ...SAMPLE_ROWS[0],
-      item: `ROW${i}`,
-      hsCode: '6403999090',
-      origin: 'TURQUIE',
-      pieces,
-      total: pieces * 100,
-    }));
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-partial-coverage');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      rows,
-      declaration,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // Columns 1-8 base, 9 tax total (only 000110), 10-11 Somme/DD unitaire
-    // HT, 12-13 Somme/DD unitaire TTC, 14 PRORATA.
-    const PRORATA_COL = 14;
-
-    // 10 real rows (5-14) + 1 leftover synthetic row (15) for the missing
-    // 18 - 16 = 2 pieces.
-    const leftoverRow = sheet.getRow(15);
-    expect(leftoverRow.getCell(4).value).toBe(2); // pieces
-    expect(leftoverRow.getCell(8).value).toBe('6403999090');
-    expect(leftoverRow.getCell(7).value).toBe('TURQUIE');
-
-    // Summed across 11 rows, each individually rounded to 4 decimal places
-    // for display, so allow for that per-row rounding drift rather than
-    // exact-fraction precision.
-    let prorataSum = 0;
-    for (let rowNum = 5; rowNum <= 15; rowNum++) {
-      prorataSum += Number(sheet.getRow(rowNum).getCell(PRORATA_COL).value);
-    }
-    expect(prorataSum).toBeCloseTo(1, 3);
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {

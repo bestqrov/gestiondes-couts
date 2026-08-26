@@ -498,21 +498,14 @@ export async function addPackingListSheet(
     styleColumnsFill(excelRow, [sommeDdTtcColumn, ddUnitaireTtcColumn], SUM_TTC_ROW_FILL_ARGB);
   }
 
-  // Pieces actually accounted for, per HS+origin group, by the real
-  // packing-list rows matched to it — tracked so a group whose rows only
-  // *partly* cover its declaration quantite (e.g. the packing list lists
-  // 16 of an article's 18 units under this HS+origin, the other 2 simply
-  // missing) can get a synthetic row for exactly the shortfall below,
-  // rather than either being silently under-100% or, if this only checked
-  // "any row matched at all", getting no synthetic row despite the gap.
-  const matchedPiecesByGroup = new Map<string, number>();
+  // Every HS+origin group a packing-list row actually matched — tracked so
+  // a declaration group with zero matching packing-list rows (see below)
+  // can be told apart from one that's simply well-covered by several rows.
+  const coveredGroupKeys = new Set<string>();
 
   rows.forEach((row, index) => {
     const match = resolveRowMatch(row);
-    if (match) {
-      const key = hsAndOriginKey(match.hsCode, match.pays);
-      matchedPiecesByGroup.set(key, (matchedPiecesByGroup.get(key) ?? 0) + row.pieces);
-    }
+    if (match) coveredGroupKeys.add(hsAndOriginKey(match.hsCode, match.pays));
     // PRORATA — the matched article's own per-unit Prorata (Global's Valeur
     // Déclarée / unit, over its HS+origin group's combined Valeur Déclarée)
     // × this row's pieces, since a packing-list row stands for `pieces`
@@ -544,40 +537,33 @@ export async function addPackingListSheet(
     );
   });
 
-  // Any declaration group (HS+origin) whose real packing-list rows don't
-  // fully account for its declaration quantite — whether none matched at
-  // all, or the matched rows' pieces just fall short of it — gets one
-  // synthetic row for exactly the shortfall. Without this, a product
-  // present in Articles/Global but missing (or under-counted) in the
-  // supplier's packing list either never appeared in HS total at all, or
-  // appeared with a PRORATA that silently summed to well under 100% for
-  // its group, with no indication why in either case.
+  // A declaration group (HS+origin) the packing list has no line for at all
+  // — different from an unmatched packing-list row, which at least shows up
+  // (under its own HS code) even without a match. Without this, a product
+  // present in Articles/Global but missing from the supplier's packing list
+  // simply never appeared anywhere in HS total, with no indication why —
+  // reported as "this HS code is in Global but not in HS total". One
+  // synthetic row per missing group stands in for the whole group (all of
+  // its matching articles' combined pieces/value), with PRORATA fixed at
+  // 100% since, by construction, it's the only row representing that group.
   let syntheticIndex = rows.length;
   for (const [key, data] of firstUnitTaxesByOrigin) {
-    const quantiteTotal = quantiteTotalsByGroup.get(key) ?? 0;
-    const matchedPieces = matchedPiecesByGroup.get(key) ?? 0;
-    const leftoverPieces = quantiteTotal - matchedPieces;
-    if (leftoverPieces <= 0) continue;
-    const groupTotal = valeurDeclareeTotalsByGroup.get(key) ?? 0;
-    // This leftover's own slice of the group's declared value, at the
-    // group's average per-unit value — same "total x prorata" spread
-    // logic used everywhere else, just applied to the shortfall alone
-    // instead of the whole group.
-    const total = quantiteTotal > 0 ? (leftoverPieces / quantiteTotal) * groupTotal : 0;
-    const prorata = Math.round(data.prorata * leftoverPieces * 10000) / 10000;
+    if (coveredGroupKeys.has(key)) continue;
+    const pieces = quantiteTotalsByGroup.get(key) ?? 0;
+    const total = valeurDeclareeTotalsByGroup.get(key) ?? 0;
     addHsTotalRow(
       {
         item: '',
         description: '(absent de la packing list)',
         color: '',
-        pieces: leftoverPieces,
-        unit: leftoverPieces > 0 ? total / leftoverPieces : 0,
+        pieces,
+        unit: pieces > 0 ? total / pieces : 0,
         total,
         origin: data.pays,
         hsCode: data.hsCode,
       },
       data.taxes,
-      prorata,
+      pieces > 0 ? 1 : 0,
       syntheticIndex
     );
     syntheticIndex += 1;
