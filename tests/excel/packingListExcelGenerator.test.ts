@@ -649,7 +649,7 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
   });
 
-  it('adds a PRORATA column with the matched Global article\'s own Prorata value, not derived from the row\'s own pieces', async () => {
+  it('adds a PRORATA column with each matched row\'s own share of its HS+origin group\'s combined total', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-prorata');
     tempDir = dir;
@@ -672,13 +672,12 @@ describe('addPackingListSheet', () => {
     // Somme/DD unitaire TTC, 15 PRORATA.
     expect(headerRow.getCell(15).value).toBe('PRORATA');
 
-    // Declaration's only article: valeurDeclaree 172.98 across 18 units, and
-    // it's also the declaration's only article, so Prorata for its first
-    // unit = (172.98 / 18) / 172.98 = 1 / 18, rounded to 4 decimal places
-    // (matching the column's 0.00% display) since the extra-cost columns
-    // downstream derive from this same rounded value.
+    // Row 5 (HS 61044300) is the only packing-list row matching the
+    // declaration's only article's HS prefix, so it's also the only row in
+    // its group: its own total (172.98) over the group's combined total
+    // (its own 172.98 alone) is 100%.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(0.0556, 6);
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(1, 6);
 
     // Row 6 has no matching article, so PRORATA defaults to 0 too.
     const unmatchedRow = sheet.getRow(6);
