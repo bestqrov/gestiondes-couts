@@ -6,6 +6,8 @@ import {
   allocateTaxAcrossUnits,
   unionTaxCodes,
   taxCodeDesignation,
+  hsAndOriginKey,
+  valeurDeclareeTotalsByHsAndOrigin,
 } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
@@ -82,10 +84,8 @@ function hsCodePrefix(code: string): string {
 // one from Bangladesh) — so, when that actually happens, the group total a
 // packing-list row picks up needs to key on HS code prefix AND country of
 // origin together, not HS code alone, or a row would silently pick up
-// another country's tax montants.
-function hsAndOriginKey(hsCode: string, pays: string): string {
-  return `${hsCodePrefix(hsCode)}|${normalizeCountryName(pays)}`;
-}
+// another country's tax montants. (Shared with unitLevelExcelGenerator.ts's
+// own Prorata grouping, so both sheets agree on the same pools.)
 
 // The per-unit tax montants of an article's very first physical unit (the
 // same allocation Global's row 1 for this article shows) — not the article's
@@ -102,10 +102,20 @@ interface FirstUnitData {
   prorata: number;
 }
 
+// `groupTotal` is the sum of Valeur Déclarée across every article sharing
+// this article's own HS code prefix + country of origin (Global's own
+// Prorata pool for it) — used for the displayed `prorata`. `declarationTotal`
+// is the whole declaration's Valeur Déclarée sum — used only to spread
+// extraOrdonnancementTaxes' declaration-wide montants (see
+// unitLevelExcelGenerator.ts's matching `declarationShare`), since those
+// rubriques only have a single montant for the whole declaration, not one
+// per HS+origin group, and would otherwise be applied once per group instead
+// of once, total.
 function firstUnitTaxes(
   article: Declaration['articles'][number],
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  declarationValeurDeclareeTotal: number
+  groupTotal: number,
+  declarationTotal: number
 ): FirstUnitData {
   const quantite = Math.round(article.quantite);
   const perCode = new Map<string, number>();
@@ -113,12 +123,12 @@ function firstUnitTaxes(
     perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
   }
   const prorata =
-    quantite > 0 && declarationValeurDeclareeTotal > 0
-      ? article.valeurDeclaree / quantite / declarationValeurDeclareeTotal
-      : 0;
-  if (quantite > 0 && declarationValeurDeclareeTotal > 0) {
+    quantite > 0 && groupTotal > 0 ? article.valeurDeclaree / quantite / groupTotal : 0;
+  const declarationShare =
+    quantite > 0 && declarationTotal > 0 ? article.valeurDeclaree / quantite / declarationTotal : 0;
+  if (declarationShare > 0) {
     for (const tax of extraOrdonnancementTaxes) {
-      perCode.set(tax.code, tax.montant * prorata);
+      perCode.set(tax.code, tax.montant * declarationShare);
     }
   } else {
     for (const tax of extraOrdonnancementTaxes) {
@@ -137,13 +147,15 @@ function firstUnitTaxes(
 function firstUnitTaxesByHsAndOrigin(
   declaration: Declaration,
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  declarationValeurDeclareeTotal: number
+  valeurDeclareeTotalsByGroup: Map<string, number>,
+  declarationTotal: number
 ): Map<string, FirstUnitData> {
   const result = new Map<string, FirstUnitData>();
   for (const article of declaration.articles) {
     const key = hsAndOriginKey(article.hsCode, article.pays);
     if (result.has(key)) continue;
-    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationValeurDeclareeTotal));
+    const groupTotal = valeurDeclareeTotalsByGroup.get(key) ?? 0;
+    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
   }
   return result;
 }
@@ -156,13 +168,15 @@ function firstUnitTaxesByHsAndOrigin(
 function firstUnitTaxesByHsPrefix(
   declaration: Declaration,
   extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  declarationValeurDeclareeTotal: number
+  valeurDeclareeTotalsByGroup: Map<string, number>,
+  declarationTotal: number
 ): Map<string, FirstUnitData> {
   const result = new Map<string, FirstUnitData>();
   for (const article of declaration.articles) {
     const prefix = hsCodePrefix(article.hsCode);
     if (result.has(prefix)) continue;
-    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, declarationValeurDeclareeTotal));
+    const groupTotal = valeurDeclareeTotalsByGroup.get(hsAndOriginKey(article.hsCode, article.pays)) ?? 0;
+    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
   }
   return result;
 }
@@ -219,6 +233,7 @@ export async function addPackingListSheet(
     ...taxCodes.map(taxCodeDesignation),
     ...extraOrdonnancementTaxes.map((tax) => tax.designation),
   ];
+  const valeurDeclareeTotalsByGroup = valeurDeclareeTotalsByHsAndOrigin(declaration.articles);
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
     (sum, article) => sum + article.valeurDeclaree,
     0
@@ -264,11 +279,13 @@ export async function addPackingListSheet(
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
     declaration,
     extraOrdonnancementTaxes,
+    valeurDeclareeTotalsByGroup,
     declarationValeurDeclareeTotal
   );
   const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(
     declaration,
     extraOrdonnancementTaxes,
+    valeurDeclareeTotalsByGroup,
     declarationValeurDeclareeTotal
   );
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
