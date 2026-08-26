@@ -808,6 +808,66 @@ describe('addPackingListSheet', () => {
     expect(prorataSum).toBeCloseTo(1, 4);
   });
 
+  it('adds a synthetic row for a declaration article whose HS+origin group has no matching packing-list row at all', async () => {
+    // Two declaration articles: one (61044300, CHINE) has a matching
+    // packing-list row (SAMPLE_ROWS[0]); the other (42023210, CHINE) has
+    // none at all in the packing list — reported bug: that second HS code
+    // shows up in Articles/Global but never in HS total.
+    const declaration: Declaration = {
+      ...DECLARATION_WITH_TAXES,
+      articles: [
+        ...DECLARATION_WITH_TAXES.articles,
+        {
+          numero: 2,
+          hsCode: '4202321091',
+          nomArticle: 'SET PORTE FEUILLE ET POCHETTE',
+          pays: 'CHINE',
+          paysCode: 'CN',
+          valeurDeclaree: 2790,
+          quantite: 4,
+          unite: 'U',
+          totalArticle: 2790,
+          poidsNet: 3,
+          unitesComplementaires: 1,
+          taxes: [{ code: '000110', assiette: 2790, taux: 2.5, montant: 69.75 }],
+        },
+      ],
+    };
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-missing-group');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      declaration,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // SAMPLE_ROWS has 2 rows (rows 5-6); the synthetic row for the missing
+    // group is appended after them, at row 7.
+    const syntheticRow = sheet.getRow(7);
+    expect(syntheticRow.getCell(7).value).toBe('CHINE'); // origin
+    expect(syntheticRow.getCell(8).value).toBe('4202321091'); // HSC
+    expect(syntheticRow.getCell(4).value).toBe(4); // pieces = the article's own quantite
+    expect(Number(syntheticRow.getCell(6).value)).toBeCloseTo(2790, 2); // total = valeurDeclaree
+
+    // PRORATA (column 15, same as the two-tax-code fixtures above) — the
+    // synthetic row is the only one representing this whole group, so it's
+    // fixed at 100%, not derived from a (possibly rounding-drifted)
+    // per-unit × pieces multiplication.
+    expect(Number(syntheticRow.getCell(15).value)).toBeCloseTo(1, 6);
+
+    // Sanity: the real, matched row for the OTHER group is unaffected.
+    expect(sheet.getRow(5).getCell(8).value).toBe('61044300');
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

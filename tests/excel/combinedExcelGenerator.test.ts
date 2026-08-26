@@ -74,7 +74,11 @@ describe('generateCombinedExcel', () => {
     const hsTotalSheet = workbook.getWorksheet('HS total')!;
     expect(hsTotalSheet.getRow(4).getCell(1).value).toBe('item');
     expect(hsTotalSheet.getRow(5).getCell(1).value).toBe('AB0141DOAY16');
-    expect(hsTotalSheet.rowCount).toBe(5); // 3 title rows + header + 1 packing-list row
+    // 3 title rows + header + 1 packing-list row + 2 synthetic rows — the
+    // real declaration's 2 articles (ITALIE, BANGLADESH) neither match the
+    // single packing-list row's origin (CHINA), so both get a synthetic row
+    // standing in for their own HS+origin group.
+    expect(hsTotalSheet.rowCount).toBe(7);
 
     // All three sheets share the identical "Date de génération" timestamp —
     // proves generateCombinedExcel computed it once, not once per sheet.

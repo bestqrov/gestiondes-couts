@@ -115,6 +115,11 @@ interface FirstUnitData {
   // while the declaration's is the authoritative customs one Global itself
   // displays.
   hsCode: string;
+  // The matched article's own country of origin — used to derive this
+  // article's HS+origin group key (hsAndOriginKey(hsCode, pays)) so a
+  // packing-list row that matched via the HS-prefix-only fallback can still
+  // mark the right group as covered (see coveredGroupKeys below).
+  pays: string;
 }
 
 // `groupTotal` is this article's HS+origin group's combined Valeur Déclarée
@@ -148,7 +153,7 @@ function firstUnitTaxes(
       perCode.set(tax.code, 0);
     }
   }
-  return { taxes: perCode, prorata, hsCode: article.hsCode };
+  return { taxes: perCode, prorata, hsCode: article.hsCode, pays: article.pays };
 }
 
 // Maps HS code prefix + country of origin to the first-encountered matching
@@ -292,6 +297,15 @@ export async function addPackingListSheet(
   ];
 
   const valeurDeclareeTotalsByGroup = valeurDeclareeTotalsByHsAndOrigin(declaration.articles);
+  // Total physical units (quantite) across every article sharing an
+  // HS+origin group — used below to size a synthetic row standing in for a
+  // whole group the packing list has no line for at all (see
+  // coveredGroupKeys), the same way `pieces` sizes a real packing-list row.
+  const quantiteTotalsByGroup = new Map<string, number>();
+  for (const article of declaration.articles) {
+    const key = hsAndOriginKey(article.hsCode, article.pays);
+    quantiteTotalsByGroup.set(key, (quantiteTotalsByGroup.get(key) ?? 0) + Math.round(article.quantite));
+  }
   const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
     declaration,
     extraOrdonnancementTaxes,
@@ -378,23 +392,25 @@ export async function addPackingListSheet(
   ]);
   styleHeaderRowGrouped(headerRow, columnCount, columnGroups);
 
-  rows.forEach((row, index) => {
-    const match = resolveRowMatch(row);
-    const matchedTaxes = match?.taxes;
-    const rowValues: Record<string, string | number> = {
-      item: row.item,
-      description: row.description,
-      color: row.color,
-      pieces: row.pieces,
-      unit: row.unit,
-      total: row.total,
-      origin: row.origin,
-      // The matched declaration article's own full HS code (same value
-      // Global shows), not the packing list's own — falls back to the
-      // packing list's when unmatched, so an unmatched row still shows
-      // something to help spot why it didn't match.
-      hsCode: match?.hsCode ?? row.hsCode,
-    };
+  // Builds and styles one HS-total data row — shared by real packing-list
+  // rows and by the synthetic rows added below for a declaration group the
+  // packing list has no line for at all (see coveredGroupKeys).
+  function addHsTotalRow(
+    identity: {
+      item: string;
+      description: string;
+      color: string;
+      pieces: number;
+      unit: number;
+      total: number;
+      origin: string;
+      hsCode: string;
+    },
+    matchedTaxes: Map<string, number> | undefined,
+    prorata: number,
+    index: number
+  ): void {
+    const rowValues: Record<string, string | number> = { ...identity };
     // Not displayed as its own columns (see the comment on sommeDdColumn
     // above), but still needed per-code to build Somme DD HT/TTC and the
     // "<tax> Total" columns below.
@@ -407,32 +423,22 @@ export async function addPackingListSheet(
     // the "total" column (unit price x pieces).
     let sommeDdTtc = 0;
     for (const code of allTaxCodes) {
-      const taxTotal = taxMontants.get(code)! * row.pieces;
+      const taxTotal = taxMontants.get(code)! * identity.pieces;
       rowValues[`${code}_total`] = taxTotal;
       sommeDdTtc += taxTotal;
     }
     // "Somme DD TTC" / "DD unitaire TTC" — the row's "<tax> Total" columns
     // summed, and that sum spread per piece.
     rowValues.sommeDdTtc = sommeDdTtc;
-    rowValues.ddUnitaireTtc = row.pieces > 0 ? sommeDdTtc / row.pieces : 0;
+    rowValues.ddUnitaireTtc = identity.pieces > 0 ? sommeDdTtc / identity.pieces : 0;
     // "Somme DD HT" — Somme DD TTC minus the TVA IMPORT AUTRE PDS Total
     // column, i.e. every tax's total except VAT. "DD unitaire" spreads that
     // over this row's piece count, same per-unit pattern as Global's Valeur
     // Déclarée / Unité.
-    const vatTotal = (taxMontants.get(VAT_TAX_CODE) ?? 0) * row.pieces;
+    const vatTotal = (taxMontants.get(VAT_TAX_CODE) ?? 0) * identity.pieces;
     const sommeDd = sommeDdTtc - vatTotal;
     rowValues.sommeDd = sommeDd;
-    rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
-    // PRORATA — the matched article's own per-unit Prorata (Global's Valeur
-    // Déclarée / unit, over its HS+origin group's combined Valeur Déclarée)
-    // × this row's pieces, since a packing-list row stands for `pieces`
-    // physical units, not one. Summing this across every row sharing the
-    // same pays + HS code therefore reconciles to ~100% of that group.
-    // Rounded to match the PRORATA column's 0.00% display (4 decimal places
-    // of the raw fraction) so the extra-cost columns below, which multiply
-    // by this same value, derive from what's actually shown, not a longer
-    // float tail hidden by display-only formatting.
-    const prorata = match ? Math.round(match.prorata * row.pieces * 10000) / 10000 : 0;
+    rowValues.ddUnitaire = identity.pieces > 0 ? sommeDd / identity.pieces : 0;
     rowValues.prorata = prorata;
     // Each extra cost field's shipment-wide total spread across this row by
     // its matched PRORATA share, same "total x prorata" split Global uses
@@ -490,5 +496,76 @@ export async function addPackingListSheet(
     // overrides above.
     styleColumnsFill(excelRow, [sommeDdColumn, ddUnitaireColumn], SUM_HT_ROW_FILL_ARGB);
     styleColumnsFill(excelRow, [sommeDdTtcColumn, ddUnitaireTtcColumn], SUM_TTC_ROW_FILL_ARGB);
+  }
+
+  // Every HS+origin group a packing-list row actually matched — tracked so
+  // a declaration group with zero matching packing-list rows (see below)
+  // can be told apart from one that's simply well-covered by several rows.
+  const coveredGroupKeys = new Set<string>();
+
+  rows.forEach((row, index) => {
+    const match = resolveRowMatch(row);
+    if (match) coveredGroupKeys.add(hsAndOriginKey(match.hsCode, match.pays));
+    // PRORATA — the matched article's own per-unit Prorata (Global's Valeur
+    // Déclarée / unit, over its HS+origin group's combined Valeur Déclarée)
+    // × this row's pieces, since a packing-list row stands for `pieces`
+    // physical units, not one. Summing this across every row sharing the
+    // same pays + HS code therefore reconciles to ~100% of that group.
+    // Rounded to match the PRORATA column's 0.00% display (4 decimal places
+    // of the raw fraction) so the extra-cost columns below, which multiply
+    // by this same value, derive from what's actually shown, not a longer
+    // float tail hidden by display-only formatting.
+    const prorata = match ? Math.round(match.prorata * row.pieces * 10000) / 10000 : 0;
+    addHsTotalRow(
+      {
+        item: row.item,
+        description: row.description,
+        color: row.color,
+        pieces: row.pieces,
+        unit: row.unit,
+        total: row.total,
+        origin: row.origin,
+        // The matched declaration article's own full HS code (same value
+        // Global shows), not the packing list's own — falls back to the
+        // packing list's when unmatched, so an unmatched row still shows
+        // something to help spot why it didn't match.
+        hsCode: match?.hsCode ?? row.hsCode,
+      },
+      match?.taxes,
+      prorata,
+      index
+    );
   });
+
+  // A declaration group (HS+origin) the packing list has no line for at all
+  // — different from an unmatched packing-list row, which at least shows up
+  // (under its own HS code) even without a match. Without this, a product
+  // present in Articles/Global but missing from the supplier's packing list
+  // simply never appeared anywhere in HS total, with no indication why —
+  // reported as "this HS code is in Global but not in HS total". One
+  // synthetic row per missing group stands in for the whole group (all of
+  // its matching articles' combined pieces/value), with PRORATA fixed at
+  // 100% since, by construction, it's the only row representing that group.
+  let syntheticIndex = rows.length;
+  for (const [key, data] of firstUnitTaxesByOrigin) {
+    if (coveredGroupKeys.has(key)) continue;
+    const pieces = quantiteTotalsByGroup.get(key) ?? 0;
+    const total = valeurDeclareeTotalsByGroup.get(key) ?? 0;
+    addHsTotalRow(
+      {
+        item: '',
+        description: '(absent de la packing list)',
+        color: '',
+        pieces,
+        unit: pieces > 0 ? total / pieces : 0,
+        total,
+        origin: data.pays,
+        hsCode: data.hsCode,
+      },
+      data.taxes,
+      pieces > 0 ? 1 : 0,
+      syntheticIndex
+    );
+    syntheticIndex += 1;
+  }
 }
