@@ -95,8 +95,9 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(10).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(14).value)).toBeCloseTo(27147.0 / 354, 4);
-    // Prorata — this unit's own Valeur Déclarée / Unité, same as column 14.
-    expect(Number(firstRow.getCell(15).value)).toBeCloseTo(27147.0 / 354, 4);
+    // Prorata — this unit's Valeur Déclarée over the whole declaration's total
+    // Valeur Déclarée (article 1's 27147.0 + article 2's 12892.992 = 40039.992).
+    expect(Number(firstRow.getCell(15).value)).toBeCloseTo(27147.0 / 354 / 40039.992, 6);
 
     // last row of article 1, first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(358);
@@ -110,8 +111,8 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRowArticle2.getCell(8).value).toBe('BANGLADESH');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(14).value)).toBeCloseTo(12892.992 / 200, 4);
-    // Prorata — article 2's own Valeur Déclarée / Unité, same as column 14.
-    expect(Number(firstRowArticle2.getCell(15).value)).toBeCloseTo(12892.992 / 200, 4);
+    // Prorata — still divided by the whole declaration's total, not article 2's own total.
+    expect(Number(firstRowArticle2.getCell(15).value)).toBeCloseTo(12892.992 / 200 / 40039.992, 6);
     // A thicker top border marks where article 2's block starts.
     expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 
@@ -132,14 +133,13 @@ describe('generateUnitLevelExcel', () => {
     expect(sum007217).toBeCloseTo(68.0, 2);
 
     // Every unit row's Prorata, summed across both articles, must reconcile
-    // to the declaration's total Valeur Déclarée (27147.0 + 12892.992 =
-    // 40039.992) — confirms Prorata is each unit's own Valeur Déclarée,
-    // reconstructing the whole declaration's total when summed.
+    // to 100% of the declaration — confirms Prorata is divided by the whole
+    // declaration's total Valeur Déclarée, not each article's own total.
     let prorataSum = 0;
     for (let rowNum = 5; rowNum <= 558; rowNum++) {
       prorataSum += Number(sheet.getRow(rowNum).getCell(15).value);
     }
-    expect(prorataSum).toBeCloseTo(40039.992, 2);
+    expect(prorataSum).toBeCloseTo(1, 6);
   });
 
   it('fills every row\'s N° Enregistrement, Date d\'arrivée, DONNEES COMPTABLES, and Nature et numéro du titre de transport with the DUM\'s declaration-wide values when present', async () => {

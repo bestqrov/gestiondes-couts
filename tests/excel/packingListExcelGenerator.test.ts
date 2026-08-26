@@ -672,11 +672,13 @@ describe('addPackingListSheet', () => {
     // Somme/DD unitaire TTC, 15 PRORATA.
     expect(headerRow.getCell(15).value).toBe('PRORATA');
 
-    // Declaration's only article: the displayed Prorata is its own raw
-    // Valeur Déclarée, 172.98, not divided by quantite or by the
-    // declaration's total.
+    // Declaration's only article: valeurDeclaree 172.98 across 18 units, and
+    // it's also the declaration's only article, so Prorata for its first
+    // unit = (172.98 / 18) / 172.98 = 1 / 18, rounded to 4 decimal places
+    // (matching the column's 0.00% display) since the extra-cost columns
+    // downstream derive from this same rounded value.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(172.98, 6);
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(0.0556, 6);
 
     // Row 6 has no matching article, so PRORATA defaults to 0 too.
     const unmatchedRow = sheet.getRow(6);
