@@ -397,15 +397,17 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // Both rows share HS position 610443, but only article 1 (the first
-    // encountered, matching Global's row order) is used — its first unit's
-    // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of
-    // both. Read via Somme DD HT (col 10, right after the one tax's "Total"
-    // column at col 9) since the individual tax columns aren't shown; the
-    // only tax here is 000110 (not VAT), so Somme DD HT equals Somme DD TTC,
-    // i.e. that per-unit value spread across each row's 18 pieces.
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
-    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
+    // Both packing-list rows share HS position 610443 (and CHINE), so
+    // they're merged into one HS-total row (18 + 18 = 36 pieces) — but only
+    // article 1's tax data (the first encountered, matching Global's row
+    // order) is used for it, its first unit's 2.5 / 10 = 0.25, not article
+    // 2's 25 / 5 = 5.00, and not a blend of both. Read via Somme DD HT (col
+    // 10, right after the one tax's "Total" column at col 9) since the
+    // individual tax columns aren't shown; the only tax here is 000110 (not
+    // VAT), so Somme DD HT equals Somme DD TTC, i.e. that per-unit value
+    // spread across the merged row's 36 pieces.
+    expect(sheet.getRow(5).getCell(4).value).toBe(36);
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 36, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
@@ -798,11 +800,11 @@ describe('addPackingListSheet', () => {
     expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
   });
 
-  it('splits PRORATA across multiple rows sharing one HS+origin group by each row\'s own pieces, summing back to 100%', async () => {
+  it('merges multiple packing-list rows sharing one HS+origin group into a single HS-total row, PRORATA summing to 100%', async () => {
     // One declaration article, 300 physical units — Global's own per-unit
     // Prorata for it is 1/300. Three packing-list rows for the same HS+origin
     // (e.g. 3 color variants), with deliberately uneven pieces (50/100/150),
-    // stand for those 300 units between them.
+    // stand for those 300 units between them — merged into one HS-total row.
     const declaration: Declaration = {
       ...SAMPLE_DECLARATION,
       articles: [
@@ -849,21 +851,17 @@ describe('addPackingListSheet', () => {
     // fewer than the two-tax-code fixtures above.
     expect(sheet.getRow(4).getCell(14).value).toBe('PRORATA');
 
-    // 50/300, 100/300, 150/300 — proportional to each row's own pieces, not
-    // a flat repeat of the article's own per-unit share.
-    let prorataSum = 0;
-    const expected = [50 / 300, 100 / 300, 150 / 300];
-    for (let i = 0; i < 3; i++) {
-      const value = Number(sheet.getRow(5 + i).getCell(14).value);
-      expect(value).toBeCloseTo(expected[i], 4);
-      prorataSum += value;
-    }
-    expect(prorataSum).toBeCloseTo(1, 4);
+    // One merged row: pieces = 50 + 100 + 150 = 300 (the article's own
+    // quantite, fully covered), PRORATA = 300/300 = 100% — not three
+    // separate rows each showing a fraction.
+    const mergedRow = sheet.getRow(5);
+    expect(mergedRow.getCell(4).value).toBe(300);
+    expect(Number(mergedRow.getCell(14).value)).toBeCloseTo(1, 4);
   });
 
-  it('adds a synthetic row for a declaration article whose HS+origin group has no matching packing-list row at all', async () => {
+  it('still adds a row for a declaration article whose HS+origin group has no matching packing-list row at all', async () => {
     // Two declaration articles: one (61044300, CHINE) has a matching
-    // packing-list row (SAMPLE_ROWS[0]); the other (42023210, CHINE) has
+    // packing-list row (SAMPLE_ROWS[0]); the other (4202321091, CHINE) has
     // none at all in the packing list — reported bug: that second HS code
     // shows up in Articles/Global but never in HS total.
     const declaration: Declaration = {
@@ -903,19 +901,17 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // SAMPLE_ROWS has 2 rows (rows 5-6); the synthetic row for the missing
-    // group is appended after them, at row 7.
-    const syntheticRow = sheet.getRow(7);
-    expect(syntheticRow.getCell(7).value).toBe('CHINE'); // origin
-    expect(syntheticRow.getCell(8).value).toBe('4202321091'); // HSC
-    expect(syntheticRow.getCell(4).value).toBe(4); // pieces = the article's own quantite
-    expect(Number(syntheticRow.getCell(6).value)).toBeCloseTo(2790, 2); // total = valeurDeclaree
-
-    // PRORATA (column 15, same as the two-tax-code fixtures above) — the
-    // synthetic row is the only one representing this whole group, so it's
-    // fixed at 100%, not derived from a (possibly rounding-drifted)
-    // per-unit × pieces multiplication.
-    expect(Number(syntheticRow.getCell(15).value)).toBeCloseTo(1, 6);
+    // One row per declaration group, in declaration.articles order: row 5
+    // is article 1's group (matched by SAMPLE_ROWS[0]), row 6 is article
+    // 2's — zero matching packing-list rows, but it still gets a row, with
+    // 0 pieces/total/PRORATA rather than not appearing at all.
+    const missingGroupRow = sheet.getRow(6);
+    expect(missingGroupRow.getCell(7).value).toBe('CHINE'); // origin
+    expect(missingGroupRow.getCell(8).value).toBe('4202321091'); // HSC
+    expect(missingGroupRow.getCell(2).value).toBe('SET PORTE FEUILLE ET POCHETTE'); // description
+    expect(missingGroupRow.getCell(4).value).toBe(0); // pieces
+    expect(Number(missingGroupRow.getCell(6).value)).toBe(0); // total
+    expect(Number(missingGroupRow.getCell(15).value)).toBe(0); // PRORATA (column 15)
 
     // Sanity: the real, matched row for the OTHER group is unaffected.
     expect(sheet.getRow(5).getCell(8).value).toBe('61044300');

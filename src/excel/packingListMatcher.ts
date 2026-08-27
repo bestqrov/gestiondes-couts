@@ -34,6 +34,7 @@ export interface FirstUnitData {
   prorata: number;
   hsCode: string;
   pays: string;
+  nomArticle: string;
 }
 
 function firstUnitTaxes(
@@ -59,7 +60,7 @@ function firstUnitTaxes(
       perCode.set(tax.code, 0);
     }
   }
-  return { taxes: perCode, prorata, hsCode: article.hsCode, pays: article.pays };
+  return { taxes: perCode, prorata, hsCode: article.hsCode, pays: article.pays, nomArticle: article.nomArticle };
 }
 
 // Maps HS code prefix + country of origin to the first-encountered matching
