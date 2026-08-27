@@ -1,12 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { Declaration } from '../domain/types.js';
-import {
-  allocateTaxAcrossUnits,
-  hsAndOriginKey,
-  taxCodeDesignation,
-  unionTaxCodes,
-  valeurDeclareeTotalsByHsAndOrigin,
-} from './unitLevelTaxHelpers.js';
+import { allocateTaxAcrossUnits, taxCodeDesignation, unionTaxCodes } from './unitLevelTaxHelpers.js';
 import {
   styleDataRow,
   styleHeaderRowGrouped,
@@ -78,13 +72,6 @@ export async function addUnitLevelSheet(
     ...extraCodes.map((_, i) => 11 + taxCodes.length + i),
   ]);
   const percentColumns = new Set<number>([prorataColumn]);
-  const valeurDeclareeTotalsByGroup = valeurDeclareeTotalsByHsAndOrigin(declaration.articles);
-  // Declaration-wide-only rubriques (REDV.INF., RI SEGMA, REMISES CREDIT —
-  // extraOrdonnancementTaxes) only have a single montant for the whole
-  // declaration, not one per HS+origin group, so they must keep being spread
-  // with a share that sums to 1 across every row of the declaration (not per
-  // group) or a declaration with more than one HS+origin group would apply
-  // their montant once per group instead of once, total.
   const declarationValeurDeclareeTotal = declaration.articles.reduce(
     (sum, article) => sum + article.valeurDeclaree,
     0
@@ -165,17 +152,10 @@ export async function addUnitLevelSheet(
     // producing Infinity/NaN in the sheet).
     const poidsNetPerUnit =
       article.unitesComplementaires > 0 ? article.poidsNet / article.unitesComplementaires : article.poidsNet;
-    // Prorata — this unit's share of its product group's total declared
-    // value (montant in Valeur Déclarée / the sum of Valeur Déclarée across
-    // every article sharing the same HS code prefix + country of origin),
-    // not the whole declaration's total.
-    const groupTotal = valeurDeclareeTotalsByGroup.get(hsAndOriginKey(article.hsCode, article.pays)) ?? 0;
-    const prorata = groupTotal > 0 ? valeurDeclareePerUnit / groupTotal : 0;
-    // Share used only to spread extraOrdonnancementTaxes' declaration-wide
-    // montants (see above) — sums to 1 across the whole declaration, unlike
-    // the displayed `prorata`, which sums to 1 within each HS+origin group.
-    const declarationShare =
-      declarationValeurDeclareeTotal > 0 ? valeurDeclareePerUnit / declarationValeurDeclareeTotal : 0;
+    // Prorata — this unit's share of the whole declaration's total declared
+    // value (montant in Valeur Déclarée / the sum of every article's Valeur
+    // Déclarée across the declaration), not just its own product's total.
+    const prorata = valeurDeclareePerUnit / declarationValeurDeclareeTotal;
 
     const perCodeAllocations = new Map<string, number[]>();
     for (const code of taxCodes) {
@@ -205,7 +185,7 @@ export async function addUnitLevelSheet(
         rowValues[code] = perCodeAllocations.get(code)![unit];
       }
       for (const tax of extraOrdonnancementTaxes) {
-        rowValues[tax.code] = tax.montant * declarationShare;
+        rowValues[tax.code] = tax.montant * prorata;
       }
       const row = sheet.addRow(rowValues);
       styleDataRow(row, columnCount, dataRowIndex, moneyColumns, percentColumns);

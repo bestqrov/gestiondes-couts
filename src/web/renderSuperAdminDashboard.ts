@@ -1335,7 +1335,6 @@ const GENERATE_PAGE_STYLE = `
   #successPanel.cost-exclusive .results-section,
   #successPanel.cost-exclusive #newDeclarationBtn,
   #successPanel.cost-exclusive #downloadAgainBtn,
-  #successPanel.cost-exclusive #downloadVerificationBtn,
   #successPanel.cost-exclusive #showResultsBtn { display: none; }
   #successPanel.cost-exclusive .cost-panel { border-top: none; margin-top: 0; }
   table.cost-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -1549,10 +1548,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10.5M10 13.5l-4-4M10 13.5l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Télécharger
           </button>
-          <button type="button" class="secondary" id="downloadVerificationBtn" title="Lignes de la packing list non reconnues, et produits de la déclaration non entièrement couverts par la packing list">
-            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5v4M10 13.2h.01M10 2.5l7.5 13H2.5l7.5-13Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            À vérifier
-          </button>
           <button type="button" id="showCostsBtn">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 16.5V9M8 16.5V4M13 16.5v-6M17.5 16.5V7" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Coûts des produits
@@ -1673,7 +1668,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const costTableContainer = document.getElementById('costTableContainer');
       const showCostsBtn = document.getElementById('showCostsBtn');
       const downloadAgainBtn = document.getElementById('downloadAgainBtn');
-      const downloadVerificationBtn = document.getElementById('downloadVerificationBtn');
       const newDeclarationBtn = document.getElementById('newDeclarationBtn');
       const validationModal = document.getElementById('validationModal');
       const validationModalOk = document.getElementById('validationModalOk');
@@ -1828,20 +1822,6 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
           showFormError(err.message);
         } finally {
           downloadAgainBtn.disabled = false;
-        }
-      });
-
-      downloadVerificationBtn.addEventListener('click', async () => {
-        downloadVerificationBtn.disabled = true;
-        try {
-          const response = await fetch('/download-verification-report');
-          if (!response.ok) throw new Error('Impossible de télécharger le fichier à vérifier.');
-          const blob = await response.blob();
-          triggerBlobDownload(blob, 'A_verifier.xlsx');
-        } catch (err) {
-          showFormError(err.message);
-        } finally {
-          downloadVerificationBtn.disabled = false;
         }
       });
 

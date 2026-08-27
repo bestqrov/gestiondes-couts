@@ -120,7 +120,7 @@ describe('addPackingListSheet', () => {
     expect(row1.getCell(2).alignment?.horizontal).toBe('left');
   });
 
-  it('shows the packing list\'s own full HS code, even one with more than 8 digits, when no declaration article matches', async () => {
+  it('shows the full HS code even when it has more than 8 digits', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-long-hscode');
     tempDir = dir;
@@ -143,67 +143,6 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
 
     expect(sheet.getRow(5).getCell(8).value).toBe('6104430011');
-  });
-
-  it('shows the matched declaration article\'s own full HS code, not the packing list\'s own (shorter) one', async () => {
-    // The packing list only carries the supplier's 8-digit code ('61044300'),
-    // while the declaration's (Global's) is the full, authoritative 10-digit
-    // customs code — HS total should show the latter for a matched row, same
-    // as Global does, not the packing list's shorter one.
-    const declaration: Declaration = {
-      ...DECLARATION_WITH_TAXES,
-      articles: [{ ...DECLARATION_WITH_TAXES.articles[0], hsCode: '6104430099' }],
-    };
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-matched-hscode');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      SAMPLE_ROWS,
-      declaration,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // Row 5 (SAMPLE_ROWS[0], hsCode '61044300') matches the declaration
-    // article by its 6-digit prefix, so it shows the article's full
-    // '6104430099', not the packing list's own '61044300'.
-    expect(sheet.getRow(5).getCell(8).value).toBe('6104430099');
-
-    // Row 6 (hsCode '61142000') has no matching article, so it still falls
-    // back to its own packing-list HS code.
-    expect(sheet.getRow(6).getCell(8).value).toBe('61142000');
-  });
-
-  it('still matches a row whose HS code is dot- or space-formatted (e.g. straight from an unnormalized source), not just plain digits', async () => {
-    const rows: PackingListRow[] = [{ ...SAMPLE_ROWS[0], hsCode: '6104.43.0099' }];
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-dotted-hscode');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      rows,
-      DECLARATION_WITH_TAXES,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // Matches DECLARATION_WITH_TAXES's article (hsCode '61044300') by its
-    // 6-digit prefix ('610443'), so it shows the declaration's HS code, not
-    // '6104.43.0099' left un-normalized.
-    expect(sheet.getRow(5).getCell(8).value).toBe('61044300');
   });
 
   it('colors the header by column group: identity, quantity, value', async () => {
@@ -397,17 +336,15 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // Both packing-list rows share HS position 610443 (and CHINE), so
-    // they're merged into one HS-total row (18 + 18 = 36 pieces) — but only
-    // article 1's tax data (the first encountered, matching Global's row
-    // order) is used for it, its first unit's 2.5 / 10 = 0.25, not article
-    // 2's 25 / 5 = 5.00, and not a blend of both. Read via Somme DD HT (col
-    // 10, right after the one tax's "Total" column at col 9) since the
-    // individual tax columns aren't shown; the only tax here is 000110 (not
-    // VAT), so Somme DD HT equals Somme DD TTC, i.e. that per-unit value
-    // spread across the merged row's 36 pieces.
-    expect(sheet.getRow(5).getCell(4).value).toBe(36);
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 36, 2);
+    // Both rows share HS position 610443, but only article 1 (the first
+    // encountered, matching Global's row order) is used — its first unit's
+    // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of
+    // both. Read via Somme DD HT (col 10, right after the one tax's "Total"
+    // column at col 9) since the individual tax columns aren't shown; the
+    // only tax here is 000110 (not VAT), so Somme DD HT equals Somme DD TTC,
+    // i.e. that per-unit value spread across each row's 18 pieces.
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
+    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
@@ -531,59 +468,6 @@ describe('addPackingListSheet', () => {
     // 18 pieces, i.e. 4.32 again. Read via Somme DD HT (col 10, right after
     // the one tax's "Total" column at col 9).
     expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo((4.32 / 18) * 18, 2);
-  });
-
-  it('does NOT match by HS prefix alone when the row\'s origin is a real, different country actually present elsewhere in the declaration (not just an unmapped spelling)', async () => {
-    // Found from a real file: the declaration's only 61044300 article is
-    // CHINE, but a packing-list row for the same HS prefix is honestly
-    // marked "INDE" — and INDE is a real country the declaration DOES use
-    // for a different article, not a spelling glitch. Silently pooling it
-    // into the CHINE article (as the origin-agnostic fallback used to)
-    // means CHINE's taxes/PRORATA absorb pieces that were never really
-    // CHINE's — this row must be treated as unmatched instead.
-    const declaration: Declaration = {
-      ...DECLARATION_WITH_TAXES,
-      articles: [
-        ...DECLARATION_WITH_TAXES.articles, // 61044300, CHINE
-        {
-          numero: 2,
-          hsCode: '4202110020',
-          nomArticle: 'PORTE-DOCUMENT',
-          pays: 'INDE',
-          paysCode: 'IN',
-          valeurDeclaree: 3507,
-          quantite: 3,
-          unite: 'U',
-          totalArticle: 3507,
-          poidsNet: 2.6,
-          unitesComplementaires: 3,
-          taxes: [{ code: '000110', assiette: 3507, taux: 30, montant: 1053 }],
-        },
-      ],
-    };
-    const rows: PackingListRow[] = [{ ...SAMPLE_ROWS[0], hsCode: '61044300', origin: 'INDE' }];
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-real-origin-mismatch');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      rows,
-      declaration,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // Unmatched: falls back to the row's own (packing list's) HS code, and
-    // PRORATA is 0, not silently borrowed from the CHINE article.
-    const row = sheet.getRow(5);
-    expect(row.getCell(8).value).toBe('61044300');
-    expect(Number(row.getCell(15).value)).toBe(0);
   });
 
   it('adds a column for a RECAPITULATION rubrique that never appears on any article, filled as montant × Prorata for the matched article\'s first unit', async () => {
@@ -765,7 +649,7 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
   });
 
-  it('adds a PRORATA column with each matched row\'s own share of its HS+origin group\'s combined total', async () => {
+  it('adds a PRORATA column with the matched Global article\'s own Prorata value, not derived from the row\'s own pieces', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-prorata');
     tempDir = dir;
@@ -788,133 +672,17 @@ describe('addPackingListSheet', () => {
     // Somme/DD unitaire TTC, 15 PRORATA.
     expect(headerRow.getCell(15).value).toBe('PRORATA');
 
-    // Row 5 (HS 61044300) is the only packing-list row matching the
-    // declaration's only article's HS prefix, so it's also the only row in
-    // its group: its own total (172.98) over the group's combined total
-    // (its own 172.98 alone) is 100%.
+    // Declaration's only article: valeurDeclaree 172.98 across 18 units, and
+    // it's also the declaration's only article, so Prorata for its first
+    // unit = (172.98 / 18) / 172.98 = 1 / 18, rounded to 4 decimal places
+    // (matching the column's 0.00% display) since the extra-cost columns
+    // downstream derive from this same rounded value.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(1, 6);
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(0.0556, 6);
 
     // Row 6 has no matching article, so PRORATA defaults to 0 too.
     const unmatchedRow = sheet.getRow(6);
     expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
-  });
-
-  it('merges multiple packing-list rows sharing one HS+origin group into a single HS-total row, PRORATA summing to 100%', async () => {
-    // One declaration article, 300 physical units — Global's own per-unit
-    // Prorata for it is 1/300. Three packing-list rows for the same HS+origin
-    // (e.g. 3 color variants), with deliberately uneven pieces (50/100/150),
-    // stand for those 300 units between them — merged into one HS-total row.
-    const declaration: Declaration = {
-      ...SAMPLE_DECLARATION,
-      articles: [
-        {
-          numero: 1,
-          hsCode: '61044300',
-          nomArticle: 'VESTITO A FASCIA CORTO IN TULLE',
-          pays: 'CHINE',
-          paysCode: 'CN',
-          valeurDeclaree: 3000,
-          quantite: 300,
-          unite: 'U',
-          totalArticle: 3000,
-          poidsNet: 12,
-          unitesComplementaires: 1,
-          taxes: [{ code: '000110', assiette: 3000, taux: 2.5, montant: 75 }],
-        },
-      ],
-    };
-    const rows: PackingListRow[] = [
-      { ...SAMPLE_ROWS[0], color: 'PK2 PINK', pieces: 50, origin: 'CHINA' },
-      { ...SAMPLE_ROWS[0], color: 'BL2 BLUE', pieces: 100, origin: 'CHINA' },
-      { ...SAMPLE_ROWS[0], color: 'WH2 WHITE', pieces: 150, origin: 'CHINA' },
-    ];
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-prorata-split');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      rows,
-      declaration,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // Columns 1-8 base, 9 tax total (only 000110 here), 10-11 Somme/DD
-    // unitaire HT, 12-13 Somme/DD unitaire TTC, 14 PRORATA — one column
-    // fewer than the two-tax-code fixtures above.
-    expect(sheet.getRow(4).getCell(14).value).toBe('PRORATA');
-
-    // One merged row: pieces = 50 + 100 + 150 = 300 (the article's own
-    // quantite, fully covered), PRORATA = 300/300 = 100% — not three
-    // separate rows each showing a fraction.
-    const mergedRow = sheet.getRow(5);
-    expect(mergedRow.getCell(4).value).toBe(300);
-    expect(Number(mergedRow.getCell(14).value)).toBeCloseTo(1, 4);
-  });
-
-  it('still adds a row for a declaration article whose HS+origin group has no matching packing-list row at all', async () => {
-    // Two declaration articles: one (61044300, CHINE) has a matching
-    // packing-list row (SAMPLE_ROWS[0]); the other (4202321091, CHINE) has
-    // none at all in the packing list — reported bug: that second HS code
-    // shows up in Articles/Global but never in HS total.
-    const declaration: Declaration = {
-      ...DECLARATION_WITH_TAXES,
-      articles: [
-        ...DECLARATION_WITH_TAXES.articles,
-        {
-          numero: 2,
-          hsCode: '4202321091',
-          nomArticle: 'SET PORTE FEUILLE ET POCHETTE',
-          pays: 'CHINE',
-          paysCode: 'CN',
-          valeurDeclaree: 2790,
-          quantite: 4,
-          unite: 'U',
-          totalArticle: 2790,
-          poidsNet: 3,
-          unitesComplementaires: 1,
-          taxes: [{ code: '000110', assiette: 2790, taux: 2.5, montant: 69.75 }],
-        },
-      ],
-    };
-    const workbook = new ExcelJS.Workbook();
-    const { filePath, dir } = createTempXlsxPath('packing-list-missing-group');
-    tempDir = dir;
-
-    await addPackingListSheet(
-      workbook,
-      SAMPLE_ROWS,
-      declaration,
-      { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
-    );
-    await workbook.xlsx.writeFile(filePath);
-
-    const readBack = new ExcelJS.Workbook();
-    await readBack.xlsx.readFile(filePath);
-    const sheet = readBack.getWorksheet('HS total')!;
-
-    // One row per declaration group, in declaration.articles order: row 5
-    // is article 1's group (matched by SAMPLE_ROWS[0]), row 6 is article
-    // 2's — zero matching packing-list rows, but it still gets a row, with
-    // 0 pieces/total/PRORATA rather than not appearing at all.
-    const missingGroupRow = sheet.getRow(6);
-    expect(missingGroupRow.getCell(7).value).toBe('CHINE'); // origin
-    expect(missingGroupRow.getCell(8).value).toBe('4202321091'); // HSC
-    expect(missingGroupRow.getCell(2).value).toBe('SET PORTE FEUILLE ET POCHETTE'); // description
-    expect(missingGroupRow.getCell(4).value).toBe(0); // pieces
-    expect(Number(missingGroupRow.getCell(6).value)).toBe(0); // total
-    expect(Number(missingGroupRow.getCell(15).value)).toBe(0); // PRORATA (column 15)
-
-    // Sanity: the real, matched row for the OTHER group is unaffected.
-    expect(sheet.getRow(5).getCell(8).value).toBe('61044300');
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {

@@ -1,38 +1,4 @@
 import type { Article } from '../domain/types.js';
-import { normalizeCountryName } from '../domain/countryNames.js';
-
-// Only the first 6 digits (the HS "position") need to agree to group articles
-// into the same Prorata pool — matches the HS_CODE_COMPARISON_LENGTH
-// convention already used to reconcile the Liquidation and DUM's HS codes in
-// declarationMerger.ts.
-const HS_CODE_GROUP_LENGTH = 6;
-
-export function hsCodePrefix(code: string): string {
-  // Strips any non-digit characters (dots, spaces, dashes) before taking the
-  // prefix — declaration-sourced codes are always plain digits, but this
-  // keeps the comparison safe against any less-clean source too.
-  return code.replace(/\D/g, '').slice(0, HS_CODE_GROUP_LENGTH);
-}
-
-// Same HS position can be sourced from more than one country, each with its
-// own declared value — so the Prorata pool a unit row draws from keys on HS
-// code prefix AND country of origin together, not HS code alone.
-export function hsAndOriginKey(hsCode: string, pays: string): string {
-  return `${hsCodePrefix(hsCode)}|${normalizeCountryName(pays)}`;
-}
-
-// Sum of Valeur Déclarée across every article sharing the same HS code
-// prefix + country of origin — the denominator each of those articles'
-// Prorata is computed against (its own declared value's share of its
-// product group's total, not the whole declaration's).
-export function valeurDeclareeTotalsByHsAndOrigin(articles: Article[]): Map<string, number> {
-  const totals = new Map<string, number>();
-  for (const article of articles) {
-    const key = hsAndOriginKey(article.hsCode, article.pays);
-    totals.set(key, (totals.get(key) ?? 0) + article.valeurDeclaree);
-  }
-  return totals;
-}
 
 export function allocateTaxAcrossUnits(montant: number, quantite: number): number[] {
   if (!Number.isInteger(quantite) || quantite <= 0) {

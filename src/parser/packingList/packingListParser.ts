@@ -78,16 +78,6 @@ function cellText(row: ExcelJS.Row, col: number): string {
   return String(row.getCell(col).value ?? '').trim();
 }
 
-// HS codes are matched against the declaration's (always plain digits — see
-// dumParser.ts/liquidationParser.ts) by their first 6 digits, but a
-// supplier's packing list often enters them dot- or space-formatted (e.g.
-// "4202.32.1091") or as a decimal-looking Excel number — stripping every
-// non-digit character here keeps that comparison working regardless of how
-// the source file formatted it, instead of silently failing to match.
-function normalizeHsCode(rawHsCode: string): string {
-  return rawHsCode.replace(/\D/g, '');
-}
-
 // Reads a real .xlsx buffer directly (no OCR — this is structured data, not
 // a scanned document). Row 1 is the header row; column position for each
 // field is found by name, not assumed to be in a fixed order. Rows are
@@ -121,7 +111,7 @@ export async function parsePackingList(buffer: Buffer): Promise<PackingListRow[]
       unit: parseMoneyCell(row.getCell(columnIndexes.unit).value),
       total: parseMoneyCell(row.getCell(columnIndexes.total).value),
       origin: cellText(row, columnIndexes.origin),
-      hsCode: normalizeHsCode(cellText(row, columnIndexes.hsCode)),
+      hsCode: cellText(row, columnIndexes.hsCode),
     });
   }
 

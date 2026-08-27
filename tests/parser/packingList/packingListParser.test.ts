@@ -62,18 +62,6 @@ describe('parsePackingList', () => {
     expect(rows[0].hsCode).toBe('62064000');
   });
 
-  it('strips dots/spaces from a dot- or space-formatted HS code, so it still matches the declaration\'s plain-digit code', async () => {
-    const buffer = await buildFixtureBuffer([
-      ['CF0093DOAY16', 'CAMICIA CROP IN SATIN', 'WH1 OFF WHITE', 2, 6.65, 13.3, 'CAMBOGIA', '4202.32.1091'],
-      ['CF0094DOAY16', 'CAMICIA CROP IN SATIN', 'WH1 OFF WHITE', 2, 6.65, 13.3, 'CAMBOGIA', '4202 32 1091'],
-    ]);
-
-    const rows = await parsePackingList(buffer);
-
-    expect(rows[0].hsCode).toBe('4202321091');
-    expect(rows[1].hsCode).toBe('4202321091');
-  });
-
   it('parses unit/total from plain numeric cells, not just "€ X,XX"-formatted strings', async () => {
     const buffer = await buildFixtureBuffer([
       ['CF0093DOAY16', 'CAMICIA CROP IN SATIN', 'WH1 OFF WHITE', 2, 6.65, 13.3, 'CAMBOGIA', '62064000'],

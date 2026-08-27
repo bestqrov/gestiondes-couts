@@ -2,6 +2,7 @@ import type { Article, Declaration, TaxLine } from '../domain/types.js';
 import type { LiquidationResult } from '../parser/liquidation/liquidationParser.js';
 import type { DumResult } from '../parser/dum/dumParser.js';
 
+const VALEUR_TOLERANCE = 0.5;
 const QUANTITE_TOLERANCE = 0.5;
 
 export class MergeError extends Error {
@@ -71,7 +72,7 @@ export function mergeDeclaration(liquidation: LiquidationResult, dum: DumResult)
       );
     }
 
-    if (Math.trunc(dumArticle.valeurDeclaree) !== Math.trunc(liqArticle.valeurDeclaree)) {
+    if (Math.abs(dumArticle.valeurDeclaree - liqArticle.valeurDeclaree) > VALEUR_TOLERANCE) {
       throw new MergeError(
         `Article ${liqArticle.numero}: valeur déclarée mismatch (Liquidation ${liqArticle.valeurDeclaree} vs DUM ${dumArticle.valeurDeclaree})`
       );

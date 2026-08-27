@@ -95,11 +95,9 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRow.getCell(10).value).toBe(1);
     // Valeur Déclarée (27147.0) / quantite (354) — same value on every row of article 1.
     expect(Number(firstRow.getCell(14).value)).toBeCloseTo(27147.0 / 354, 4);
-    // Prorata — this unit's Valeur Déclarée over its product group's total
-    // Valeur Déclarée (HS code prefix + country of origin). Article 1 (ITALIE)
-    // is the only article in its HS+origin group, so the group total is just
-    // its own 27147.0.
-    expect(Number(firstRow.getCell(15).value)).toBeCloseTo(27147.0 / 354 / 27147.0, 6);
+    // Prorata — this unit's Valeur Déclarée over the whole declaration's total
+    // Valeur Déclarée (article 1's 27147.0 + article 2's 12892.992 = 40039.992).
+    expect(Number(firstRow.getCell(15).value)).toBeCloseTo(27147.0 / 354 / 40039.992, 6);
 
     // last row of article 1, first row of article 2 resets serial number
     const lastRowArticle1 = sheet.getRow(358);
@@ -113,10 +111,8 @@ describe('generateUnitLevelExcel', () => {
     expect(firstRowArticle2.getCell(8).value).toBe('BANGLADESH');
     // Valeur Déclarée (12892.992) / quantite (200) — article 2's own per-unit value.
     expect(Number(firstRowArticle2.getCell(14).value)).toBeCloseTo(12892.992 / 200, 4);
-    // Prorata — article 2 (BANGLADESH) is likewise the only article in its
-    // HS+origin group, so it's divided by its own total, not the whole
-    // declaration's.
-    expect(Number(firstRowArticle2.getCell(15).value)).toBeCloseTo(12892.992 / 200 / 12892.992, 6);
+    // Prorata — still divided by the whole declaration's total, not article 2's own total.
+    expect(Number(firstRowArticle2.getCell(15).value)).toBeCloseTo(12892.992 / 200 / 40039.992, 6);
     // A thicker top border marks where article 2's block starts.
     expect(firstRowArticle2.getCell(1).border?.top?.style).toBe('medium');
 
@@ -136,22 +132,14 @@ describe('generateUnitLevelExcel', () => {
     expect(sum002109).toBeCloseTo(5443.0, 2);
     expect(sum007217).toBeCloseTo(68.0, 2);
 
-    // Every unit row's Prorata, summed within one article, must reconcile to
-    // 100% of that article's HS+origin group — confirms Prorata is divided
-    // by its product group's total Valeur Déclarée. Article 1 (ITALIE) and
-    // article 2 (BANGLADESH) are each the sole member of their own group, so
-    // each sums to 1 independently, not 1 across the whole declaration.
-    let prorataSumArticle1 = 0;
-    for (let rowNum = 5; rowNum <= 358; rowNum++) {
-      prorataSumArticle1 += Number(sheet.getRow(rowNum).getCell(15).value);
+    // Every unit row's Prorata, summed across both articles, must reconcile
+    // to 100% of the declaration — confirms Prorata is divided by the whole
+    // declaration's total Valeur Déclarée, not each article's own total.
+    let prorataSum = 0;
+    for (let rowNum = 5; rowNum <= 558; rowNum++) {
+      prorataSum += Number(sheet.getRow(rowNum).getCell(15).value);
     }
-    expect(prorataSumArticle1).toBeCloseTo(1, 6);
-
-    let prorataSumArticle2 = 0;
-    for (let rowNum = 359; rowNum <= 558; rowNum++) {
-      prorataSumArticle2 += Number(sheet.getRow(rowNum).getCell(15).value);
-    }
-    expect(prorataSumArticle2).toBeCloseTo(1, 6);
+    expect(prorataSum).toBeCloseTo(1, 6);
   });
 
   it('fills every row\'s N° Enregistrement, Date d\'arrivée, DONNEES COMPTABLES, and Nature et numéro du titre de transport with the DUM\'s declaration-wide values when present', async () => {
