@@ -488,8 +488,14 @@ app.get('/last-declaration-cost-summary', (_req, res) => {
 });
 
 app.get('/download', async (_req, res) => {
+  // A plain redirect here used to send the browser to '/' with a 200 HTML
+  // response — fetch() follows redirects transparently, so response.ok was
+  // still true and the client happily saved that HTML page as
+  // "Declaration.xlsx" (reproduced: Excel then reports the file as
+  // corrupted/invalid-format on open). A 404 makes response.ok false so the
+  // client's existing error handling actually triggers instead.
   if (!lastGeneratedFilePath) {
-    res.redirect('/');
+    res.status(404).json({ success: false, error: 'Aucun fichier généré à télécharger.' });
     return;
   }
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
