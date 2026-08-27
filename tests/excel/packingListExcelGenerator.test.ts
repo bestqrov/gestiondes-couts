@@ -372,15 +372,16 @@ describe('addPackingListSheet', () => {
     await readBack.xlsx.readFile(filePath);
     const sheet = readBack.getWorksheet('HS total')!;
 
-    // Both rows share HS position 610443, but only article 1 (the first
-    // encountered, matching Global's row order) is used — its first unit's
-    // 2.5 / 10 = 0.25, not article 2's 25 / 5 = 5.00, and not a blend of
-    // both. Read via Somme DD HT (col 10, right after the one tax's "Total"
-    // column at col 9) since the individual tax columns aren't shown; the
-    // only tax here is 000110 (not VAT), so Somme DD HT equals Somme DD TTC,
-    // i.e. that per-unit value spread across each row's 18 pieces.
-    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
-    expect(Number(sheet.getRow(6).getCell(10).value)).toBeCloseTo(0.25 * 18, 2);
+    // Both rows share HS position 610443 and origin CHINE, so they merge
+    // into a single HS-total group row (36 combined pieces). The group's
+    // tax montant is only article 1's (the first encountered, matching
+    // Global's row order) first unit: 2.5 / 10 = 0.25, not article 2's
+    // 25 / 5 = 5.00, and not a blend of both. Read via Somme DD HT (col 10,
+    // right after the one tax's "Total" column at col 9) since the
+    // individual tax columns aren't shown; the only tax here is 000110 (not
+    // VAT), so Somme DD HT equals Somme DD TTC, i.e. that per-unit value
+    // spread across the merged row's 36 pieces (18 + 18).
+    expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo(0.25 * 36, 2);
   });
 
   it('matches by HS code prefix AND country of origin — same HS position, different countries, must not mix tax montants', async () => {
