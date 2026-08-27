@@ -1446,14 +1446,14 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       const deleteButton = customFieldKeys.has(field.key)
         ? `<form method="post" action="/superadmin/extra-cost-fields/${encodeURIComponent(field.key)}/delete" class="ec-remove-form" onsubmit="return confirmDeleteExtraCostField(this)"><input type="hidden" name="password" /><button type="submit" class="ec-remove-btn" title="Supprimer" aria-label="Supprimer">&times;</button></form>`
         : '';
-      return `<label class="${colorClass}">${escapeHtml(field.label)}${deleteButton}<input type="number" id="extra-${escapeHtml(field.key)}" step="0.01" min="0" required /></label>`;
+      return `<label class="${colorClass}">${escapeHtml(field.label)}${deleteButton}<input type="number" id="extra-${escapeHtml(field.key)}" step="0.01" min="0" value="0" /></label>`;
     })
     .join('\n        ');
 
   const body = `
     <div class="card extra-costs-inline-card">
       <h2>Frais supplémentaires</h2>
-      <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Tous les champs sont obligatoires.</p>
+      <p>Ces montants sont répartis sur chaque ligne de la feuille HS total selon le PRORATA. Laissez à 0 les champs non applicables.</p>
       <div class="extra-costs-grid">
         ${extraCostFieldRows}
       </div>
@@ -1638,7 +1638,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
       function extraCostsAreComplete() {
         return extraCostFields.every((field) => {
           const raw = document.getElementById('extra-' + field.key).value.trim();
-          if (raw === '') return false;
+          if (raw === '') return true;
           const numeric = Number(raw);
           return Number.isFinite(numeric) && numeric >= 0;
         });
@@ -1723,11 +1723,7 @@ export function renderSuperAdminGenerate(settings: AppSettings, errorMessage?: s
         for (const field of extraCostFields) {
           const input = document.getElementById('extra-' + field.key);
           const raw = input.value.trim();
-          if (raw === '') {
-            showValidationModal('SVP saisissez le montant de "' + field.label + '".');
-            input.focus();
-            return false;
-          }
+          if (raw === '') continue;
           const numeric = Number(raw);
           if (!Number.isFinite(numeric) || numeric < 0) {
             showValidationModal('Le montant de "' + field.label + '" doit être un nombre valide, supérieur ou égal à 0.');
