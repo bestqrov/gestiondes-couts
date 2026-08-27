@@ -167,6 +167,53 @@ function firstUnitTaxesByHsPrefix(
   return result;
 }
 
+// An article's own Prorata share of the whole declaration's declared value —
+// summing this across every one of an article's unit rows in Global (each
+// showing valeurDeclareePerUnit / declarationValeurDeclareeTotal) gives back
+// exactly this same fraction, so it's the group sum this article contributes
+// to hsAndOriginProrataSums/hsPrefixProrataSums below.
+function articleProrataShare(
+  article: Declaration['articles'][number],
+  declarationValeurDeclareeTotal: number
+): number {
+  return declarationValeurDeclareeTotal > 0 ? article.valeurDeclaree / declarationValeurDeclareeTotal : 0;
+}
+
+// Maps HS code prefix + country of origin to the SUM of every matching
+// article's own Prorata share — requested explicitly: a packing-list row's
+// PRORATA should reflect its whole HS+origin group's combined share of the
+// declaration (e.g. several color variants of the same product/origin), not
+// just the first matching article's own share the way firstUnitTaxes' taxes
+// still do.
+function hsAndOriginProrataSums(
+  declaration: Declaration,
+  declarationValeurDeclareeTotal: number
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const article of declaration.articles) {
+    const key = hsAndOriginKey(article.hsCode, article.pays);
+    const share = articleProrataShare(article, declarationValeurDeclareeTotal);
+    result.set(key, (result.get(key) ?? 0) + share);
+  }
+  return result;
+}
+
+// Same as hsAndOriginProrataSums, but grouped by HS code prefix alone — the
+// fallback used for the same unambiguous-prefix case firstUnitTaxesByHsPrefix
+// handles.
+function hsPrefixProrataSums(
+  declaration: Declaration,
+  declarationValeurDeclareeTotal: number
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const article of declaration.articles) {
+    const prefix = hsCodePrefix(article.hsCode);
+    const share = articleProrataShare(article, declarationValeurDeclareeTotal);
+    result.set(prefix, (result.get(prefix) ?? 0) + share);
+  }
+  return result;
+}
+
 // HS prefixes with more than one distinct (normalized) country of origin
 // among the declaration's articles — only for these does origin actually
 // need to be part of the match; every other prefix is unambiguous by HS
@@ -272,6 +319,8 @@ export async function addPackingListSheet(
     declarationValeurDeclareeTotal
   );
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
+  const prorataSumsByOrigin = hsAndOriginProrataSums(declaration, declarationValeurDeclareeTotal);
+  const prorataSumsByPrefix = hsPrefixProrataSums(declaration, declarationValeurDeclareeTotal);
   // Somme DD and the "<tax> Total" columns are zero-padded to at least 4
   // digits before the decimal separator, with no thousands separator —
   // requested so every value in these columns lines up the same width (e.g.
@@ -346,6 +395,13 @@ export async function addPackingListSheet(
         firstUnitTaxesByPrefix.get(rowHsPrefix))
       : firstUnitTaxesByPrefix.get(rowHsPrefix);
     const matchedTaxes = matchedData?.taxes;
+    // Same origin-ambiguity resolution as matchedData above, but pulling the
+    // whole HS+origin group's summed Prorata (see hsAndOriginProrataSums)
+    // instead of a single matched article's own share.
+    const matchedProrataSum = ambiguousHsPrefixes.has(rowHsPrefix)
+      ? (prorataSumsByOrigin.get(hsAndOriginKey(row.hsCode, row.origin)) ??
+        prorataSumsByPrefix.get(rowHsPrefix))
+      : prorataSumsByPrefix.get(rowHsPrefix);
     const rowValues: Record<string, string | number> = {
       item: row.item,
       description: row.description,
@@ -386,14 +442,15 @@ export async function addPackingListSheet(
     const sommeDd = sommeDdTtc - vatTotal;
     rowValues.sommeDd = sommeDd;
     rowValues.ddUnitaire = row.pieces > 0 ? sommeDd / row.pieces : 0;
-    // PRORATA — the matched Global article's own Prorata value (its first
-    // unit row's, same as every tax column above), not a value derived from
-    // this row's own pieces/total.
+    // PRORATA — the SUM of Global's own Prorata share across every article
+    // in this row's HS+origin group (e.g. several color variants of the same
+    // product/origin), not just the one matched article firstUnitTaxes above
+    // picks its tax montants from.
     // Rounded to match the PRORATA column's 0.00% display (4 decimal places
     // of the raw fraction) so the extra-cost columns below, which multiply
     // by this same value, derive from what's actually shown, not a longer
     // float tail hidden by display-only formatting.
-    const prorata = Math.round((matchedData?.prorata ?? 0) * 10000) / 10000;
+    const prorata = Math.round((matchedProrataSum ?? 0) * 10000) / 10000;
     rowValues.prorata = prorata;
     // Each extra cost field's shipment-wide total spread across this row by
     // its matched PRORATA share, same "total x prorata" split Global uses
