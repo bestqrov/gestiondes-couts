@@ -807,6 +807,62 @@ describe('addPackingListSheet', () => {
     expect(Number(secondRow.getCell(prorataColumn).value)).toBeCloseTo(0.25, 6);
   });
 
+  it('adds a synthetic row for a declaration HS+origin group with no matching packing-list row at all', async () => {
+    // Reported bug: HSC 6106200010 (MYANMAR) appears in Articles/Global but
+    // nowhere in HS total, because the packing list simply had no line for
+    // it — HS total was built by iterating packing-list rows only, so a
+    // declaration group with zero matching rows silently never appeared.
+    const declaration: Declaration = {
+      ...DECLARATION_WITH_TAXES,
+      articles: [
+        ...DECLARATION_WITH_TAXES.articles,
+        {
+          numero: 2,
+          hsCode: '6106200010',
+          nomArticle: 'CHEMISIER',
+          pays: 'MYANMAR',
+          paysCode: 'MM',
+          valeurDeclaree: 80,
+          quantite: 8,
+          unite: 'U',
+          totalArticle: 80,
+          poidsNet: 4,
+          unitesComplementaires: 1,
+          taxes: [{ code: '000110', assiette: 80, taux: 2.5, montant: 2 }],
+        },
+      ],
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-synthetic-row');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      declaration,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // SAMPLE_ROWS[0] (61044300/CHINA) matches article 1, row 5. SAMPLE_ROWS[1]
+    // (61142000/BANGLADESH) matches nothing (unmatched row), row 6. The
+    // MYANMAR/6106200010 article has no matching packing-list row at all, so
+    // it gets a synthetic row 7, sized from its own declared quantite/valeur
+    // (8 pieces, 80 declared value), with PRORATA = its own share of the
+    // declaration total (172.98 + 80 = 252.98): 80 / 252.98.
+    const syntheticRow = sheet.getRow(7);
+    expect(syntheticRow.getCell(8).value).toBe('6106200010');
+    expect(syntheticRow.getCell(7).value).toBe('MYANMAR');
+    expect(Number(syntheticRow.getCell(4).value)).toBe(8);
+    expect(Number(syntheticRow.getCell(6).value)).toBeCloseTo(80, 2);
+  });
+
   it('writes only the letterhead/header when there are no rows', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-empty');

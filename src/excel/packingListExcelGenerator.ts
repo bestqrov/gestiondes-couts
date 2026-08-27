@@ -225,6 +225,25 @@ function hsPrefixProrataSums(
   return result;
 }
 
+// Sums every article's own quantite/valeurDeclaree into its HS+origin
+// group — used to size a synthetic row standing in for a whole declaration
+// group the packing list has no line for at all (see the synthetic-row loop
+// in addPackingListSheet below), the same way a real packing-list row's own
+// pieces/total size a matched group's row.
+function quantiteAndValeurTotalsByHsAndOrigin(
+  declaration: Declaration
+): Map<string, { quantite: number; valeur: number }> {
+  const result = new Map<string, { quantite: number; valeur: number }>();
+  for (const article of declaration.articles) {
+    const key = hsAndOriginKey(article.hsCode, article.pays);
+    const totals = result.get(key) ?? { quantite: 0, valeur: 0 };
+    totals.quantite += Math.round(article.quantite);
+    totals.valeur += article.valeurDeclaree;
+    result.set(key, totals);
+  }
+  return result;
+}
+
 // HS prefixes with more than one distinct (normalized) country of origin
 // among the declaration's articles — only for these does origin actually
 // need to be part of the match; every other prefix is unambiguous by HS
@@ -336,6 +355,7 @@ export async function addPackingListSheet(
   const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
   const prorataSumsByOrigin = hsAndOriginProrataSums(declaration, declarationValeurDeclareeTotal);
   const prorataSumsByPrefix = hsPrefixProrataSums(declaration, declarationValeurDeclareeTotal);
+  const groupTotalsByOrigin = quantiteAndValeurTotalsByHsAndOrigin(declaration);
   // Somme DD and the "<tax> Total" columns are zero-padded to at least 4
   // digits before the decimal separator, with no thousands separator —
   // requested so every value in these columns lines up the same width (e.g.
@@ -597,6 +617,38 @@ export async function addPackingListSheet(
       },
       undefined,
       0,
+      index
+    );
+    index += 1;
+  }
+
+  // A declaration group (HS+origin) the packing list has no line for at
+  // all — different from an unmatched packing-list row, which at least
+  // shows up (under its own HS code) even without a match. Without this, a
+  // product present in Articles/Global but missing from the supplier's
+  // packing list simply never appears anywhere in HS total, with no
+  // indication why (reported: an HSC visible in Global with no row at all
+  // in HS total). One synthetic row per missing group stands in for the
+  // whole group, sized from its own combined quantite/valeur declarée, with
+  // the same summed-Prorata-share-of-the-declaration PRORATA a matched
+  // group's row would show.
+  for (const [key, data] of firstUnitTaxesByOrigin) {
+    if (matchedByGroup.has(key)) continue;
+    const totals = groupTotalsByOrigin.get(key) ?? { quantite: 0, valeur: 0 };
+    const prorata = Math.round((prorataSumsByOrigin.get(key) ?? 0) * 10000) / 10000;
+    addHsTotalRow(
+      {
+        item: '',
+        description: `${data.nomArticle} (absent de la packing list)`,
+        color: '',
+        pieces: totals.quantite,
+        unit: totals.quantite > 0 ? totals.valeur / totals.quantite : 0,
+        total: totals.valeur,
+        origin: data.pays,
+        hsCode: data.hsCode,
+      },
+      data.taxes,
+      prorata,
       index
     );
     index += 1;
