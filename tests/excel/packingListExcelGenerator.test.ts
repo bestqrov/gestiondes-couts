@@ -531,6 +531,59 @@ describe('addPackingListSheet', () => {
     expect(Number(sheet.getRow(5).getCell(10).value)).toBeCloseTo((4.32 / 18) * 18, 2);
   });
 
+  it('does NOT match by HS prefix alone when the row\'s origin is a real, different country actually present elsewhere in the declaration (not just an unmapped spelling)', async () => {
+    // Found from a real file: the declaration's only 61044300 article is
+    // CHINE, but a packing-list row for the same HS prefix is honestly
+    // marked "INDE" — and INDE is a real country the declaration DOES use
+    // for a different article, not a spelling glitch. Silently pooling it
+    // into the CHINE article (as the origin-agnostic fallback used to)
+    // means CHINE's taxes/PRORATA absorb pieces that were never really
+    // CHINE's — this row must be treated as unmatched instead.
+    const declaration: Declaration = {
+      ...DECLARATION_WITH_TAXES,
+      articles: [
+        ...DECLARATION_WITH_TAXES.articles, // 61044300, CHINE
+        {
+          numero: 2,
+          hsCode: '4202110020',
+          nomArticle: 'PORTE-DOCUMENT',
+          pays: 'INDE',
+          paysCode: 'IN',
+          valeurDeclaree: 3507,
+          quantite: 3,
+          unite: 'U',
+          totalArticle: 3507,
+          poidsNet: 2.6,
+          unitesComplementaires: 3,
+          taxes: [{ code: '000110', assiette: 3507, taux: 30, montant: 1053 }],
+        },
+      ],
+    };
+    const rows: PackingListRow[] = [{ ...SAMPLE_ROWS[0], hsCode: '61044300', origin: 'INDE' }];
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-real-origin-mismatch');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      rows,
+      declaration,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Unmatched: falls back to the row's own (packing list's) HS code, and
+    // PRORATA is 0, not silently borrowed from the CHINE article.
+    const row = sheet.getRow(5);
+    expect(row.getCell(8).value).toBe('61044300');
+    expect(Number(row.getCell(15).value)).toBe(0);
+  });
+
   it('adds a column for a RECAPITULATION rubrique that never appears on any article, filled as montant × Prorata for the matched article\'s first unit', async () => {
     // 002701 (REDV.INF.) only shows up in ordonnancementTaxes, never on the
     // article's own tax rows — same declaration-wide-only rubrique Global

@@ -17,6 +17,8 @@ import {
   BASE_EXTRA_COST_FIELDS,
   type ExtraCosts,
 } from '../excel/packingListExcelGenerator.js';
+import { generateVerificationReportExcel } from '../excel/verificationReportExcelGenerator.js';
+import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 import { renderResultsPage, renderResultsFragment } from './renderResultsPage.js';
 import {
   renderSuperAdminOverview,
@@ -140,6 +142,12 @@ const loginHtml = readFileSync(path.join(__dirname, 'views/login.html'), 'utf-8'
 // preview can reference it without a database.
 let lastDeclaration: Declaration | undefined;
 let lastGeneratedFilePath: string | undefined;
+// The raw packing-list rows behind the last generated declaration — not
+// otherwise retained anywhere (the combined .xlsx only holds its already-
+// matched "HS total" sheet) — kept so /download-verification-report can
+// recompute the same matching to list what didn't reconcile, without
+// re-uploading/re-parsing the packing list.
+let lastPackingListRows: PackingListRow[] | undefined;
 
 // multer's default disk storage strips the original file extension, but
 // extractDocumentText() dispatches on extension (.pdf vs image formats) —
@@ -368,6 +376,7 @@ app.post(
 
       lastDeclaration = declaration;
       lastGeneratedFilePath = generatedFilePath;
+      lastPackingListRows = packingListRows;
 
       // Persisted to MongoDB (unlike the in-memory `last*` state above,
       // which only serves this admin's own immediate results/download/
@@ -493,6 +502,25 @@ app.get('/download', async (_req, res) => {
     return;
   }
   await sendXlsxFile(res, lastGeneratedFilePath, 'Declaration.xlsx');
+});
+
+// A small, separate report of everything the last generation's "HS total"
+// matching couldn't reconcile between the uploaded packing list and the
+// declaration — packing-list rows that matched nothing, and declaration
+// products the packing list doesn't fully itemize — so likely data-entry
+// mistakes (on either the packing list or the customs documents) can be
+// checked at the source instead of only showing up as an unexplained 0%/
+// under-100% PRORATA in "HS total". Generated on demand (cheap, no OCR)
+// rather than cached alongside the main file.
+app.get('/download-verification-report', async (_req, res) => {
+  if (!lastDeclaration || !lastPackingListRows) {
+    res.redirect('/');
+    return;
+  }
+  const reportPath = path.join(OUTPUT_DIR, `verification-${randomUUID()}.xlsx`);
+  const branding = await getAppSettings(await getSettingsCollection());
+  await generateVerificationReportExcel(lastDeclaration, lastPackingListRows, reportPath, branding);
+  await sendXlsxFile(res, reportPath, 'A_verifier.xlsx');
 });
 
 // Shared by GET /superadmin/dashboard and POST /superadmin/dashboard/reset-

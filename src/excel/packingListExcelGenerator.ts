@@ -1,14 +1,8 @@
 import ExcelJS from 'exceljs';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 import type { Declaration } from '../domain/types.js';
-import { normalizeCountryName } from '../domain/countryNames.js';
-import {
-  allocateTaxAcrossUnits,
-  unionTaxCodes,
-  taxCodeDesignation,
-  hsAndOriginKey,
-  valeurDeclareeTotalsByHsAndOrigin,
-} from './unitLevelTaxHelpers.js';
+import { unionTaxCodes, taxCodeDesignation, hsAndOriginKey } from './unitLevelTaxHelpers.js';
+import { createPackingListMatcher } from './packingListMatcher.js';
 import {
   styleDataRow,
   styleHeaderRowGrouped,
@@ -66,158 +60,6 @@ const BASE_COLUMN_GROUPS: ColumnGroup[] = [
   { kind: 'value', from: 5, to: 6 }, // unit, total
   { kind: 'identity', from: 7, to: 8 }, // origin, HS CODE
 ];
-
-// Only the first 6 digits (the HS "position") need to agree to consider a
-// packing-list row and a declaration article the same product — matches the
-// HS_CODE_COMPARISON_LENGTH convention already used to reconcile the
-// Liquidation and DUM's HS codes in declarationMerger.ts. Product names
-// differ too much between the supplier's packing list and the customs
-// documents' OCR'd text to match reliably by name.
-const HS_CODE_MATCH_LENGTH = 6;
-
-function hsCodePrefix(code: string): string {
-  // Strips any non-digit characters (dots, spaces, dashes) before taking the
-  // prefix — see unitLevelTaxHelpers.ts's matching hsCodePrefix.
-  return code.replace(/\D/g, '').slice(0, HS_CODE_MATCH_LENGTH);
-}
-
-// Same HS position can be sourced from more than one country, each with its
-// own tax montants (e.g. two variants of the same product, one from China,
-// one from Bangladesh) — so, when that actually happens, the group total a
-// packing-list row picks up needs to key on HS code prefix AND country of
-// origin together, not HS code alone, or a row would silently pick up
-// another country's tax montants. (Shared with unitLevelExcelGenerator.ts's
-// own Prorata grouping, so both sheets agree on the same pools.)
-
-// The per-unit tax montants of an article's very first physical unit (the
-// same allocation Global's row 1 for this article shows) — not the article's
-// full total. Requested explicitly: a packing-list row picks up a single
-// unit's tax value from the matching Global rows, not the sum across every
-// matching unit/article. Also folds in the declaration-wide-only
-// ordonnancement taxes (e.g. REDV.INF., RI SEGMA, REMISES CREDIT) using the
-// same montant × Prorata treatment Global gives them, so every tax visible
-// in Global has a matching value here. `prorata` is Global's own Prorata
-// value for this article (same on every one of its unit rows), picked up
-// the same "first matching line, not a sum" way for the PRORATA column.
-interface FirstUnitData {
-  taxes: Map<string, number>;
-  // Global's own per-unit Prorata for this article (Valeur Déclarée / unit,
-  // over its HS+origin group's combined Valeur Déclarée) — summing this
-  // value across every physical unit of every article in the group always
-  // totals to 1, by construction. A packing-list row stands for `pieces`
-  // physical units, so its own PRORATA is this value × row.pieces, not this
-  // value alone (seeing the bare per-unit share repeated, unmultiplied, on
-  // every row sharing the group is the bug this exists to fix).
-  prorata: number;
-  // The matched declaration article's own full HS code (Global's HSC),
-  // shown in place of the packing list's own hsCode — the packing list's
-  // code is often shorter/less precise (only what the supplier entered),
-  // while the declaration's is the authoritative customs one Global itself
-  // displays.
-  hsCode: string;
-  // The matched article's own country of origin — used to derive this
-  // article's HS+origin group key (hsAndOriginKey(hsCode, pays)) so a
-  // packing-list row that matched via the HS-prefix-only fallback can still
-  // mark the right group as covered (see coveredGroupKeys below).
-  pays: string;
-}
-
-// `groupTotal` is this article's HS+origin group's combined Valeur Déclarée
-// (Global's own Prorata pool for it). `declarationTotal` is the whole
-// declaration's Valeur Déclarée sum — used only to spread
-// extraOrdonnancementTaxes' declaration-wide montants, since those rubriques
-// only have a single montant for the whole declaration, not one per
-// article, and need a share that sums to 1 across the whole declaration to
-// reconcile back to that single montant.
-function firstUnitTaxes(
-  article: Declaration['articles'][number],
-  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  groupTotal: number,
-  declarationTotal: number
-): FirstUnitData {
-  const quantite = Math.round(article.quantite);
-  const perCode = new Map<string, number>();
-  for (const tax of article.taxes) {
-    perCode.set(tax.code, quantite > 0 ? allocateTaxAcrossUnits(tax.montant, quantite)[0] : 0);
-  }
-  const prorata =
-    quantite > 0 && groupTotal > 0 ? article.valeurDeclaree / quantite / groupTotal : 0;
-  const declarationShare =
-    quantite > 0 && declarationTotal > 0 ? article.valeurDeclaree / quantite / declarationTotal : 0;
-  if (declarationShare > 0) {
-    for (const tax of extraOrdonnancementTaxes) {
-      perCode.set(tax.code, tax.montant * declarationShare);
-    }
-  } else {
-    for (const tax of extraOrdonnancementTaxes) {
-      perCode.set(tax.code, 0);
-    }
-  }
-  return { taxes: perCode, prorata, hsCode: article.hsCode, pays: article.pays };
-}
-
-// Maps HS code prefix + country of origin to the first-encountered matching
-// article's first-unit tax montants — multiple articles (e.g. one per
-// color/variant) can share the same HS position and origin, the same way
-// multiple packing-list rows do, but only the first one encountered
-// (declaration.articles order, matching Global's row order) is used, per
-// the same "just the first matching line" rule.
-function firstUnitTaxesByHsAndOrigin(
-  declaration: Declaration,
-  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  valeurDeclareeTotalsByGroup: Map<string, number>,
-  declarationTotal: number
-): Map<string, FirstUnitData> {
-  const result = new Map<string, FirstUnitData>();
-  for (const article of declaration.articles) {
-    const key = hsAndOriginKey(article.hsCode, article.pays);
-    if (result.has(key)) continue;
-    const groupTotal = valeurDeclareeTotalsByGroup.get(key) ?? 0;
-    result.set(key, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
-  }
-  return result;
-}
-
-// Same as firstUnitTaxesByHsAndOrigin, but grouped by HS code prefix alone —
-// the fallback used for the (overwhelmingly common) case where an HS prefix
-// has only one country of origin in the whole declaration, so origin
-// spelling (packing list vs DUM/Liquidation, potentially a country name
-// outside countryNames.ts's known aliases) can't cause a false non-match.
-function firstUnitTaxesByHsPrefix(
-  declaration: Declaration,
-  extraOrdonnancementTaxes: Declaration['ordonnancementTaxes'],
-  valeurDeclareeTotalsByGroup: Map<string, number>,
-  declarationTotal: number
-): Map<string, FirstUnitData> {
-  const result = new Map<string, FirstUnitData>();
-  for (const article of declaration.articles) {
-    const prefix = hsCodePrefix(article.hsCode);
-    if (result.has(prefix)) continue;
-    const groupTotal = valeurDeclareeTotalsByGroup.get(hsAndOriginKey(article.hsCode, article.pays)) ?? 0;
-    result.set(prefix, firstUnitTaxes(article, extraOrdonnancementTaxes, groupTotal, declarationTotal));
-  }
-  return result;
-}
-
-// HS prefixes with more than one distinct (normalized) country of origin
-// among the declaration's articles — only for these does origin actually
-// need to be part of the match; every other prefix is unambiguous by HS
-// code alone, and forcing an origin match there would only risk a spelling
-// mismatch losing a row's taxes for no benefit.
-function hsPrefixesWithMultipleOrigins(declaration: Declaration): Set<string> {
-  const originsByPrefix = new Map<string, Set<string>>();
-  for (const article of declaration.articles) {
-    const prefix = hsCodePrefix(article.hsCode);
-    const origins = originsByPrefix.get(prefix) ?? new Set<string>();
-    origins.add(normalizeCountryName(article.pays));
-    originsByPrefix.set(prefix, origins);
-  }
-  const ambiguous = new Set<string>();
-  for (const [prefix, origins] of originsByPrefix) {
-    if (origins.size > 1) ambiguous.add(prefix);
-  }
-  return ambiguous;
-}
 
 // Adds the "HS total" sheet — a direct, unaggregated copy of the uploaded
 // packing list's rows, in their original order, independent of the
@@ -296,40 +138,8 @@ export async function addPackingListSheet(
     { kind: 'value' as const, from: prorataColumn, to: columnCount },
   ];
 
-  const valeurDeclareeTotalsByGroup = valeurDeclareeTotalsByHsAndOrigin(declaration.articles);
-  // Total physical units (quantite) across every article sharing an
-  // HS+origin group — used below to size a synthetic row standing in for a
-  // whole group the packing list has no line for at all (see
-  // coveredGroupKeys), the same way `pieces` sizes a real packing-list row.
-  const quantiteTotalsByGroup = new Map<string, number>();
-  for (const article of declaration.articles) {
-    const key = hsAndOriginKey(article.hsCode, article.pays);
-    quantiteTotalsByGroup.set(key, (quantiteTotalsByGroup.get(key) ?? 0) + Math.round(article.quantite));
-  }
-  const firstUnitTaxesByOrigin = firstUnitTaxesByHsAndOrigin(
-    declaration,
-    extraOrdonnancementTaxes,
-    valeurDeclareeTotalsByGroup,
-    declarationValeurDeclareeTotal
-  );
-  const firstUnitTaxesByPrefix = firstUnitTaxesByHsPrefix(
-    declaration,
-    extraOrdonnancementTaxes,
-    valeurDeclareeTotalsByGroup,
-    declarationValeurDeclareeTotal
-  );
-  const ambiguousHsPrefixes = hsPrefixesWithMultipleOrigins(declaration);
-  // Resolves a packing-list row to its matched declaration data — an
-  // HS+origin match when ambiguous, the bare HS prefix otherwise —
-  // undefined when no declaration article matches this row at all.
-  function resolveRowMatch(row: PackingListRow): FirstUnitData | undefined {
-    const prefix = hsCodePrefix(row.hsCode);
-    if (!ambiguousHsPrefixes.has(prefix)) {
-      return firstUnitTaxesByPrefix.get(prefix);
-    }
-    const originKey = hsAndOriginKey(row.hsCode, row.origin);
-    return firstUnitTaxesByOrigin.get(originKey) ?? firstUnitTaxesByPrefix.get(prefix);
-  }
+  const matcher = createPackingListMatcher(declaration);
+  const { valeurDeclareeTotalsByGroup, quantiteTotalsByGroup, firstUnitTaxesByOrigin, resolveRowMatch } = matcher;
   // Somme DD and the "<tax> Total" columns are zero-padded to at least 4
   // digits before the decimal separator, with no thousands separator —
   // requested so every value in these columns lines up the same width (e.g.
