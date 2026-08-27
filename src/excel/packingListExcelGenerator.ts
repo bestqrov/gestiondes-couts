@@ -100,6 +100,12 @@ function hsAndOriginKey(hsCode: string, pays: string): string {
 interface FirstUnitData {
   taxes: Map<string, number>;
   prorata: number;
+  // The matched declaration article's own full HS code (Global's HSC),
+  // shown in place of the packing list's own hsCode — the packing list's
+  // code is often shorter/less precise (only what the supplier entered),
+  // while the declaration's is the authoritative customs one Global itself
+  // displays.
+  hsCode: string;
 }
 
 function firstUnitTaxes(
@@ -125,7 +131,7 @@ function firstUnitTaxes(
       perCode.set(tax.code, 0);
     }
   }
-  return { taxes: perCode, prorata };
+  return { taxes: perCode, prorata, hsCode: article.hsCode };
 }
 
 // Maps HS code prefix + country of origin to the first-encountered matching
@@ -410,9 +416,11 @@ export async function addPackingListSheet(
       unit: row.unit,
       total: row.total,
       origin: row.origin,
-      // The full HS code is shown here; only the 6-digit prefix is used
-      // above to match against the declaration's tax totals.
-      hsCode: row.hsCode,
+      // The matched declaration article's own full HS code (same value
+      // Global shows), not the packing list's own — falls back to the
+      // packing list's when unmatched, so an unmatched row still shows
+      // something to help spot why it didn't match.
+      hsCode: matchedData?.hsCode ?? row.hsCode,
     };
     // Not displayed as its own columns (see the comment on sommeDdColumn
     // above), but still needed per-code to build Somme DD HT/TTC and the

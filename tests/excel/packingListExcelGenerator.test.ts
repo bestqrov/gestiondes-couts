@@ -120,7 +120,7 @@ describe('addPackingListSheet', () => {
     expect(row1.getCell(2).alignment?.horizontal).toBe('left');
   });
 
-  it('shows the full HS code even when it has more than 8 digits', async () => {
+  it('shows the packing list\'s own full HS code, even one with more than 8 digits, when no declaration article matches', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-long-hscode');
     tempDir = dir;
@@ -143,6 +143,42 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
 
     expect(sheet.getRow(5).getCell(8).value).toBe('6104430011');
+  });
+
+  it('shows the matched declaration article\'s own full HS code, not the packing list\'s own (shorter) one', async () => {
+    // The packing list only carries the supplier's 8-digit code ('61044300'),
+    // while the declaration's (Global's) is the full, authoritative 10-digit
+    // customs code — HS total should show the latter for a matched row, same
+    // as Global does, not the packing list's shorter one.
+    const declaration: Declaration = {
+      ...DECLARATION_WITH_TAXES,
+      articles: [{ ...DECLARATION_WITH_TAXES.articles[0], hsCode: '6104430099' }],
+    };
+    const workbook = new ExcelJS.Workbook();
+    const { filePath, dir } = createTempXlsxPath('packing-list-matched-hscode');
+    tempDir = dir;
+
+    await addPackingListSheet(
+      workbook,
+      SAMPLE_ROWS,
+      declaration,
+      { companyName: null, brandColor: null, logoDataUri: null },
+      new Date(2026, 6, 26, 10, 0)
+    );
+    await workbook.xlsx.writeFile(filePath);
+
+    const readBack = new ExcelJS.Workbook();
+    await readBack.xlsx.readFile(filePath);
+    const sheet = readBack.getWorksheet('HS total')!;
+
+    // Row 5 (SAMPLE_ROWS[0], hsCode '61044300') matches the declaration
+    // article by its 6-digit prefix, so it shows the article's full
+    // '6104430099', not the packing list's own '61044300'.
+    expect(sheet.getRow(5).getCell(8).value).toBe('6104430099');
+
+    // Row 6 (hsCode '61142000') has no matching article, so it still falls
+    // back to its own packing-list HS code.
+    expect(sheet.getRow(6).getCell(8).value).toBe('61142000');
   });
 
   it('colors the header by column group: identity, quantity, value', async () => {
