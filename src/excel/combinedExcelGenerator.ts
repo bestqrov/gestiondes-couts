@@ -8,6 +8,7 @@ import {
   type ExtraCostField,
   type ExtraCosts,
 } from './packingListExcelGenerator.js';
+import { addProrataSheet } from './prorataExcelGenerator.js';
 import type { BrandingInfo } from './excelStyling.js';
 import type { PackingListRow } from '../parser/packingList/packingListParser.js';
 
@@ -42,6 +43,7 @@ export async function generateCombinedExcel(
     extraCosts,
     extraCostFields
   );
+  await addProrataSheet(workbook, declaration, branding, generatedAt);
 
   await workbook.xlsx.writeFile(outputPath);
 }

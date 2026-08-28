@@ -55,9 +55,15 @@ describe('generateCombinedExcel', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    // 1 summary sheet + 1 combined "Global" sheet + 1 "HS total" sheet.
-    expect(workbook.worksheets).toHaveLength(3);
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Articles', 'Global', 'HS total']);
+    // 1 summary sheet + 1 combined "Global" sheet + 1 "HS total" sheet + 1
+    // "prorata" sheet.
+    expect(workbook.worksheets).toHaveLength(4);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      'Articles',
+      'Global',
+      'HS total',
+      'prorata',
+    ]);
 
     const articlesSheet = workbook.getWorksheet('Articles')!;
     expect(articlesSheet.getRow(1).getCell(1).value).toBe('ACME LOGISTICS SARL');
@@ -74,15 +80,25 @@ describe('generateCombinedExcel', () => {
     const hsTotalSheet = workbook.getWorksheet('HS total')!;
     expect(hsTotalSheet.getRow(4).getCell(1).value).toBe('item');
     expect(hsTotalSheet.getRow(5).getCell(1).value).toBe('AB0141DOAY16');
-    // 3 title rows + header + 1 unmatched packing-list row + 2 synthetic
-    // rows — the real declaration's 2 articles (ITALIE, BANGLADESH) neither
-    // match the single packing-list row's origin (CHINA), so both get a
-    // synthetic row standing in for their own HS+origin group.
-    expect(hsTotalSheet.rowCount).toBe(7);
+    expect(hsTotalSheet.rowCount).toBe(5); // 3 title rows + header + 1 packing-list row
 
-    // All three sheets share the identical "Date de génération" timestamp —
+    const prorataSheet = workbook.getWorksheet('prorata')!;
+    expect(prorataSheet.getRow(4).getCell(1).value).toBe('product');
+    expect(prorataSheet.getRow(4).getCell(4).value).toBe('PRORATA');
+    // The 2 real articles share the same HS position (6109100010) but have
+    // different origins (ITALIE, BANGLADESH), so they're 2 separate groups —
+    // one row each, PRORATA summing to 1 across both (27147 / 40039.992 and
+    // 12892.992 / 40039.992).
+    expect(prorataSheet.rowCount).toBe(6); // 3 title rows + header + 2 groups
+    expect(prorataSheet.getRow(5).getCell(2).value).toBe('ITALIE');
+    expect(Number(prorataSheet.getRow(5).getCell(4).value)).toBeCloseTo(27147 / 40039.992, 3);
+    expect(prorataSheet.getRow(6).getCell(2).value).toBe('BANGLADESH');
+    expect(Number(prorataSheet.getRow(6).getCell(4).value)).toBeCloseTo(12892.992 / 40039.992, 3);
+
+    // All four sheets share the identical "Date de génération" timestamp —
     // proves generateCombinedExcel computed it once, not once per sheet.
     expect(articlesSheet.getRow(3).getCell(1).value).toBe(globalSheet.getRow(3).getCell(1).value);
     expect(articlesSheet.getRow(3).getCell(1).value).toBe(hsTotalSheet.getRow(3).getCell(1).value);
+    expect(articlesSheet.getRow(3).getCell(1).value).toBe(prorataSheet.getRow(3).getCell(1).value);
   });
 });
