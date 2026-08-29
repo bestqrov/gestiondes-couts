@@ -686,7 +686,7 @@ describe('addPackingListSheet', () => {
     expect(Number(matchedRow.getCell(13).value)).toBeCloseTo(expectedSommeDdTtc, 2);
   });
 
-  it('adds a PRORATA column with the sum of Global Prorata across the row\'s HS+origin group, not derived from the row\'s own pieces', async () => {
+  it('spreads an extra cost by the sum of Global Prorata across the row\'s HS+origin group, not derived from the row\'s own pieces — PRORATA itself is not a displayed column', async () => {
     const workbook = new ExcelJS.Workbook();
     const { filePath, dir } = createTempXlsxPath('packing-list-prorata');
     tempDir = dir;
@@ -696,7 +696,8 @@ describe('addPackingListSheet', () => {
       SAMPLE_ROWS,
       DECLARATION_WITH_TAXES,
       { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
+      new Date(2026, 6, 26, 10, 0),
+      { fraisTransport: 500 }
     );
     await workbook.xlsx.writeFile(filePath);
 
@@ -706,23 +707,24 @@ describe('addPackingListSheet', () => {
     const headerRow = sheet.getRow(4);
 
     // Columns 1-8 base, 9-10 tax totals, 11-12 Somme/DD unitaire HT, 13-14
-    // Somme/DD unitaire TTC, 15 PRORATA.
-    expect(headerRow.getCell(15).value).toBe('PRORATA');
+    // Somme/DD unitaire TTC, 15 Montant Frais transport (PRORATA itself
+    // isn't shown as its own column any more).
+    expect(headerRow.getCell(15).value).toBe('Montant Frais transport');
 
     // Declaration's only article: valeurDeclaree 172.98, and it's also the
     // declaration's only article, so its HS+origin group's summed Prorata
-    // share = 172.98 / 172.98 = 1 (rounded to 4 decimal places, matching the
-    // column's 0.00% display, since the extra-cost columns downstream derive
-    // from this same rounded value).
+    // share = 172.98 / 172.98 = 1 (rounded to 4 decimal places, matching
+    // PRORATA's usual 0.00% display), so the whole 500 lands on this row.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(1, 6);
+    expect(Number(matchedRow.getCell(15).value)).toBeCloseTo(500, 6);
 
-    // Row 6 has no matching article, so PRORATA defaults to 0 too.
+    // Row 6 has no matching article, so its Prorata defaults to 0 and none
+    // of the extra cost is spread onto it.
     const unmatchedRow = sheet.getRow(6);
     expect(Number(unmatchedRow.getCell(15).value)).toBe(0);
   });
 
-  it('sums Prorata across every article sharing a row\'s HS+origin group, e.g. multiple color variants', async () => {
+  it('sums Prorata across every article sharing a row\'s HS+origin group, e.g. multiple color variants, and spreads extra costs by that sum', async () => {
     const declarationWithSharedHsAndOrigin: Declaration = {
       ...SAMPLE_DECLARATION,
       articles: [
@@ -780,7 +782,8 @@ describe('addPackingListSheet', () => {
       SAMPLE_ROWS,
       declarationWithSharedHsAndOrigin,
       { companyName: null, brandColor: null, logoDataUri: null },
-      new Date(2026, 6, 26, 10, 0)
+      new Date(2026, 6, 26, 10, 0),
+      { fraisTransport: 1000 }
     );
     await workbook.xlsx.writeFile(filePath);
 
@@ -789,22 +792,23 @@ describe('addPackingListSheet', () => {
     const sheet = readBack.getWorksheet('HS total')!;
 
     // No article has any tax, so there are no "<tax> Total" columns here:
-    // PRORATA sits at column 13 (8 base + 0 tax totals + 4 Somme/DD HT/TTC
-    // columns), not the 15 the other PRORATA test uses with its 2 taxes.
-    const prorataColumn = 13;
+    // Montant Frais transport sits at column 13 (8 base + 0 tax totals + 4
+    // Somme/DD HT/TTC columns), not the 15 the other test uses with its 2
+    // taxes.
+    const fraisTransportColumn = 13;
 
     // Declaration total is 100 + 50 + 50 = 200. The first packing-list row
     // (61044300 / CHINA) matches both the PINK and WHITE articles (same HS
-    // prefix + origin), so its PRORATA is their combined share:
+    // prefix + origin), so its Prorata is their combined share:
     // (100 + 50) / 200 = 0.75 — not just the first matched article's own
-    // 100 / 200 = 0.5.
+    // 100 / 200 = 0.5 — so it picks up 75% of the 1000 extra cost.
     const matchedRow = sheet.getRow(5);
-    expect(Number(matchedRow.getCell(prorataColumn).value)).toBeCloseTo(0.75, 6);
+    expect(Number(matchedRow.getCell(fraisTransportColumn).value)).toBeCloseTo(750, 6);
 
     // Second packing-list row (61142000 / BANGLADESH) matches only the BODY
-    // article on its own: 50 / 200 = 0.25.
+    // article on its own: 50 / 200 = 0.25, i.e. 25% of the extra cost.
     const secondRow = sheet.getRow(6);
-    expect(Number(secondRow.getCell(prorataColumn).value)).toBeCloseTo(0.25, 6);
+    expect(Number(secondRow.getCell(fraisTransportColumn).value)).toBeCloseTo(250, 6);
   });
 
   it('writes only the letterhead/header when there are no rows', async () => {
